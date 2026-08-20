@@ -690,7 +690,7 @@ void frame_work(struct k_work* work) {
 }
 ```
 
-The RGB path casts the buffer straight through, because neutral order is exactly what `led_strip_update_rgb()` wants and the driver applies `color-mapping` itself. That cast is only valid while `CONFIG_LED_STRIP_RGB_SCRATCH` is off, which is worth a `static_assert` in the real adapter. The RGBW path has no such luck: `led_strip_update_channels()` takes a raw array already in the chip's own order and maps nothing, so `permute_in_place` is the adapter's own — a within-pixel byte shuffle needing no second buffer.
+The RGB path casts the buffer straight through, because neutral order is exactly what `led_strip_update_rgb()` wants and the driver applies `color-mapping` itself. That cast is only valid while `CONFIG_LED_STRIP_RGB_SCRATCH` is off, which is worth a `static_assert` in the real adapter. The RGBW path has no such luck, and not by a small margin: `struct led_rgb` carries no fourth channel, so `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero and `led_strip_update_rgb()` cannot light the white die at all. `led_strip_update_channels()` is therefore the only option rather than the tidier one, and it takes a raw array already in the chip's own order, consulting `color-mapping` nowhere — so `permute_in_place` is the adapter's own: a within-pixel byte shuffle needing no second buffer.
 
 ## Open questions
 
