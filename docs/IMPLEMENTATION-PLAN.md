@@ -42,6 +42,9 @@ CMakeLists.txt              # standalone build; library + optional tests
 cmake/
   sources.cmake             # RGBSEQ_SOURCES / RGBSEQ_INCLUDE_DIR, shared with the Zephyr module
   rgbseq_variant.cmake       # helper that builds one (library, test) pair per configuration
+  arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
+scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand
+.github/workflows/ci.yml
 include/rgbseq/
   config.h                  # the four macros, each #ifndef-guarded
   color.h                   # Color, colors::, lerp, hsv        (all constexpr, header-only)
@@ -124,7 +127,7 @@ Tests that only make sense in one configuration guard on the macro rather than l
 
 The **freestanding cross-compile check** is the cheapest possible proxy for "this actually works on the MCU": compile the library only — no tests, no link — with `arm-none-eabi-g++ -mcpu=cortex-m4 -ffreestanding -fno-exceptions -fno-rtti -Os`. It catches host-libc dependencies, accidental heap use through `operator new`, and code that only compiles because the host happens to be 64-bit. Run it in CI from Phase 0, where fixing a violation is one line, rather than in Phase 6, where it is an archaeology exercise.
 
-CI is a GitHub Actions matrix: {gcc, clang} x five variants for host build and test, plus the cross-compile job. Adding the Zephyr build job waits for Phase 6.
+CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. The variants are not a matrix axis: one configure produces all five libraries and all five test binaries in the same tree, and `doctest_discover_tests` reports each case under its variant's prefix — so a matrix over variants would rebuild everything five times for the same coverage and the same per-variant reporting. Adding the Zephyr build job waits for Phase 6.
 
 **Exit criteria:** `cmake --build build && ctest` passes in all five variants on gcc and clang, RGBW among them and not as an afterthought; the cross-compile job produces an object file; the umbrella header compiles standalone (a `#include <rgbseq/rgbseq.h>`-only translation unit, which catches missing includes inside headers).
 
