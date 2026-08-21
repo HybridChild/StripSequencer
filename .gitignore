@@ -1,0 +1,8 @@
+notes/ideas.md
+
+# Build trees. Every variant lives in one of these; none of it is worth keeping.
+build*/
+
+# Editor and tooling artefacts.
+.cache/
+compile_commands.json
