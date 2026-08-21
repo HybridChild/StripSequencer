@@ -1,0 +1,63 @@
+# Every phase ends green, and this is what says so.
+#
+# Two axes only. The variants are *not* a matrix axis: one configure produces
+# all five libraries and all five test binaries in the same tree, and
+# doctest_discover_tests registers every case under its variant's prefix, so a
+# matrix over variants would rebuild everything five times for the same
+# coverage and the same per-variant reporting.
+#
+# The Zephyr build job arrives with Phase 6.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host:
+    name: host (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      # No doctest package is installed on the runner, so this exercises the
+      # FetchContent fallback in CMakeLists.txt -- the path a developer with
+      # doctest installed never takes.
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }}
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build
+
+      # Five variants x every case, each reported under its own name.
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j
+
+  cross:
+    name: freestanding cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-arm-none-eabi
+
+      # The library only: no tests, no link. Compiling for a target with no
+      # hosted libc is the signal -- see cmake/arm-none-eabi.cmake.
+      - name: Cross-compile the library
+        run: ./scripts/cross-check.sh
+
+      - name: Check the archive exists
+        run: arm-none-eabi-nm build-cross/librgbseq.a
