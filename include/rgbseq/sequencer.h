@@ -6,10 +6,6 @@
  * derived on every call; a stored playhead advanced each frame would be the
  * tape model docs/DESIGN.md rejects. Why there is one bit here and not a state
  * machine is argued in docs/API-SKETCH.md, "Sequencer".
- *
- * Phase 0: declarations and stubs. Phase 3 brings the derivation, the re-basing
- * that keeps an endless sequence clear of the 49.7-day millisecond wrap, and
- * the clamp that keeps a finite one clear of int32_t overflow.
  */
 
 #ifndef RGBSEQ_SEQUENCER_H_

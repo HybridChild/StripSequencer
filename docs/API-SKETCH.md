@@ -317,10 +317,11 @@ namespace rgbseq {
 // playhead_ms - index * pixel_delay. A replacement computes that difference
 // for itself, so the delay is applied neither before the call nor after it.
 // Installing a replacement therefore clears the segment's pixel_delay, and the
-// setters refuse while one is in place, so no dormant value can linger. Twinkle relies on this -- hash(index) has to *be* the offset,
-// not be added to a linear ramp already in place. A replacement that wants a
-// configurable stagger must bake the constant in until context pointers
-// arrive (see DESIGN.md, Deferred).
+// setters refuse while one is in place, so no dormant value can linger.
+// Twinkle relies on this -- hash(index) has to *be* the offset, not be added to
+// a linear ramp already in place. A replacement gets no context pointer, so one
+// that wants a configurable stagger must bake the constant in (see DESIGN.md,
+// Deferred).
 //
 // Both plug-in types take (playhead_ms, index, count) in that order, so the
 // pipeline reads playhead in -> playhead out -> color out with the spatial

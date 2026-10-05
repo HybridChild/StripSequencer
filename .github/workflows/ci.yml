@@ -5,8 +5,6 @@
 # doctest_discover_tests registers every case under its variant's prefix, so a
 # matrix over variants would rebuild everything five times for the same
 # coverage and the same per-variant reporting.
-#
-# The Zephyr build job arrives with Phase 6.
 
 name: CI
 

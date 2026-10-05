@@ -2,8 +2,8 @@
 #
 # The cheapest possible proxy for "this actually works on the MCU": compile the
 # library only -- no tests, no link -- and see whether it needs a hosted libc, a
-# heap, or a 64-bit word. Run from Phase 0 rather than Phase 6, where fixing a
-# violation is one line rather than an archaeology exercise.
+# heap, or a 64-bit word. It runs on every change, so a violation is caught
+# while fixing it is one line rather than an archaeology exercise.
 #
 #   cmake -B build-cross -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
 #         -DRGBSEQ_BUILD_TESTS=OFF

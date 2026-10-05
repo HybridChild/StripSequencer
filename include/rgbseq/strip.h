@@ -7,10 +7,6 @@
  *
  * Note what is absent: no LED type, no driver reference, no clock object, no
  * callbacks. Everything platform-shaped lives outside.
- *
- * Phase 0: the constructor is real, because the cookbook declares its strip
- * `constinit` at file scope and that needs a constexpr one. Phase 4 brings
- * render(), the segment list and the hold fold.
  */
 
 #ifndef RGBSEQ_STRIP_H_

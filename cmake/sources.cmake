@@ -1,7 +1,7 @@
 # The library's source list and include directory, in one place.
 #
-# Included by the standalone CMakeLists.txt and, from Phase 6, by
-# zephyr/CMakeLists.txt -- so a new .cpp cannot be added to one build and
+# Shared by the standalone CMakeLists.txt and the Zephyr module's
+# zephyr/CMakeLists.txt, so a new .cpp cannot be added to one build and
 # forgotten in the other. That failure mode surfaces as a link error on
 # hardware long after the host tests went green.
 #

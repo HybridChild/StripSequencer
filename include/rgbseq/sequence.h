@@ -8,10 +8,6 @@
  *
  * The mechanism is docs/DESIGN.md, "A sequence is a lookup table, not a tape";
  * the decisions beside each declaration are docs/API-SKETCH.md, "Sequence".
- *
- * Phase 0: declarations and stubs. Phase 2 fills in at(), the easing curves,
- * the duration arithmetic and the builder -- including the builder's storage
- * beyond the two flags the sketch declares.
  */
 
 #ifndef RGBSEQ_SEQUENCE_H_
@@ -87,8 +83,8 @@ public:
     /* These two are here for the library's own use rather than the caller's:
      * Sequencer needs the loop length to re-base an endless origin, and
      * Segment::finished() needs the total. Endless reads as hold_forever. */
-    constexpr uint32_t loop_duration_ms() const { return 0; }   /* stub -- Phase 2 */
-    constexpr uint32_t total_duration_ms() const { return 0; }  /* stub -- Phase 2 */
+    constexpr uint32_t loop_duration_ms() const { return 0; }   /* stub */
+    constexpr uint32_t total_duration_ms() const { return 0; }  /* stub */
 
 private:
     Step     steps_[RGBSEQ_MAX_STEPS] = {};   /* capacity: always allocated in full */
@@ -111,38 +107,38 @@ public:
 
     constexpr SequenceBuilder& fade_to(Color /*c*/, uint32_t /*ms*/,
                                        Transition /*t*/ = Transition::Linear) {
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
     constexpr SequenceBuilder& hold(Color /*c*/, uint32_t /*ms*/) {   /* sugar for Transition::Step */
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
     constexpr SequenceBuilder& endless() {                            /* the default */
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
     constexpr SequenceBuilder& repeat(uint16_t /*times*/) {
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
     constexpr SequenceBuilder& start_color(Color /*c*/) {             /* finite only */
         start_set_ = true;
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
     constexpr SequenceBuilder& landing_color(Color /*c*/) {           /* finite only */
         landing_set_ = true;
-        return *this;   /* stub -- Phase 2 */
+        return *this;   /* stub */
     }
 
     /* Runtime path: reports rather than traps, because a sequence assembled from
      * user input can legitimately be invalid. */
     [[nodiscard]] constexpr Error build(Sequence& /*out*/) const {
-        return Error::None;   /* stub -- Phase 2 */
+        return Error::None;   /* stub */
     }
 
     /* Compile-time path: the same rules, enforced by constant evaluation.
      * consteval, so an invalid sequence is a compile error rather than a
-     * runtime check that cannot fail. Phase 2 adds the failure path, which
-     * cannot use throw: -fno-exceptions is how Zephyr builds C++ by default. */
+     * runtime check that cannot fail. The failure path cannot use throw:
+     * -fno-exceptions is how Zephyr builds C++ by default. */
     consteval Sequence build_const() const {
-        return Sequence{};    /* stub -- Phase 2 */
+        return Sequence{};    /* stub */
     }
 
 private:
@@ -152,11 +148,7 @@ private:
      * sequence even when the color is black, and to know when build() should
      * supply the default instead. Sequence keeps neither bit, so at() never
      * branches on one. Not std::optional: <optional> is outside the three
-     * headers the core may include.
-     *
-     * The rest of the builder's storage -- a sequence under construction plus
-     * a sticky Error -- is Phase 2's to decide alongside the validation rules
-     * that use it. */
+     * headers the core may include. */
     bool start_set_ = false;
     bool landing_set_ = false;
 };

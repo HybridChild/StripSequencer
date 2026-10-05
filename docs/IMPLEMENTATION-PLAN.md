@@ -193,6 +193,8 @@ The diagnostic quality is worth checking on both gcc and clang while writing thi
 
 **Decisions to make in this phase.** What an *unset* `start_color` or `landing_color` means on a finite sequence. The builder tracks set versus unset and `build()` writes the resolved color into the `Sequence`, so the two candidates are black, or the adjacent step's color (first step's color before the start, last step's color after the end). Recommendation: **black** before the start and the **last step's color** after the end — a finite sequence that runs to completion and then blanks is almost never wanted, whereas one that starts dark is the wipe recipe's default. Whichever is chosen, it needs a sentence in the sketch beside the builder.
 
+**Guide.** Constant initialisation — "why does nothing here run before `main`?" `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. It belongs to this phase because `build_const()` is what makes `consteval` real; written any earlier, the material would have to be rewritten once it is. [`cross-compiling-guide.md`](../notes/cross-compiling-guide.md) §5–§6 already covers the object-file evidence, and its Exercises 3 and 4 show the two costs directly, so the guide builds on those rather than repeating them.
+
 **Exit criteria:** `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors; every `Error` produced by a builder that triggers it; a `build_const()` compile-failure test (CMake `try_compile` asserting failure); the `Step` layout assertion passing in both builds.
 
 ## Phase 3 — Sequencer
@@ -230,6 +232,8 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 *`finished()` is a full stagger later than the sequencer's own end.* It is `playhead(now) - max_stagger > total_duration_ms()`, with `max_stagger` the largest offset across the segment's pixels — which is `(count_ - 1) * delay_q8_ >> 8` for a positive delay and zero for a negative one. It is false when the sequencer is not playing, false for an endless sequence, and false whenever a `PlayheadFn` replacement is installed, since the library cannot know the offsets a replacement produces.
 
 *`add()` rejects a segment that does not fit the buffer.* The strip knows `pixel_count_`; a segment constructed independently does not. Returning false for `first + count > pixel_count_` catches the mistake at the call site instead of turning it into a buffer overrun at frame rate. The `Segment&` assignment path in `segment(at)` bypasses this check by design, and that asymmetry is worth a comment in the header.
+
+*Delete `-Wno-unused-private-field` from `CMakeLists.txt`.* Clang reports private fields nothing reads, and until `Segment` and `Strip` are implemented the stubs read nothing. This is the phase that leaves no field unread, so the suppression goes, and whatever clang still reports is a real finding rather than a placeholder.
 
 *The hold fold is one `min` per pixel over work already being done*, folded again across segments. A pixel reporting 0 cannot be beaten, so folding may stop early — but painting cannot, so the saving is a comparison, not a loop exit.
 

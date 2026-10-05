@@ -4,9 +4,6 @@
  * staggers them -- plus the two optional replacements for the render loop's two
  * steps. There is no per-pixel state here and there must never be: that
  * invariant is the whole argument of docs/DESIGN.md.
- *
- * Phase 0: declarations and stubs. Phase 4 brings the per-pixel loop, the
- * stagger arithmetic (an arithmetic shift, not a division) and finished().
  */
 
 #ifndef RGBSEQ_SEGMENT_H_
@@ -37,7 +34,9 @@ namespace rgbseq {
  * Installing a replacement therefore clears the segment's pixel_delay, and the
  * setters refuse while one is in place, so no dormant value can linger.
  * Twinkle relies on this -- hash(index) has to *be* the offset, not be added to
- * a linear ramp already in place.
+ * a linear ramp already in place. A replacement gets no context pointer, so one
+ * that wants a configurable stagger must bake the constant in (see
+ * docs/DESIGN.md, Deferred).
  *
  * Both plug-in types take (playhead_ms, index, count) in that order, so the
  * pipeline reads playhead in -> playhead out -> color out with the spatial
@@ -61,7 +60,7 @@ using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
  * A free function rather than a Segment method, because the result is just a
  * delay -- once computed there is nothing about it left to remember. */
 constexpr int32_t spread(uint32_t /*total_ms*/, uint16_t /*count*/) {
-    return 0;   /* stub -- Phase 4 */
+    return 0;   /* stub */
 }
 
 class Segment {

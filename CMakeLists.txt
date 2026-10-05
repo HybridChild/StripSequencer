@@ -40,18 +40,13 @@ if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)      # for clangd
 
     # -Wconversion is deliberately absent. This codebase mixes uint8_t,
-    # uint16_t, int32_t and uint32_t in nearly every expression, and enabling it
-    # while the arithmetic is still in flux would slow every phase with casts.
-    # It goes on in Phase 7, where reaching zero is the job.
+    # uint16_t, int32_t and uint32_t in nearly every expression, and the warning
+    # would demand a cast in most of them.
     set(RGBSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # Phase 0 only, and it should be deleted rather than inherited. Every
-        # class is declared in full while its implementation is a stub, so clang
-        # correctly reports members that nothing reads yet -- Sequence::steps_,
-        # Segment::first_, Strip::buffer_ and the rest. Phase 4 is the last
-        # phase that leaves any of them unread; remove this line then and see
-        # what is left.
+        # Clang reports private fields that nothing reads, and a stub reads
+        # nothing.
         list(APPEND RGBSEQ_WARNINGS -Wno-unused-private-field)
     endif()
 

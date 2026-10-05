@@ -182,6 +182,6 @@ A test framework and a test runner solve different problems, and the seam betwee
 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
-- **`tests/layout.cpp`** — the suite as it stands after Phase 0: four cases, two of which exist to check the build system rather than the code.
+- **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, and that a `constinit` strip links against the library.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 5** — where the suite becomes an acceptance test: the eleven cookbook recipes compiled unmodified, with property assertions and golden-frame hashes.
 - **doctest's own `doctest.cmake`** — the ~200 lines behind §4, and short enough to read once to see that discovery really is just generated `add_test` calls.

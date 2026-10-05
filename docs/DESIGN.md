@@ -195,7 +195,7 @@ A replacement is a pure function of the pixel index, the pixel count and the pla
 
 Both the built-in lookup and any replacement answer the same question in the same shape: given a playhead, what color is here, and *how long does it stay this color?* The second half feeds the "when should I come back" answer described [below](#how-a-frame-gets-rendered), and it is not an extra burden — the built-in lookup has to find the step containing the playhead anyway, so that step's end falls out of the same search. A function that genuinely changes every frame, like a sine breathe, reports zero and gets frame-rate treatment; one that holds a color for a while says how long. So replacing the default costs nothing in power: a segment driven by your own function can let the system sleep exactly as long as one driven by a step list.
 
-All of which is why the library does **not** offer a "here is the buffer, draw whatever you like" escape hatch, which was the earlier plan. Handing over the buffer means giving up everything the surrounding machinery does for you: segments, overlapping, brightness, gamma, and the sleep answer. Plugging into one of these two steps keeps all of it working.
+All of which is why the library does **not** offer a "here is the buffer, draw whatever you like" escape hatch. Handing over the buffer means giving up everything the surrounding machinery does for you: segments, overlapping, brightness, gamma, and the sleep answer. Plugging into one of these two steps keeps all of it working.
 
 ## The four building blocks
 

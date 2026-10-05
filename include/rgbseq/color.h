@@ -8,9 +8,6 @@
  * Everything here is constexpr and header-only, so a palette costs flash and no
  * startup code. The naming decision -- why nothing is called `white` -- is
  * recorded in docs/API-SKETCH.md, "Color".
- *
- * Phase 0: rgb() and rgb8() are complete; hsv() and lerp() are stubs filled in
- * by Phase 1, which also brings the gamma table and the 8-bit conversion.
  */
 
 #ifndef RGBSEQ_COLOR_H_
@@ -52,9 +49,9 @@ struct Color {
                    static_cast<uint16_t>(b * 257));
     }
 
-    /* hue 0..65535; leaves w at 0. Integer sextant math -- Phase 1. */
+    /* hue 0..65535; leaves w at 0. Integer sextant math. */
     static constexpr Color hsv(uint16_t /*hue*/, uint8_t /*sat*/, uint8_t /*val*/) {
-        return Color{};   /* stub -- Phase 1 */
+        return Color{};   /* stub */
     }
 
 #if RGBSEQ_WHITE_CHANNEL
@@ -69,7 +66,7 @@ struct Color {
      * 16-bit space the sequence does -- gamma is applied later, at the 8-bit
      * conversion, so blending here is unaffected by it. */
     static constexpr Color lerp(Color a, Color /*b*/, uint16_t /*t*/) {
-        return a;         /* stub -- Phase 1 */
+        return a;         /* stub */
     }
 };
 

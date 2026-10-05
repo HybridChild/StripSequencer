@@ -8,8 +8,7 @@
 # It catches host-libc dependencies, accidental heap use through operator new,
 # and code that only compiles because the host happens to be 64-bit. Nothing is
 # linked and nothing is run: on a target with no startup file and no linker
-# script, compiling is the whole signal. From Phase 7 the resulting objects are
-# also what gets checked for a non-empty .init_array.
+# script, compiling is the whole signal.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

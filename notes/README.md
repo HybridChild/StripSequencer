@@ -50,7 +50,3 @@ Rows are in the reading order above, so the column to scan for "can I start here
 | 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become twenty test cases? | #2, for §5 | [`../docs/IMPLEMENTATION-PLAN.md`](../docs/IMPLEMENTATION-PLAN.md), Phase 0 and Phase 5 |
 | 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `RGBSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* |
 | 5 | [`cross-compiling-guide.md`](cross-compiling-guide.md) | What does compiling for a machine you cannot run actually prove? | #1 §3–§5, lightly; roughly what a microcontroller is | *(`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`)* |
-
-## Not yet written
-
-- **Constant initialisation — "why does nothing here run before `main`?"** `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. Deliberately deferred to **Phase 2**, when `SequenceBuilder::build_const()` makes `consteval` real; today the material would have to be rewritten twice. Until then, [`cross-compiling-guide.md`](cross-compiling-guide.md) §5–§6 covers the object-file evidence and its Exercises 3 and 4 show the two costs directly.
