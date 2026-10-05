@@ -1,5 +1,5 @@
 /* Sequencer: the playhead, and the one bit of state around it -- whether the
- * playhead is advancing or standing still.
+ * playhead follows the clock or stands still.
  *
  * Nothing stores a playhead as such. origin_ms_ and frozen_ are the two
  * representations, playing_ says which is authoritative, and the value is
@@ -20,11 +20,21 @@ namespace rgbseq {
 class Sequencer {
 public:
     void load(const Sequence& s);     /* copies; playhead 0, not playing */
-    void play(uint32_t now_ms);       /* advance from wherever the playhead is */
-    void pause(uint32_t now_ms);      /* stop advancing; the playhead stays put */
-    void seek(int32_t playhead_ms);   /* place the playhead; stops advancing */
+
+    /* play:  the playhead follows the clock from wherever it stands.
+     * pause: it stops following the clock and keeps its value.
+     * seek:  it is set directly, and does not follow the clock until play.
+     * play while playing and pause while paused change nothing: either one
+     * re-derived from the other state's stale field would make the playhead
+     * jump. */
+    void play(uint32_t now_ms);
+    void pause(uint32_t now_ms);
+    void seek(int32_t playhead_ms);
 
     bool playing() const;
+    /* What a segment calls at() on, once per pixel, with that pixel's own
+     * staggered playhead. The sequencer cannot do the lookup itself: it knows
+     * only the unstaggered playhead. */
     const Sequence& sequence() const;
 
     /* Non-const on purpose. For an endless sequence this re-bases the origin by

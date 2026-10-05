@@ -213,7 +213,7 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 
 `play()` on an already-playing sequencer must be a no-op, not a restart: recomputing the origin from the current playhead is the identity. Worth an explicit test, because getting it wrong turns any redundant `play()` call into a visible jump.
 
-**Exit criteria:** `pause`/`play` round-trips preserve the playhead exactly; `seek` stops advancement; re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic; a simulated `uint32_t` wrap of `now_ms` produces no discontinuity; `load()` resets the playhead to 0 and clears `playing_`.
+**Exit criteria:** `pause`/`play` round-trips preserve the playhead exactly; `seek` stops the playhead following the clock; `play` while playing and `pause` while paused leave the playhead exactly where it was; re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic; a simulated `uint32_t` wrap of `now_ms` produces no discontinuity; `load()` resets the playhead to 0 and clears `playing_`.
 
 ## Phase 4 — Segment and Strip
 

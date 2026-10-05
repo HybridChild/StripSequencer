@@ -303,11 +303,20 @@ namespace rgbseq {
 class Sequencer {
 public:
     void load(const Sequence& s);     // copies; playhead 0, not playing
-    void play(uint32_t now_ms);       // advance from wherever the playhead is
-    void pause(uint32_t now_ms);      // stop advancing; the playhead stays put
-    void seek(int32_t playhead_ms);   // place the playhead; stops advancing
+
+    // play:  the playhead follows the clock from wherever it stands.
+    // pause: it stops following the clock and keeps its value.
+    // seek:  it is set directly, and does not follow the clock until play.
+    // play while playing and pause while paused change nothing: either one
+    // re-derived from the other state's stale field would make the playhead jump.
+    void play(uint32_t now_ms);
+    void pause(uint32_t now_ms);
+    void seek(int32_t playhead_ms);
 
     bool playing() const;
+    // What a segment calls at() on, once per pixel, with that pixel's own
+    // staggered playhead. The sequencer cannot do the lookup itself: it knows
+    // only the unstaggered playhead.
     const Sequence& sequence() const;
 
     // Non-const on purpose. For an endless sequence this re-bases the origin by
@@ -327,11 +336,43 @@ private:
 
 Nothing stores a playhead as such. `origin_ms_` and `frozen_` are the two representations, `playing_` says which is authoritative, and the value is derived on every call — a stored playhead that got advanced each frame would be the tape model DESIGN.md rejects.
 
-**There is one bit of state here, not a state machine.** A sequencer is either advancing or it is not. The obvious extra states are all derivable and none of them earns storage: *complete* is `playhead > total_duration_ms()` on a finite sequence, and is in any case not the signal anyone wants, since removing a segment keys off `Segment::finished()`. *Idle* is a sequence with no steps, which `Sequence` already represents. *Paused* and *loaded-but-never-played* are the same condition arrived at from different directions, and nothing downstream can tell them apart or needs to.
+**What the calls store.** `playhead(now)` is answered one of two ways. While playing, the playhead follows the clock: the sequencer keeps `origin_ms_`, the clock reading at which the playhead was 0, and answers `now - origin_ms_`. Otherwise it keeps the playhead itself in `frozen_` and answers that, whatever `now` is. The calls switch between the two without letting the value jump:
 
-Collapsing them removes the verbs that existed only to move between them. `start(now)` was `seek(0)` then `play(now)`; `stop()` was `seek(0)`; `resume(now)` was `play(now)`; `unload()` was `load({})`. Re-triggering an alert that has already run is `load()` again, since loading resets the playhead — which is what the overlay recipe does anyway.
+| Call | Stores | Effect |
+| --- | --- | --- |
+| `load(s)` | `frozen_ = 0`, `playing_ = false` | The playhead sits at the start of the new sequence. |
+| `play(now)` | `origin_ms_ = now - frozen_`, `playing_ = true` | Picks the origin that puts the playhead at `frozen_` at this instant, so it carries on from where it stood. Nothing, if already playing. |
+| `pause(now)` | `frozen_ = now - origin_ms_`, `playing_ = false` | Records where the playhead is at this instant and keeps it there. Nothing, if not playing. |
+| `seek(p)` | `frozen_ = p`, `playing_ = false` | Sets the value directly. Nothing is following the clock, so no `now` is needed. |
 
-**`seek` stops the playhead advancing**, and that is the only coherent reading. Placing a playhead by hand on a moving target would mean re-deriving the origin, which needs a `now_ms` the call does not take. The recipes that seek — static gradient, progress bar — never play at all, so it costs them nothing, and scrubbing a running animation is `seek` then `play`.
+`play` and `pause` take `now` because each converts between a value and an origin on the clock; `seek` only ever sets a value. Each conversion reads the field the *other* state keeps current, which is why calling one in the state it would produce does nothing: `play` while playing would rebuild the origin from a `frozen_` left over from the last pause, and the playhead would jump back to it. Worked through, with clock time on the left:
+
+```text
+t=1000  load(s)       frozen = 0                    playhead(1000) = 0
+t=1000  play(1000)    origin = 1000 - 0    = 1000   playhead(1300) = 300
+t=1500  pause(1500)   frozen = 1500 - 1000 = 500    playhead(9999) = 500    stays put
+t=4000  play(4000)    origin = 4000 - 500  = 3500   playhead(4200) = 700    carries on from 500
+t=5000  seek(2000)    frozen = 2000                 playhead(5000) = 2000   not playing
+t=6000  play(6000)    origin = 6000 - 2000 = 4000   playhead(6100) = 2100
+```
+
+The 2.5 s pause cost nothing: `play(4000)` put the origin 500 ms in the past, so the playhead resumed at exactly the value `pause` recorded.
+
+**There is one bit of state here, not a state machine.** A sequencer's playhead either follows the clock or it does not. The obvious extra states are all derivable and none of them earns storage:
+
+- **Complete** is `playhead > total_duration_ms()` on a finite sequence, and is the wrong signal for removing a segment anyway, since with a stagger the last pixel is still `(count - 1) * pixel_delay` behind the sequencer — which is why removal keys off `Segment::finished()`.
+- **Idle** is a sequence with no steps, which `Sequence` already represents.
+- **Paused** and **loaded-but-never-played** are the same condition arrived at from different directions, and nothing downstream can tell them apart or needs to.
+
+With no states to move between, there are no transition verbs either. The operations a player usually names are each already one of the calls above, or two of them in a row:
+
+- **Start from the top** is `seek(0)` then `play(now)`.
+- **Stop** is `seek(0)`.
+- **Resume** is `play(now)`.
+- **Unload** is `load({})`.
+- **Re-trigger** an alert that has already run is `load()` again, since loading resets the playhead — which is what the overlay recipe does.
+
+**`seek` stops the playhead following the clock**, and that is the only coherent reading. Placing a playhead by hand on a moving target would mean re-deriving the origin, which needs a `now_ms` the call does not take. The recipes that seek — static gradient, progress bar — never play at all, so it costs them nothing, and scrubbing a running animation is `seek` then `play`.
 
 Every operation is total. There are no state-dependent refusals to document, which leaves the builder as the only place in the library that reports an error.
 

@@ -203,7 +203,7 @@ With the mechanism established, the pieces are small and each has one job.
 
 **Sequence** — the description. A list of steps, each a target color, a duration, and how to get there (jump, linear fade, or one of three eased fades). Plus whether it loops forever or a fixed number of times, and for finite sequences the start and landing colors. It holds no state, references no hardware, and can be built at compile time or at run time. Given a playhead, it produces a color and how long that color holds. That is its entire interface.
 
-**Sequencer** — the playhead, and the one bit of state around it: whether the playhead is advancing or standing still. It converts a clock reading into a playhead, or accepts one directly via `seek`. Several segments may share one sequencer, which is how you get two parts of a strip running the same animation in lockstep.
+**Sequencer** — the playhead, and the one bit of state around it: whether the playhead follows the clock or stands still. It converts a clock reading into a playhead, or accepts one directly via `seek`. Several segments may share one sequencer, which is how you get two parts of a strip running the same animation in lockstep.
 
 It is worth resisting the urge to give it more states than that. "Complete" is a comparison against the sequence's length, not a condition to store — and as the **Segment** entry below explains, it is not even the signal you want, since a segment finishes a full stagger later than its sequencer does. "Idle" is a sequence with no steps. "Paused" and "loaded but never played" are the same standing-still condition reached from different directions, and nothing downstream can tell them apart.
 
