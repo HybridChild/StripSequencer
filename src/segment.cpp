@@ -17,4 +17,9 @@ bool Segment::finished(uint32_t /*now_ms*/) const {
     return false;   /* stub */
 }
 
+uint32_t Segment::paint(uint8_t* /*buffer*/, uint16_t /*pixel_count*/,
+                        uint8_t /*brightness*/, uint32_t /*now_ms*/) const {
+    return hold_forever;   /* stub */
+}
+
 }  // namespace rgbseq

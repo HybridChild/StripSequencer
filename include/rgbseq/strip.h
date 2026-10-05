@@ -45,7 +45,8 @@ public:
     /* Position in the list is paint order: index 0 is painted first and later
      * entries overwrite it wherever they overlap. Segments are only appended,
      * so a background goes in first and overlays after it. */
-    bool add(const Segment& s);   /* on top of everything already present */
+    bool add(const Segment& s);   /* on top of everything already present;
+                                     false if full or s runs past the strip */
     bool remove(uint8_t at);      /* false if at >= count */
 
     /* remove shifts every entry after `at`, so an index is a position and never
@@ -60,9 +61,9 @@ public:
      * state -- the playhead lives in the sequencer -- so replacing one costs
      * nothing and the animation underneath does not flinch.
      *
-     * Note the asymmetry with add(): this path bypasses add()'s check that the
-     * segment fits the buffer, by design, since the caller has already named a
-     * position that does. */
+     * The assignment is not checked against the strip's length the way add()
+     * is, because a reference cannot refuse. A segment assigned here that runs
+     * past the end is clipped when painted instead of being rejected. */
     Segment& segment(uint8_t at);
     const Segment& segment(uint8_t at) const;
 

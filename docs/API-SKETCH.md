@@ -374,6 +374,25 @@ public:
     bool finished(uint32_t now_ms) const;
 
 private:
+    // Strip::render() is the only caller. The pixel loop lives here because a
+    // segment is what knows its pixels: it asks its sequencer for the playhead
+    // once, runs steps 1 and 2 for each pixel, converts through the strip's
+    // brightness and gamma, and writes 8-bit bytes straight into the buffer at
+    // its own offset. Returns the smallest hold among its pixels.
+    //
+    // Private, because painting one segment on its own skips the clear and the
+    // paint order, and nothing outside the strip has a reason to.
+    //
+    // Clips to pixel_count: pixels past the end of the strip are neither
+    // painted nor counted towards the hold, so a segment overhanging the end
+    // paints its visible part and one wholly off the strip returns
+    // hold_forever. add() already rejects such a segment; the clip is for
+    // `strip.segment(i) = Segment(...)`, which never passes through the strip
+    // and so cannot be checked, and would otherwise overrun the buffer.
+    friend class Strip;
+    uint32_t paint(uint8_t* buffer, uint16_t pixel_count, uint8_t brightness,
+                   uint32_t now_ms) const;
+
     uint16_t   first_ = 0;
     uint16_t   count_ = 0;
     Sequencer* sequencer_ = nullptr;
@@ -409,7 +428,8 @@ public:
     // Position in the list is paint order: index 0 is painted first and later
     // entries overwrite it wherever they overlap. Segments are only appended,
     // so a background goes in first and overlays after it.
-    bool add(const Segment& s);   // on top of everything already present
+    bool add(const Segment& s);   // on top of everything already present;
+                                  // false if full or s runs past the strip
     bool remove(uint8_t at);      // false if at >= count
 
     // remove shifts every entry after `at`, so an index is a position and never
@@ -424,6 +444,10 @@ public:
     // `strip.segment(i) = Segment(0, n, seq);`. A segment holds no animation
     // state -- the playhead lives in the sequencer -- so replacing one costs
     // nothing and the animation underneath does not flinch.
+    //
+    // The assignment is not checked against the strip's length the way add()
+    // is, because a reference cannot refuse. A segment assigned here that runs
+    // past the end is clipped when painted instead of being rejected.
     Segment& segment(uint8_t at);
     const Segment& segment(uint8_t at) const;
 
