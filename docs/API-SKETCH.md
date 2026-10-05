@@ -8,6 +8,7 @@ How it gets built is in [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md). Decisi
 
 ## Contents
 
+- [How the pieces fit](#how-the-pieces-fit)
 - [Language requirements](#language-requirements)
 - [Build-time configuration](#build-time-configuration)
 - [Color](#color)
@@ -15,9 +16,51 @@ How it gets built is in [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md). Decisi
 - [Sequencer](#sequencer)
 - [Segment](#segment)
 - [Strip](#strip)
+- [Putting it together](#putting-it-together)
 - [The cookbook as code](#the-cookbook-as-code)
 - [The Zephyr adapter](#the-zephyr-adapter)
 - [Open questions](#open-questions)
+
+## How the pieces fit
+
+DESIGN.md's four building blocks, used in two different ways. This section is the map; the sections after it give the declarations in dependency order, and [putting it together](#putting-it-together) shows them at work once they have all been introduced.
+
+### Who owns what
+
+```mermaid
+---
+config:
+  class:
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    class PixelBuffer["uint8_t buffer[]"]
+    SequenceBuilder ..> Sequence : builds
+    Sequencer *-- "1" Sequence : owns a copy
+    Sequence *-- "1..MAX_STEPS" Step
+    Strip *-- "0..MAX_SEGMENTS" Segment : owns copies
+    Segment o-- "1" Sequencer : borrows
+    Segment --> "0..1" PlayheadFn : replaces step 1
+    Segment --> "0..1" ColorFn : replaces step 2
+    Strip o-- "1" PixelBuffer : borrows
+```
+
+- **Ownership is by copy.** A `Sequence` passed to `load()` may be a temporary, since the sequencer keeps its own copy. A `Segment` built locally is copied by `add()`, so changing the local one afterwards changes nothing on the strip; the strip's copy is reached through `strip.segment(i)`.
+- **What is borrowed belongs to your code.** The buffer and every sequencer a segment points at must outlive whatever points at them. Static storage, which the cookbook uses throughout, satisfies both.
+- **Many segments may point at one sequencer**, which is how two parts of a strip run in lockstep. Nothing points the other way: a sequencer does not know which segments read it.
+- **`PlayheadFn` and `ColorFn` are plain function pointers**, held by the segment and null unless installed. Null means the default for that step.
+
+### Two kinds of call
+
+Every call into the library is one of two kinds, and keeping them apart is most of what there is to understanding the API.
+
+- **Control calls** say what the strip should show: `load`, `play`, `pause` and `seek` on a sequencer, the setters on a segment, and `add`, `remove`, `segment(i) = …` and `set_brightness` on the strip. They are made when something in the application changes — at start-up, when an alert fires, when a progress value moves. None of them touches the buffer, and none of them sets anything running: `play()` stores one number and returns.
+- **The frame call** is `render(now)`. It works out what every pixel looks like at `now`, writes the buffer, and returns how long until anything changes. Calling it twice with the same `now` produces the same buffer.
+
+`drop_finished(now)` sits between the two: it is a control call, but the frame loop is where it usually gets made, just before `render`.
+
+Between one `render()` and the next, the library does not run at all. There is no timer, no thread and no callback, which is how `play()` can amount to storing a number: the playhead moves only in the sense that the next `render()` asks with a later `now`.
 
 ## Language requirements
 
@@ -478,6 +521,44 @@ private:
 
 }  // namespace rgbseq
 ```
+
+## Putting it together
+
+With every type declared, here they are working together through one frame of the render path.
+
+```mermaid
+sequenceDiagram
+    participant App as Frame loop
+    participant Strip
+    participant Seg as Segment
+    participant Sqr as Sequencer
+    participant Seq as Sequence
+    participant Drv as LED driver
+
+    App->>Strip: drop_finished(now)
+    App->>Strip: render(now)
+    Strip->>Strip: clear buffer to black
+    loop each segment, in list order
+        Strip->>Seg: paint(buffer, pixel_count, brightness, now)
+        Seg->>Sqr: playhead(now)
+        Sqr-->>Seg: playhead
+        Seg->>Sqr: sequence()
+        Sqr-->>Seg: const Sequence&
+        loop each pixel i of the segment
+            Note over Seg: step 1: playhead − i × pixel_delay<br/>(or the segment's PlayheadFn)
+            Seg->>Seq: at(pixel playhead)<br/>(or the segment's ColorFn)
+            Seq-->>Seg: Sample { color, hold_ms }
+            Note over Seg: brightness, gamma, 8-bit → buffer<br/>hold = min(hold, hold_ms)
+        end
+    end
+    Strip-->>App: hold
+    App->>Drv: send buffer
+    Note over App: hold = 0: next frame at frame rate<br/>hold = n: sleep n ms<br/>hold_forever: don't reschedule
+```
+
+Everything from `paint` down happens within `render()`; `paint` is private and only the strip calls it, and the rest are public calls the segment makes. The two notes on the pixel loop are the two [plug-in points](DESIGN.md#two-places-to-plug-in), shown with their defaults. The sequencer is asked once per segment rather than once per pixel: every pixel in a segment starts from the same playhead and differs only by step 1.
+
+The segment asks the sequencer for two things, a playhead and the sequence it owns, and then calls `at()` on that sequence itself, once per pixel. It cannot ask the sequencer for a color instead, because the sequencer knows only the unstaggered playhead, and each pixel's playhead differs from it by step 1, which only the segment can compute. A `Sequencer::at()` that forwarded the pixel's playhead would add a hop and decide nothing; the sequencer's job ends at turning a clock reading into a playhead.
 
 ## The cookbook as code
 
