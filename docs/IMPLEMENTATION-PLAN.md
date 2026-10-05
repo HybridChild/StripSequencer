@@ -169,7 +169,7 @@ The W channel goes through the identical path. The library has no opinion about 
 
 *Easing is integer on a 0..65535 parameter.* `EaseIn` is `t²`, `EaseOut` is `1-(1-t)²`, `EaseInOut` is smoothstep, all with 32-bit or 64-bit intermediates. The testable invariants are `f(0) == 0`, `f(65535) == 65535` and monotonicity. Endpoint exactness matters more than it sounds: a curve that returns 65534 at the top leaves a one-LSB step at every transition boundary, which is a visible tick in a slow breathe.
 
-*Duration arithmetic saturates.* `loop_duration_ms() * repeats` overflows `uint32_t` for a long loop and a large repeat count. Saturating at `UINT32_MAX` is the right behaviour and the builder should not reject it — but `total_duration_ms()` is what `Segment::finished()` compares against, so a saturated total means "effectively never finishes", which is coherent.
+*The builder rejects a sequence longer than 2^29 ms.* `Error::TooLong` covers the total for a finite sequence and one loop for an endless one. The limit is what lets the sequencer cap a finite playhead at 2^30 and still have every segment finish, and lets an endless one re-base before its playhead runs out of range; see Phase 3. Check it without overflowing on the way: summing step durations and multiplying by `repeats` both exceed `uint32_t` long before they look suspicious, so accumulate in `uint64_t`, or compare against the limit before each addition and multiplication.
 
 *The builder needs a sticky error.* `fade_to` called nine times against a capacity of eight must not clobber the ninth or silently drop it; the builder records the first `Error` it hits and every later call is a no-op until `build()` reports it. Without this, over-long sequences fail in whichever way the copy loop happens to fail.
 
@@ -195,7 +195,7 @@ The diagnostic quality is worth checking on both gcc and clang while writing thi
 
 **Guide.** Constant initialisation — "why does nothing here run before `main`?" `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. It belongs to this phase because `build_const()` is what makes `consteval` real; written any earlier, the material would have to be rewritten once it is. [`cross-compiling-guide.md`](../notes/cross-compiling-guide.md) §5–§6 already covers the object-file evidence, and its Exercises 3 and 4 show the two costs directly, so the guide builds on those rather than repeating them.
 
-**Exit criteria:** `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors; every `Error` produced by a builder that triggers it; a `build_const()` compile-failure test (CMake `try_compile` asserting failure); the `Step` layout assertion passing in both builds.
+**Exit criteria:** `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors; every `Error` produced by a builder that triggers it; `TooLong` accepted at exactly 2^29 ms and rejected one past it, including through a loop and repeat count whose product overflows `uint32_t`; a `build_const()` compile-failure test (CMake `try_compile` asserting failure); the `Step` layout assertion passing in both builds.
 
 ## Phase 3 — Sequencer
 
@@ -207,13 +207,13 @@ The diagnostic quality is worth checking on both gcc and clang while writing thi
 
 The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`, not playing gives `frozen_`. The unsigned subtraction before the cast is what makes the millisecond counter's wrap a non-event — the difference stays correct across it as long as the true elapsed time fits in the range.
 
-*Re-basing keeps an endless sequence inside that range forever.* When the derived playhead reaches or exceeds the loop duration, add whole loops to `origin_ms_` and subtract the same from the playhead. Because the shift is a whole number of loops, phase is preserved exactly and no pixel moves. Doing it on every call — keeping the playhead permanently in `[0, loop)` — is simpler and more robust than a threshold, and costs one comparison.
+*Re-basing keeps an endless sequence inside that range forever.* When the derived playhead reaches or exceeds the loop duration, add whole loops to `origin_ms_` and subtract the same from the playhead. Because the shift is a whole number of loops, phase is preserved exactly and no pixel moves. Doing it on every call — keeping the playhead permanently in `[0, loop)` — is simpler and more robust than a threshold, and costs one comparison. Skip it when the loop is zero, which is the empty sequence `load({})` leaves; otherwise the re-base divides by zero.
 
-*Finite sequences cannot re-base*, since their position is absolute. Left playing, a finite sequence's playhead grows without bound and overflows `int32_t` after about 24.8 days. The fix is to clamp the derived playhead at a large constant — 2^30, roughly 12.4 days — which is far past any real `total_duration_ms()` and still leaves headroom for a negative per-pixel stagger to be subtracted from it without overflowing. Clamping cannot change behaviour, because everything past the end of a finite timeline reports the landing color and `hold_forever` regardless.
+*Finite sequences cannot re-base*, since their position is absolute, but left playing they need the same protection: the Wipe recipe never pauses, and its playhead would overflow `int32_t` after about 24.8 days and show `start_color`. Cap it at a large constant, 2^30 (about 12.4 days), by moving the origin: when the derived playhead exceeds the cap, set `origin_ms_ = now_ms - cap` and return the cap. Clamping only the returned value is not enough, because the unsigned difference underneath keeps growing and the cast turns it negative at 24.8 days regardless. The cap is a constant rather than `total_duration_ms()` because `finished()` compares the playhead *minus a stagger* against the total; the builder's 2^29 limit on the total and Phase 4's overflow guard on the stagger keep a capped playhead minus any stagger past the end of every finite sequence. Capping cannot change behaviour, because everything past the end of a finite timeline reports the landing color and `hold_forever` regardless.
 
 `play()` on an already-playing sequencer must be a no-op, not a restart: recomputing the origin from the current playhead is the identity. Worth an explicit test, because getting it wrong turns any redundant `play()` call into a visible jump.
 
-**Exit criteria:** `pause`/`play` round-trips preserve the playhead exactly; `seek` stops the playhead following the clock; `play` while playing and `pause` while paused leave the playhead exactly where it was; re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic; a simulated `uint32_t` wrap of `now_ms` produces no discontinuity; `load()` resets the playhead to 0 and clears `playing_`.
+**Exit criteria:** `pause`/`play` round-trips preserve the playhead exactly; `seek` stops the playhead following the clock; `play` while playing and `pause` while paused leave the playhead exactly where it was; re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic; a simulated `uint32_t` wrap of `now_ms` produces no discontinuity; a finite sequence left playing for a simulated 60 days still reports its landing color and lets its segment report `finished()`; an empty sequence left playing does not divide by zero; `load()` resets the playhead to 0 and clears `playing_`.
 
 ## Phase 4 — Segment and Strip
 
@@ -318,7 +318,6 @@ Everything the sketch settled stays settled. These are genuinely open and are ca
 | Decision | Phase | Recommendation |
 | --- | --- | --- |
 | Meaning of an unset `start_color` / `landing_color` on a finite sequence | 2 | Black before the start; last step's color after the end |
-| Whether `total_duration_ms` saturates or the builder rejects the overflow | 2 | Saturate; a saturated total reads as "never finishes", which is coherent |
 | Whether `add()` rejects a segment that exceeds the buffer | 4 | Yes — it is the only place the strip and the segment's extent are both known |
 | Whether `set_pixel_delay` rejects a delay that would overflow the stagger | 4 | Yes — it keeps the check out of the per-pixel loop and reuses the existing `bool` |
 

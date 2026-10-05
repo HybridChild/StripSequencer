@@ -37,9 +37,14 @@ public:
      * only the unstaggered playhead. */
     const Sequence& sequence() const;
 
-    /* Non-const on purpose. For an endless sequence this re-bases the origin by
-     * whole loops so the 49.7-day wrap is never reached, and that mutation has
-     * to happen somewhere the sequencer is being asked for its position anyway. */
+    /* The sequencer's position at now_ms, unstaggered: now_ms - origin_ms_
+     * while playing, frozen_ otherwise. A segment asks once per render() and
+     * staggers every pixel from the answer.
+     *
+     * Non-const on purpose. It moves the origin as it goes -- by whole loops for
+     * an endless sequence, to hold a finite one at 2^30 ms past its start -- so
+     * the 49.7-day wrap is never reached, and that mutation has to happen
+     * somewhere the sequencer is being asked for its position anyway. */
     int32_t playhead(uint32_t now_ms);
 
 private:

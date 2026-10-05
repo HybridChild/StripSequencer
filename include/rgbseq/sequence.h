@@ -67,6 +67,7 @@ enum class Error : uint8_t {
     ZeroRepeatCount,
     LandingColorOnEndless,   /* an endless sequence never lands */
     StartColorOnEndless,     /* negative playheads wrap, so nothing is ever "before" */
+    TooLong,                 /* over 2^29 ms in total, or per loop if endless */
 };
 
 class Sequence {

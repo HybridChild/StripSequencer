@@ -20,7 +20,7 @@ They are a spec, not notes, and they answer different questions. Read them in th
 
 - **[`DESIGN.md`](docs/DESIGN.md) — why.** The mechanism: a sequence as a stateless lookup table indexed by a continuous playhead, `pixel_delay` as the whole spatial dimension, the two plug-in points, hold as a binding contract rather than advice, and the invariant that there is **no per-pixel state inside the library, ever**. Also the cookbook, the supporting decisions and the non-goals.
 - **[`API-SKETCH.md`](docs/API-SKETCH.md) — what.** The calling surface, signatures only. Decisions are recorded beside the declaration they govern, so the rationale for a name or a signature is next to it rather than in a changelog. The eleven cookbook recipes at the end are the acceptance criteria: if Blink is not three lines, something is wrong upstream.
-- **[`IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) — how, and in what order.** Eight phases with per-phase exit criteria, the ground rules that hold across all of them, four decisions deliberately left open, and a risk register.
+- **[`IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) — how, and in what order.** Eight phases with per-phase exit criteria, the ground rules that hold across all of them, three decisions deliberately left open, and a risk register.
 
 When something is decided, record it beside the thing it decides — that is the convention all three already follow. Don't start a decision log.
 
