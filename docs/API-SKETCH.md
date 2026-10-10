@@ -480,6 +480,13 @@ public:
     // not playing holds forever and is never finished.
     bool finished(uint32_t now_ms) const;
 
+    // How a caller finds a segment again after the strip's list has shifted.
+    // The sequencer is the identity because the application already holds it
+    // by name, so a segment needs no ID field of its own. Several segments may
+    // share one sequencer, so this is a predicate to sweep with rather than a
+    // lookup that returns one index.
+    bool drives(const Sequencer& seq) const;
+
 private:
     // Strip::render() is the only caller. The pixel loop lives here because a
     // segment is what knows its pixels: it asks its sequencer for the playhead
@@ -542,8 +549,9 @@ public:
     // remove shifts every entry after `at`, so an index is a position and never
     // a handle: one held across a removal may now name a different segment, and
     // a Segment& returned earlier may now refer to one. Re-find the segment you
-    // want rather than caching where it was. With a handful of segments that is
-    // cheaper than the bookkeeping stable handles would need.
+    // want with Segment::drives() rather than caching where it was. With a
+    // handful of segments that is cheaper than the bookkeeping stable handles
+    // would need.
 
     uint8_t segment_count() const;
 
@@ -835,6 +843,18 @@ for (uint8_t i = segment_count(); i > 0; --i)
 The loop runs backwards. Removing an entry shifts every later one down, so a forward loop skips the segment after each removal — and it skips it silently, leaving a finished overlay painting over the background until something else happens to shift the list. Running downwards means the only entries that move are ones already visited. The endless background never reports finished, so it needs no special case.
 
 Note what this recipe did *not* want: a `pop()`. The natural shape is a sweep of the whole list rather than "remove the top" — and once the loop exists, a sweep costs nothing extra, copes with two overlays finishing out of order, and spares the caller from remembering which index it added.
+
+Cancelling the alert before it finishes is the case `drop_finished` cannot cover, because the segment to remove is picked by identity rather than by state. The caller sweeps for it by the sequencer it was built on:
+
+```cpp
+void cancel_alert() {
+    for (uint8_t i = strip.segment_count(); i > 0; --i)
+        if (strip.segment(i - 1).drives(alert_seq))
+            strip.remove(i - 1);
+}
+```
+
+It is the same backwards loop for the same reason, and it removes every segment on `alert_seq`, not just the first, since one sequencer may drive several. The same check keeps `raise_alert()` from stacking a second overlay when it fires again before the first has finished: skip the `add` if any segment already `drives(alert_seq)`, and the `load()` alone restarts the one that is there.
 
 ## The Zephyr adapter
 

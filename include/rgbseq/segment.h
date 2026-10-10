@@ -89,6 +89,13 @@ public:
      * not playing holds forever and is never finished. */
     bool finished(uint32_t now_ms) const;
 
+    /* How a caller finds a segment again after the strip's list has shifted.
+     * The sequencer is the identity because the application already holds it
+     * by name, so a segment needs no ID field of its own. Several segments may
+     * share one sequencer, so this is a predicate to sweep with rather than a
+     * lookup that returns one index. */
+    bool drives(const Sequencer& seq) const;
+
 private:
     /* Strip::render() is the only caller. The pixel loop lives here because a
      * segment is what knows its pixels: it asks its sequencer for the playhead

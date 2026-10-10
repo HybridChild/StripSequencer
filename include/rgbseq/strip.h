@@ -52,7 +52,7 @@ public:
     /* remove shifts every entry after `at`, so an index is a position and never
      * a handle: one held across a removal may now name a different segment, and
      * a Segment& returned earlier may now refer to one. Re-find the segment you
-     * want rather than caching where it was. */
+     * want with Segment::drives() rather than caching where it was. */
 
     uint8_t segment_count() const;
 
