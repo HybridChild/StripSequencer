@@ -76,7 +76,14 @@ Two notes on why it is arranged this way. The source list lives in `cmake/source
 
 **Goal:** every build path exists and works before there is any code worth building, so that later phases never debug the build and the feature at the same time.
 
-**Deliverables:** the layout above with headers containing only declarations copied from the sketch and sources containing stub definitions; a `CMakeLists.txt` producing a static `rgbseq` target plus an alias `RgbSequencer::rgbseq`; the test framework wired up with one trivially passing test; the variant helper and its five calls; a freestanding cross-compile check; CI.
+**Deliverables:**
+
+- The layout above, with headers containing only declarations copied from the sketch and sources containing stub definitions.
+- A `CMakeLists.txt` producing a static `rgbseq` target plus an alias `RgbSequencer::rgbseq`.
+- The test framework wired up with one trivially passing test.
+- The variant helper and its five calls.
+- A freestanding cross-compile check.
+- CI.
 
 **Implementation notes.**
 
@@ -129,13 +136,22 @@ The **freestanding cross-compile check** is the cheapest possible proxy for "thi
 
 CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. The variants are not a matrix axis: one configure produces all five libraries and all five test binaries in the same tree, and `doctest_discover_tests` reports each case under its variant's prefix — so a matrix over variants would rebuild everything five times for the same coverage and the same per-variant reporting. Adding the Zephyr build job waits for Phase 6.
 
-**Exit criteria:** `cmake --build build && ctest` passes in all five variants on gcc and clang, RGBW among them and not as an afterthought; the cross-compile job produces an object file; the umbrella header compiles standalone (a `#include <rgbseq/rgbseq.h>`-only translation unit, which catches missing includes inside headers).
+**Exit criteria:**
+
+- `cmake --build build && ctest` passes in all five variants on gcc and clang, RGBW among them and not as an afterthought.
+- The cross-compile job produces an object file.
+- The umbrella header compiles standalone (a `#include <rgbseq/rgbseq.h>`-only translation unit, which catches missing includes inside headers).
 
 ## Phase 1 — Configuration, color and output conversion
 
 **Goal:** all color math, including the conversion to the 8-bit buffer. This is the whole bottom of the dependency graph, and it is pure enough to be tested exhaustively.
 
-**Deliverables:** `config.h` complete; `color.h` with every factory and `lerp`, all `constexpr`; `colors::` constants; `src/color.cpp` with the gamma table and the internal `to_bytes(Color, uint8_t brightness, uint8_t* out)` used by `Strip`.
+**Deliverables:**
+
+- `config.h` complete.
+- `color.h` with every factory and `lerp`, all `constexpr`.
+- `colors::` constants.
+- `src/color.cpp` with the gamma table and the internal `to_bytes(Color, uint8_t brightness, uint8_t* out)` used by `Strip`.
 
 **Implementation notes.**
 
@@ -153,13 +169,24 @@ CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. T
 
 The W channel goes through the identical path. The library has no opinion about the emitter's chromaticity — that is the same refusal that keeps it from deriving W in the first place.
 
-**Exit criteria:** exhaustive or grid tests for `lerp` monotonicity and endpoints, `hsv` continuity, `rgb8` full-scale mapping, and conversion at brightness 0 / 128 / 255 with gamma on and off; `sizeof(Color)` asserted in both builds.
+**Exit criteria:**
+
+- Exhaustive or grid tests for `lerp` monotonicity and endpoints, `hsv` continuity, `rgb8` full-scale mapping, and conversion at brightness 0 / 128 / 255 with gamma on and off.
+- `sizeof(Color)` asserted in both builds.
 
 ## Phase 2 — Sequence
 
 **Goal:** the heart of the design. `Sequence::at()` is the function every other part exists to call, and every semantic that DESIGN.md argues for in prose is decided inside it. This is the phase most likely to change the design if something is wrong, which is why it comes before anything that depends on it.
 
-**Deliverables:** `Transition`, `Step` with its layout `static_assert`, `Sample`, `hold_forever`, `Error`, `Sequence` with `at`/`loop_duration_ms`/`total_duration_ms`, and `SequenceBuilder` with `build` and `build_const`.
+**Deliverables:**
+
+- `Transition`.
+- `Step` with its layout `static_assert`.
+- `Sample`.
+- `hold_forever`.
+- `Error`.
+- `Sequence` with `at`/`loop_duration_ms`/`total_duration_ms`.
+- `SequenceBuilder` with `build` and `build_const`.
 
 **Implementation notes.**
 
@@ -195,13 +222,27 @@ The diagnostic quality is worth checking on both gcc and clang while writing thi
 
 **Guide.** Constant initialisation — "why does nothing here run before `main`?" `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. It belongs to this phase because `build_const()` is what makes `consteval` real; written any earlier, the material would have to be rewritten once it is. [`cross-compiling-guide.md`](../notes/cross-compiling-guide.md) §5–§6 already covers the object-file evidence, and its Exercises 3 and 4 show the two costs directly, so the guide builds on those rather than repeating them.
 
-**Exit criteria:** `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors; every `Error` produced by a builder that triggers it; `TooLong` accepted at exactly 2^29 ms and rejected one past it, including through a loop and repeat count whose product overflows `uint32_t`; a `build_const()` compile-failure test (CMake `try_compile` asserting failure); the `Step` layout assertion passing in both builds.
+**Exit criteria:**
+
+- `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors.
+- Every `Error` produced by a builder that triggers it.
+- `TooLong` accepted at exactly 2^29 ms and rejected one past it, including through a loop and repeat count whose product overflows `uint32_t`.
+- A `build_const()` compile-failure test (CMake `try_compile` asserting failure).
+- The `Step` layout assertion passing in both builds.
 
 ## Phase 3 — Sequencer
 
 **Goal:** the playhead, derived rather than stored, and safe against the 49.7-day `uint32_t` millisecond wrap.
 
-**Deliverables:** `load`, `play`, `pause`, `seek`, `playing`, `sequence`, `playhead`.
+**Deliverables:**
+
+- `load`.
+- `play`.
+- `pause`.
+- `seek`.
+- `playing`.
+- `sequence`.
+- `playhead`.
 
 **Implementation notes.**
 
@@ -213,13 +254,28 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 
 `play()` on an already-playing sequencer must be a no-op, not a restart: recomputing the origin from the current playhead is the identity. Worth an explicit test, because getting it wrong turns any redundant `play()` call into a visible jump.
 
-**Exit criteria:** `pause`/`play` round-trips preserve the playhead exactly; `seek` stops the playhead following the clock; `play` while playing and `pause` while paused leave the playhead exactly where it was; re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic; a simulated `uint32_t` wrap of `now_ms` produces no discontinuity; a finite sequence left playing for a simulated 60 days still reports its landing color and lets its segment report `finished()`; an empty sequence left playing does not divide by zero; `load()` resets the playhead to 0 and clears `playing_`.
+**Exit criteria:**
+
+- `pause`/`play` round-trips preserve the playhead exactly.
+- `seek` stops the playhead following the clock.
+- `play` while playing and `pause` while paused leave the playhead exactly where it was.
+- Re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic.
+- A simulated `uint32_t` wrap of `now_ms` produces no discontinuity.
+- A finite sequence left playing for a simulated 60 days still reports its landing color and lets its segment report `finished()`.
+- An empty sequence left playing does not divide by zero.
+- `load()` resets the playhead to 0 and clears `playing_`.
 
 ## Phase 4 — Segment and Strip
 
 **Goal:** pixels. The per-pixel loop, the hold fold, the segment list, and the frame answer.
 
-**Deliverables:** `PlayheadFn`, `ColorFn`, `spread`, `Segment` with its setters and `finished`, and `Strip` complete.
+**Deliverables:**
+
+- `PlayheadFn`.
+- `ColorFn`.
+- `spread`.
+- `Segment` with its setters and `finished`.
+- `Strip` complete.
 
 **Implementation notes.**
 
@@ -237,13 +293,23 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 
 *The hold fold is one `min` per pixel over work already being done*, folded again across segments. A pixel reporting 0 cannot be beaten, so folding may stop early — but painting cannot, so the saving is a comparison, not a loop exit.
 
-**Exit criteria:** rendering is verified pure by rendering the same frame twice and comparing buffers; verified stateless by building the same strip through different call orders and comparing; overlap resolves to the later segment; `drop_finished` removes correctly with two overlays finishing out of order, which is the case the backwards loop exists for; the cancel sweep over `drives()` removes both of two segments sharing one sequencer and leaves the background segment painting; `add()` returns false for a segment running past the end of the strip, and the same segment assigned through `segment(i)` paints only its visible pixels, leaves guard bytes placed after the buffer untouched, and yields a hold from those pixels alone, while a lone segment assigned wholly off the strip paints nothing and `render` returns `hold_forever`; `spread` produces a delay whose accumulated error across a ring is under 1 ms, which is the reason `q8` exists at all.
+**Exit criteria:**
+
+- Rendering is verified pure by rendering the same frame twice and comparing buffers.
+- Rendering is verified stateless by building the same strip through different call orders and comparing.
+- Overlap resolves to the later segment.
+- `drop_finished` removes correctly with two overlays finishing out of order, which is the case the backwards loop exists for.
+- The cancel sweep over `drives()` removes both of two segments sharing one sequencer and leaves the background segment painting.
+- `add()` returns false for a segment running past the end of the strip, and the same segment assigned through `segment(i)` paints only its visible pixels, leaves guard bytes placed after the buffer untouched, and yields a hold from those pixels alone, while a lone segment assigned wholly off the strip paints nothing and `render` returns `hold_forever`.
+- `spread` produces a delay whose accumulated error across a ring is under 1 ms, which is the reason `q8` exists at all.
 
 ## Phase 5 — The cookbook as tests
 
 **Goal:** prove the design, not just the code. The eleven recipes in the sketch were written to show the API is usable; compiled and run, they become the acceptance suite.
 
-**Deliverables:** `tests/cookbook.cpp` containing all eleven recipes verbatim from the sketch, each with property assertions and a golden-frame hash.
+**Deliverables:**
+
+- `tests/cookbook.cpp` containing all eleven recipes verbatim from the sketch, each with property assertions and a golden-frame hash.
 
 **Implementation notes.**
 
@@ -253,13 +319,20 @@ Each recipe gets **property assertions** rather than only golden bytes, because 
 
 A **golden hash** per recipe over a table of timestamps then guards against silent numeric drift in easing or conversion. Golden values are regenerated deliberately and the regeneration diff is reviewed, never blessed automatically.
 
-**Exit criteria:** all eleven recipes compile unmodified and pass in every variant; Blink is still three lines.
+**Exit criteria:**
+
+- All eleven recipes compile unmodified and pass in every variant.
+- Blink is still three lines.
 
 ## Phase 6 — Zephyr integration
 
 **Goal:** the library builds inside a Zephyr application and drives the bench hardware — a Nucleo-H753ZI with an 11-pixel RGBW strip on I2S3 / PB2.
 
-**Deliverables:** `zephyr/module.yml`, `zephyr/CMakeLists.txt`, `zephyr/Kconfig`; a sample app with a board overlay, a `prj.conf` and the frame loop; a short bring-up note in `docs/`.
+**Deliverables:**
+
+- `zephyr/module.yml`, `zephyr/CMakeLists.txt`, `zephyr/Kconfig`.
+- A sample app with a board overlay, a `prj.conf` and the frame loop.
+- A short bring-up note in `docs/`.
 
 The module directory is thin by construction, and its only real job is translating Kconfig into the macros the core already reads:
 
@@ -293,7 +366,11 @@ Read out of `~/zephyr-workspace` rather than assumed. Recorded here so Phase 6 d
 
 **Bring-up order, cheapest signal first.** Solid red confirms wiring, permute and power. Then a white-only color, because nothing else distinguishes a working `update_channels` path from `update_rgb`'s silent zero. Then blink for the frame loop and the hold path, comet for the stagger and its sign, rainbow for HSV and the ring seam. Last, load a static gradient and confirm the workqueue is genuinely idle rather than spinning — if it is not, the hold fold is returning 0 where it should return `hold_forever`, and that is a Phase 2 bug surfacing late.
 
-**Exit criteria:** the sample builds and runs on the board; both `RGBSEQ_WHITE_CHANNEL` settings build; the bring-up sequence passes.
+**Exit criteria:**
+
+- The sample builds and runs on the board.
+- Both `RGBSEQ_WHITE_CHANNEL` settings build.
+- The bring-up sequence passes.
 
 ## Phase 7 — Hardening and release
 
