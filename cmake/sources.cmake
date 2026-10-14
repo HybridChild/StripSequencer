@@ -9,9 +9,9 @@
 # file, whatever includes it). Relative paths would resolve against the
 # including file's directory, which is a different one in the Zephyr build.
 
-set(RGBSEQ_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/../include)
+set(STRIPSEQ_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/../include)
 
-set(RGBSEQ_SOURCES
+set(STRIPSEQ_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/../src/color.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../src/sequence.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../src/sequencer.cpp

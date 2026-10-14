@@ -1,4 +1,4 @@
-# RgbSequencer -- a standalone, OS-agnostic C++20 library for animating
+# StripSequencer -- a standalone, OS-agnostic C++20 library for animating
 # WS2812-style LED strips. See docs/DESIGN.md for the mechanism and
 # docs/IMPLEMENTATION-PLAN.md for how it gets built.
 #
@@ -6,7 +6,7 @@
 # below uses to keep our own build settings out of a consumer's build.
 cmake_minimum_required(VERSION 3.21)
 
-project(RgbSequencer VERSION 0.1.0 LANGUAGES CXX)
+project(StripSequencer VERSION 0.1.0 LANGUAGES CXX)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/sources.cmake)
 
@@ -28,16 +28,16 @@ endif()
 # consumer, pinning their configuration from inside the library.
 # ---------------------------------------------------------------------------
 
-add_library(rgbseq STATIC ${RGBSEQ_SOURCES})
-add_library(RgbSequencer::rgbseq ALIAS rgbseq)
+add_library(stripseq STATIC ${STRIPSEQ_SOURCES})
+add_library(StripSequencer::stripseq ALIAS stripseq)
 
-target_include_directories(rgbseq PUBLIC ${RGBSEQ_INCLUDE_DIR})
+target_include_directories(stripseq PUBLIC ${STRIPSEQ_INCLUDE_DIR})
 
 # A requirement, not a flag: CMake reconciles it with whatever the consumer
 # already asked for. This is the only thing the library says about the
 # toolchain -- Zephyr owns the compiler, the standard library, the optimisation
 # level and the warning set for anything built inside it.
-target_compile_features(rgbseq PUBLIC cxx_std_20)
+target_compile_features(stripseq PUBLIC cxx_std_20)
 
 # ---------------------------------------------------------------------------
 # Everything below shapes *our* build only
@@ -47,20 +47,20 @@ if(PROJECT_IS_TOP_LEVEL)
     # -Wconversion is deliberately absent. This codebase mixes uint8_t,
     # uint16_t, int32_t and uint32_t in nearly every expression, and the warning
     # would demand a cast in most of them.
-    set(RGBSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
+    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         # Clang reports private fields that nothing reads, and a stub reads
         # nothing.
-        list(APPEND RGBSEQ_WARNINGS -Wno-unused-private-field)
+        list(APPEND STRIPSEQ_WARNINGS -Wno-unused-private-field)
     endif()
 
-    target_compile_options(rgbseq PRIVATE ${RGBSEQ_WARNINGS})
+    target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()
 
-option(RGBSEQ_BUILD_TESTS "Build the host test suite" ${PROJECT_IS_TOP_LEVEL})
+option(STRIPSEQ_BUILD_TESTS "Build the host test suite" ${PROJECT_IS_TOP_LEVEL})
 
-if(RGBSEQ_BUILD_TESTS)
+if(STRIPSEQ_BUILD_TESTS)
     # doctest: installed copy first, fetched only if there is not one. The
     # installed path needs no network and no build; the fetched path pins an
     # exact tag. CI has no doctest installed, so both stay exercised.
@@ -83,12 +83,12 @@ if(RGBSEQ_BUILD_TESTS)
 
     # Not in cmake/sources.cmake: that file is shared with the Zephyr build,
     # which must never see the tests.
-    set(RGBSEQ_TEST_SOURCES
+    set(STRIPSEQ_TEST_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/tests/doctest_main.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/umbrella_only.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp)
 
-    include(${CMAKE_CURRENT_LIST_DIR}/cmake/rgbseq_variant.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
 
     # Five, not four. The cross product of the two behavioural macros is four,
     # and `default` is one of them -- called with no definitions at all, so that
@@ -98,9 +98,9 @@ if(RGBSEQ_BUILD_TESTS)
     # cross product, but one cheap variant catches anything that quietly assumes
     # 8 -- an off-by-one in the builder's capacity check, or a test with a
     # hardcoded step count.
-    rgbseq_add_variant(default)
-    rgbseq_add_variant(rgbw          RGBSEQ_WHITE_CHANNEL=1)
-    rgbseq_add_variant(nogamma       RGBSEQ_GAMMA=0)
-    rgbseq_add_variant(rgbw_nogamma  RGBSEQ_WHITE_CHANNEL=1 RGBSEQ_GAMMA=0)
-    rgbseq_add_variant(tight         RGBSEQ_MAX_STEPS=3 RGBSEQ_MAX_SEGMENTS=1)
+    stripseq_add_variant(default)
+    stripseq_add_variant(rgbw          STRIPSEQ_WHITE_CHANNEL=1)
+    stripseq_add_variant(nogamma       STRIPSEQ_GAMMA=0)
+    stripseq_add_variant(rgbw_nogamma  STRIPSEQ_WHITE_CHANNEL=1 STRIPSEQ_GAMMA=0)
+    stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1)
 endif()

@@ -6,15 +6,15 @@
  * invariant is the whole argument of docs/DESIGN.md.
  */
 
-#ifndef RGBSEQ_SEGMENT_H_
-#define RGBSEQ_SEGMENT_H_
+#ifndef STRIPSEQ_SEGMENT_H_
+#define STRIPSEQ_SEGMENT_H_
 
 #include <cstdint>
 
-#include "rgbseq/sequence.h"
-#include "rgbseq/sequencer.h"
+#include "stripseq/sequence.h"
+#include "stripseq/sequencer.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 /* Step 1 of the render loop: where does this pixel look?
  *
@@ -124,6 +124,6 @@ private:
     ColorFn    what_  = nullptr;
 };                                 /* 20 bytes on a 32-bit target */
 
-}  // namespace rgbseq
+}  // namespace stripseq
 
-#endif  /* RGBSEQ_SEGMENT_H_ */
+#endif  /* STRIPSEQ_SEGMENT_H_ */

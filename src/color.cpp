@@ -2,4 +2,4 @@
  * conversion into the 8-bit buffer the hardware wants.
  */
 
-#include "rgbseq/color.h"
+#include "stripseq/color.h"

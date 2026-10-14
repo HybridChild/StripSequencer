@@ -1,8 +1,8 @@
 /* Sequencer: deriving the playhead from a clock reading. */
 
-#include "rgbseq/sequencer.h"
+#include "stripseq/sequencer.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 void Sequencer::load(const Sequence& /*s*/) {}          /* stub */
 void Sequencer::play(uint32_t /*now_ms*/) {}            /* stub */
@@ -17,4 +17,4 @@ int32_t Sequencer::playhead(uint32_t /*now_ms*/) {
     return frozen_;   /* stub */
 }
 
-}  // namespace rgbseq
+}  // namespace stripseq

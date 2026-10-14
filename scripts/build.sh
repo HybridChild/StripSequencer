@@ -5,7 +5,7 @@
 #   scripts/build.sh                     # into ./build
 #   scripts/build.sh build-gcc           # into another directory
 #   CXX=g++-16 scripts/build.sh build-gcc   # the other compiler
-#   scripts/build.sh build -DRGBSEQ_BUILD_TESTS=OFF   # extra args go to cmake
+#   scripts/build.sh build -DSTRIPSEQ_BUILD_TESTS=OFF   # extra args go to cmake
 #
 # Why CXX matters on macOS: /usr/bin/g++ is Apple clang, not GCC. The second
 # compiler in the matrix is homebrew's, and it is only ever called g++-16.

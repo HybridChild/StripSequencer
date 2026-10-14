@@ -16,9 +16,9 @@ This is a teaching document, not project documentation. It explains what a CMake
 
 ## 1. The mental model: a build is a graph of targets
 
-The first thing to unlearn is the idea that a CMake file is a script that compiles files. It is a *description of targets* — libraries and executables — and of the edges between them. `add_library(rgbseq STATIC ...)` does not compile anything; it declares a node. The compiler command line is generated much later, by walking the graph.
+The first thing to unlearn is the idea that a CMake file is a script that compiles files. It is a *description of targets* — libraries and executables — and of the edges between them. `add_library(stripseq STATIC ...)` does not compile anything; it declares a node. The compiler command line is generated much later, by walking the graph.
 
-That distinction matters because most of what a target carries is not for the target itself. When something links `rgbseq`, that consumer needs to know where the headers are, what C++ standard they need, and which preprocessor definitions they were compiled under. None of that is discoverable from the archive file. So a target carries it, and CMake calls it a **usage requirement**: a property that travels along an edge to whoever links you.
+That distinction matters because most of what a target carries is not for the target itself. When something links `stripseq`, that consumer needs to know where the headers are, what C++ standard they need, and which preprocessor definitions they were compiled under. None of that is discoverable from the archive file. So a target carries it, and CMake calls it a **usage requirement**: a property that travels along an edge to whoever links you.
 
 Everything in this guide is one question asked repeatedly: *does this property stop at the target, or travel to its consumers?*
 
@@ -34,13 +34,13 @@ Everything in this guide is one question asked repeatedly: *does this property s
 
 `INTERFACE` looks exotic until you meet a header-only library, which is exactly the case it exists for: there is nothing to compile, so nothing applies "when building this target", but consumers still need the include directory. `doctest::doctest` is an `INTERFACE` target of precisely this kind — see [`dependencies-guide.md`](dependencies-guide.md) §2.
 
-The useful way to read a line is as a sentence about reach. `target_include_directories(rgbseq PUBLIC include/)` says *"I compile with this on my include path, and so does anyone who links me."* `target_compile_options(rgbseq PRIVATE -Wall)` says *"I compile with this, and it is nobody else's business."*
+The useful way to read a line is as a sentence about reach. `target_include_directories(stripseq PUBLIC include/)` says *"I compile with this on my include path, and so does anyone who links me."* `target_compile_options(stripseq PRIVATE -Wall)` says *"I compile with this, and it is nobody else's business."*
 
 ## 3. What propagates
 
 Four properties carry the keywords, and they are the four that matter:
 
-- **Include directories** — `target_include_directories`. Almost always `PUBLIC` for a library with headers: consumers compile those headers, so they need the path. This repo's `include/` is the prefixed directory that makes consumers write `#include <rgbseq/strip.h>`.
+- **Include directories** — `target_include_directories`. Almost always `PUBLIC` for a library with headers: consumers compile those headers, so they need the path. This repo's `include/` is the prefixed directory that makes consumers write `#include <stripseq/strip.h>`.
 - **Compile definitions** — `target_compile_definitions`. This is the interesting one, because a definition can change what the headers *mean*. §6 is entirely about that.
 - **Compile features** — `target_compile_features`. A language-level requirement rather than a flag; §4.
 - **Linked libraries** — `target_link_libraries`. `PUBLIC` here means "and my consumers link it too", which is how a dependency of a dependency reaches the final executable without anyone naming it twice.
@@ -53,12 +53,12 @@ There are two ways to ask for C++20, and only one of them composes:
 
 ```cmake
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")   # a flag: last writer wins
-target_compile_features(rgbseq PUBLIC cxx_std_20)      # a requirement: CMake reconciles
+target_compile_features(stripseq PUBLIC cxx_std_20)    # a requirement: CMake reconciles
 ```
 
 The first is a string appended to a command line. If a consumer already asked for C++23, the two now fight, and which wins depends on argument order — a coin flip decided by the generator. The second states a *minimum*: CMake takes the maximum of everything requested across the graph and emits one `-std=` flag. A consumer on C++23 stays on C++23 and this library still compiles.
 
-`PUBLIC` is right here for a reason worth saying out loud: the requirement is a property of the **headers**, not of the `.cpp` files. `SequenceBuilder::build_const()` is `consteval`, so any translation unit that includes `rgbseq/sequence.h` needs C++20 whether or not it ever links the archive.
+`PUBLIC` is right here for a reason worth saying out loud: the requirement is a property of the **headers**, not of the `.cpp` files. `SequenceBuilder::build_const()` is `consteval`, so any translation unit that includes `stripseq/sequence.h` needs C++20 whether or not it ever links the archive.
 
 This is also the *only* thing this library says about the toolchain. That is a project ground rule rather than a CMake rule: Zephyr owns the compiler, the standard library, the optimisation level and the warning set for anything built inside it, so the library sets no `-O`, no `-fno-exceptions`, no `CMAKE_CXX_FLAGS`. Where those flags legitimately live is the subject of [`cross-compiling-guide.md`](cross-compiling-guide.md) §3.
 
@@ -71,23 +71,23 @@ This repo goes one step further and puts its warnings behind `PROJECT_IS_TOP_LEV
 ```cmake
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_CXX_EXTENSIONS OFF)
-    set(RGBSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
-    target_compile_options(rgbseq PRIVATE ${RGBSEQ_WARNINGS})
+    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
+    target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()
 ```
 
-Two mechanisms, two different jobs, and it is worth keeping them apart: `PRIVATE` stops the flags travelling *along an edge*, and `PROJECT_IS_TOP_LEVEL` stops the whole opinion existing when we are not the main project. The same guard is what makes `RGBSEQ_BUILD_TESTS` default to off for a consumer, so nobody builds our test suite by accident.
+Two mechanisms, two different jobs, and it is worth keeping them apart: `PRIVATE` stops the flags travelling *along an edge*, and `PROJECT_IS_TOP_LEVEL` stops the whole opinion existing when we are not the main project. The same guard is what makes `STRIPSEQ_BUILD_TESTS` default to off for a consumer, so nobody builds our test suite by accident.
 
 ## 6. The failure with no diagnostic
 
 Now the case this whole guide exists for.
 
-This library has a build-time macro, `RGBSEQ_WHITE_CHANNEL`, that adds a fourth channel to `Color`:
+This library has a build-time macro, `STRIPSEQ_WHITE_CHANNEL`, that adds a fourth channel to `Color`:
 
 ```cpp
 struct Color {
     uint16_t r, g, b;
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     uint16_t w;
 #endif
     static constexpr Color rgb(uint16_t r, uint16_t g, uint16_t b);
@@ -115,7 +115,7 @@ Catching it needs a second source of truth that does not travel the same edge. T
 ```cmake
 set(expect "")
 foreach(def IN LISTS ARGN)
-    string(REPLACE "RGBSEQ_" "RGBSEQ_EXPECT_" renamed "${def}")
+    string(REPLACE "STRIPSEQ_" "STRIPSEQ_EXPECT_" renamed "${def}")
     list(APPEND expect ${renamed})
 endforeach()
 target_compile_definitions(${exe} PRIVATE ${expect})
@@ -124,8 +124,8 @@ target_compile_definitions(${exe} PRIVATE ${expect})
 and `tests/layout.cpp` compares the two:
 
 ```cpp
-#ifdef RGBSEQ_EXPECT_WHITE_CHANNEL
-static_assert(RGBSEQ_WHITE_CHANNEL == RGBSEQ_EXPECT_WHITE_CHANNEL, RGBSEQ_PROPAGATION_MSG);
+#ifdef STRIPSEQ_EXPECT_WHITE_CHANNEL
+static_assert(STRIPSEQ_WHITE_CHANNEL == STRIPSEQ_EXPECT_WHITE_CHANNEL, STRIPSEQ_PROPAGATION_MSG);
 #endif
 ```
 
@@ -148,21 +148,21 @@ Four, all on the host, seconds each. Two work by breaking the build on purpose; 
 *Demonstrates §2 and §3: usage requirements are resolved into ordinary command-line flags.*
 
 ```sh
-ninja -C build -t commands rgbseq_rgbw | grep -oE '\-DRGBSEQ_[A-Z_]+=[0-9]+' | sort -u
-ninja -C build -t commands tests_rgbw  | grep -oE '\-DRGBSEQ_[A-Z_]*[A-Z_]+=[0-9]+' | sort -u
+ninja -C build -t commands stripseq_rgbw | grep -oE '\-DSTRIPSEQ_[A-Z_]+=[0-9]+' | sort -u
+ninja -C build -t commands tests_rgbw    | grep -oE '\-DSTRIPSEQ_[A-Z_]*[A-Z_]+=[0-9]+' | sort -u
 ```
 
 ```
--DRGBSEQ_WHITE_CHANNEL=1
+-DSTRIPSEQ_WHITE_CHANNEL=1
 
--DRGBSEQ_EXPECT_WHITE_CHANNEL=1
--DRGBSEQ_WHITE_CHANNEL=1
+-DSTRIPSEQ_EXPECT_WHITE_CHANNEL=1
+-DSTRIPSEQ_WHITE_CHANNEL=1
 ```
 
-The library was given one definition. The test executable was never given `RGBSEQ_WHITE_CHANNEL` directly — it arrived by propagation, which is the edge in §2 made visible. `RGBSEQ_EXPECT_WHITE_CHANNEL` is the second path from §7. Now count the same flags on the `default` variant:
+The library was given one definition. The test executable was never given `STRIPSEQ_WHITE_CHANNEL` directly — it arrived by propagation, which is the edge in §2 made visible. `STRIPSEQ_EXPECT_WHITE_CHANNEL` is the second path from §7. Now count the same flags on the `default` variant:
 
 ```sh
-ninja -C build -t commands rgbseq_default | grep -c 'DRGBSEQ_'
+ninja -C build -t commands stripseq_default | grep -c 'DSTRIPSEQ_'
 ```
 
 ```
@@ -177,7 +177,7 @@ ninja -C build -t commands rgbseq_default | grep -c 'DRGBSEQ_'
 
 ```sh
 for v in default rgbw; do
-  nm -C build/librgbseq_$v.a | grep ' T ' | sed 's/^[0-9a-f]* //' | sort > /tmp/sym_$v.txt
+  nm -C build/libstripseq_$v.a | grep ' T ' | sed 's/^[0-9a-f]* //' | sort > /tmp/sym_$v.txt
 done
 diff /tmp/sym_default.txt /tmp/sym_rgbw.txt && echo "identical: $(wc -l < /tmp/sym_rgbw.txt) symbols"
 ```
@@ -194,7 +194,7 @@ Two libraries that disagree about the size of `Color`, `Step`, `Sample`, `Sequen
 
 *Demonstrates §7: the second path catches what §6 says nothing else can.*
 
-In `cmake/rgbseq_variant.cmake`, change `target_compile_definitions(${lib} PUBLIC ${ARGN})` to `PRIVATE`:
+In `cmake/stripseq_variant.cmake`, change `target_compile_definitions(${lib} PUBLIC ${ARGN})` to `PRIVATE`:
 
 ```sh
 cmake --build build --target tests_rgbw
@@ -203,7 +203,7 @@ cmake --build build --target tests_rgbw
 ```
 tests/layout.cpp:32:15: error: static assertion failed due to requirement '0 == 1':
 The variant's definitions did not reach the tests. Check that
-target_compile_definitions in cmake/rgbseq_variant.cmake is PUBLIC.
+target_compile_definitions in cmake/stripseq_variant.cmake is PUBLIC.
 ```
 
 **Revert it.** Note what the diagnostic is: not a link error, not a crash, but a `static_assert` this repo wrote on purpose. Nothing in the toolchain produced it.
@@ -236,8 +236,8 @@ A CMake build is a graph of targets, and most of what a target carries is aimed 
 
 ## 10. Where to go next
 
-- **[`build-variants-guide.md`](build-variants-guide.md)** — the direct sequel: given that a layout-changing macro cannot be shared, what does a build that supports several of them look like? It is where the `rgbseq_add_variant` helper quoted above is explained end to end.
+- **[`build-variants-guide.md`](build-variants-guide.md)** — the direct sequel: given that a layout-changing macro cannot be shared, what does a build that supports several of them look like? It is where the `stripseq_add_variant` helper quoted above is explained end to end.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — the same graph, extended to targets you did not write: imported targets, `INTERFACE` libraries, and where `doctest::doctest` comes from.
 - **[`cross-compiling-guide.md`](cross-compiling-guide.md) §3** — the other half of §4's rule: if the library sets no flags, who does?
-- **`cmake/rgbseq_variant.cmake` and the root `CMakeLists.txt`** — thirty lines each, and after this guide they should read as prose.
+- **`cmake/stripseq_variant.cmake` and the root `CMakeLists.txt`** — thirty lines each, and after this guide they should read as prose.
 - **CMake's own documentation on [`cmake-buildsystem(7)`](https://cmake.org/cmake/help/latest/manual/cmake-buildsystem.7.html)** — the reference half of §3, with the full list of properties that carry usage requirements.

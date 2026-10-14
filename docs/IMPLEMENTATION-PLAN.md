@@ -1,4 +1,4 @@
-# RgbSequencer — implementation plan
+# StripSequencer — implementation plan
 
 How the mechanism in [DESIGN.md](DESIGN.md), with the calling surface in [API-SKETCH.md](API-SKETCH.md), gets built. Eight phases, each one buildable and testable on its own, ordered so that every phase can be verified before the next depends on it.
 
@@ -23,7 +23,7 @@ The shape of the project is a **standalone CMake library that a Zephyr module wr
 
 These hold in every phase and are worth stating once rather than repeating.
 
-**The library never sets a toolchain flag.** Zephyr owns the compiler, the standard library, the optimisation level and the warning set for anything built inside it. The core target declares `target_compile_features(rgbseq PUBLIC cxx_std_20)` — a requirement, which CMake reconciles with the consumer — and nothing else. No touching `CMAKE_CXX_FLAGS`, no `-fno-exceptions`, no `-Os`. Warnings and sanitizers are applied only when `PROJECT_IS_TOP_LEVEL`, so they shape our own builds and never a consumer's.
+**The library never sets a toolchain flag.** Zephyr owns the compiler, the standard library, the optimisation level and the warning set for anything built inside it. The core target declares `target_compile_features(stripseq PUBLIC cxx_std_20)` — a requirement, which CMake reconciles with the consumer — and nothing else. No touching `CMAKE_CXX_FLAGS`, no `-fno-exceptions`, no `-Os`. Warnings and sanitizers are applied only when `PROJECT_IS_TOP_LEVEL`, so they shape our own builds and never a consumer's.
 
 **No floating point anywhere in the library.** Not in easing, not in HSV, not in gamma generation at compile time. Many Cortex-M parts have no FPU, soft-float pulls in library code, and integer math is bit-exact across compilers, which is what makes golden-frame tests meaningful. Fixed point where fractions are needed; the `q8` delay in `Segment` is the existing precedent.
 
@@ -31,28 +31,28 @@ These hold in every phase and are worth stating once rather than repeating.
 
 **Only `<cstdint>`, `<cstddef>` and `<type_traits>`.** No `<algorithm>`, no `<array>`, no `<limits>`. Where a `min` is wanted, write it. This is what makes the freestanding cross-compile check in Phase 0 a real test rather than a formality.
 
-**The bench target is a Nucleo-H753ZI driving 11 RGBW pixels over I2S3.** The one thing that matters before Phase 6 is that the board configuration is `RGBSEQ_WHITE_CHANNEL=1`, which is *not* the library default — so RGBW must be a first-class entry in the host test matrix rather than an afterthought.
+**The bench target is a Nucleo-H753ZI driving 11 RGBW pixels over I2S3.** The one thing that matters before Phase 6 is that the board configuration is `STRIPSEQ_WHITE_CHANNEL=1`, which is *not* the library default — so RGBW must be a first-class entry in the host test matrix rather than an afterthought.
 
-**Every phase ends green.** A phase is not done when the code is written; it is done when its tests pass in every build variant and CI is clean. There are five: the cross product of `RGBSEQ_WHITE_CHANNEL` and `RGBSEQ_GAMMA`, both of which change compiled behaviour, plus one built at awkward capacities to catch code that assumes the defaults.
+**Every phase ends green.** A phase is not done when the code is written; it is done when its tests pass in every build variant and CI is clean. There are five: the cross product of `STRIPSEQ_WHITE_CHANNEL` and `STRIPSEQ_GAMMA`, both of which change compiled behaviour, plus one built at awkward capacities to catch code that assumes the defaults.
 
 ## Repository layout
 
 ```text
 CMakeLists.txt              # standalone build; library + optional tests
 cmake/
-  sources.cmake             # RGBSEQ_SOURCES / RGBSEQ_INCLUDE_DIR, shared with the Zephyr module
-  rgbseq_variant.cmake       # helper that builds one (library, test) pair per configuration
+  sources.cmake             # STRIPSEQ_SOURCES / STRIPSEQ_INCLUDE_DIR, shared with the Zephyr module
+  stripseq_variant.cmake    # helper that builds one (library, test) pair per configuration
   arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
 scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand
 .github/workflows/ci.yml
-include/rgbseq/
+include/stripseq/
   config.h                  # the four macros, each #ifndef-guarded
   color.h                   # Color, colors::, lerp, hsv        (all constexpr, header-only)
   sequence.h                # Transition, Step, Sample, Error, Sequence, SequenceBuilder
   sequencer.h
   segment.h                 # PlayheadFn, ColorFn, spread, Segment
   strip.h
-  rgbseq.h                  # umbrella header, includes the rest
+  stripseq.h                # umbrella header, includes the rest
 src/
   color.cpp                 # the gamma table and the 16->8 conversion
   sequence.cpp              # Sequence::at and the easing curves
@@ -64,13 +64,13 @@ tests/
 zephyr/
   module.yml                # makes the repo a Zephyr module
   CMakeLists.txt            # zephyr_library() over the same source list
-  Kconfig                   # CONFIG_RGBSEQ_* symbols
+  Kconfig                   # CONFIG_STRIPSEQ_* symbols
 samples/strip_demo/         # the Nucleo-H753ZI bring-up app, added in Phase 6
   boards/nucleo_h753zi.overlay
 docs/
 ```
 
-Two notes on why it is arranged this way. The source list lives in `cmake/sources.cmake` and is included by both the standalone `CMakeLists.txt` and `zephyr/CMakeLists.txt`, so a new `.cpp` cannot be added to one build and forgotten in the other — a failure mode that surfaces as a link error on hardware long after the host tests went green. And `include/rgbseq/` is a prefixed include directory so consumers write `#include <rgbseq/strip.h>`, which is what keeps the headers from colliding with anything in a Zephyr tree.
+Two notes on why it is arranged this way. The source list lives in `cmake/sources.cmake` and is included by both the standalone `CMakeLists.txt` and `zephyr/CMakeLists.txt`, so a new `.cpp` cannot be added to one build and forgotten in the other — a failure mode that surfaces as a link error on hardware long after the host tests went green. And `include/stripseq/` is a prefixed include directory so consumers write `#include <stripseq/strip.h>`, which is what keeps the headers from colliding with anything in a Zephyr tree.
 
 ## Phase 0 — Skeleton and build
 
@@ -79,7 +79,7 @@ Two notes on why it is arranged this way. The source list lives in `cmake/source
 **Deliverables:**
 
 - The layout above, with headers containing only declarations copied from the sketch and sources containing stub definitions.
-- A `CMakeLists.txt` producing a static `rgbseq` target plus an alias `RgbSequencer::rgbseq`.
+- A `CMakeLists.txt` producing a static `stripseq` target plus an alias `StripSequencer::stripseq`.
 - The test framework wired up with one trivially passing test.
 - The variant helper and its five calls.
 - A freestanding cross-compile check.
@@ -87,20 +87,20 @@ Two notes on why it is arranged this way. The source list lives in `cmake/source
 
 **Implementation notes.**
 
-The variant helper is the load-bearing piece and is worth getting right on day one. `RGBSEQ_WHITE_CHANNEL` and `RGBSEQ_GAMMA` change compiled behaviour rather than just a constant — the first changes `sizeof(Color)`, `sizeof(Step)` and `Strip::bytes_per_pixel`, the second changes the output conversion and whether a table is linked — so no single compiled artifact represents both settings and the whole library is built once per combination:
+The variant helper is the load-bearing piece and is worth getting right on day one. `STRIPSEQ_WHITE_CHANNEL` and `STRIPSEQ_GAMMA` change compiled behaviour rather than just a constant — the first changes `sizeof(Color)`, `sizeof(Step)` and `Strip::bytes_per_pixel`, the second changes the output conversion and whether a table is linked — so no single compiled artifact represents both settings and the whole library is built once per combination:
 
 ```cmake
 # One (library, test binary, CTest entries) triple per build configuration.
 #
-#   rgbseq_add_variant(default)                       # config.h's own defaults
-#   rgbseq_add_variant(rgbw   RGBSEQ_WHITE_CHANNEL=1)
-#   rgbseq_add_variant(tight  RGBSEQ_MAX_STEPS=3 RGBSEQ_MAX_SEGMENTS=1)
-function(rgbseq_add_variant name)
-    set(lib rgbseq_${name})
+#   stripseq_add_variant(default)                       # config.h's own defaults
+#   stripseq_add_variant(rgbw   STRIPSEQ_WHITE_CHANNEL=1)
+#   stripseq_add_variant(tight  STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1)
+function(stripseq_add_variant name)
+    set(lib stripseq_${name})
     set(exe tests_${name})
 
-    add_library(${lib} STATIC ${RGBSEQ_SOURCES})
-    target_include_directories(${lib} PUBLIC ${RGBSEQ_INCLUDE_DIR})
+    add_library(${lib} STATIC ${STRIPSEQ_SOURCES})
+    target_include_directories(${lib} PUBLIC ${STRIPSEQ_INCLUDE_DIR})
     target_compile_features(${lib} PUBLIC cxx_std_20)
 
     # PUBLIC is load-bearing: it propagates to ${exe}, so the tests cannot
@@ -110,11 +110,11 @@ function(rgbseq_add_variant name)
     target_compile_definitions(${lib} PUBLIC ${ARGN})
 
     # PRIVATE: our warnings are not a consumer's problem.
-    target_compile_options(${lib} PRIVATE ${RGBSEQ_WARNINGS})
+    target_compile_options(${lib} PRIVATE ${STRIPSEQ_WARNINGS})
 
-    add_executable(${exe} ${RGBSEQ_TEST_SOURCES})
+    add_executable(${exe} ${STRIPSEQ_TEST_SOURCES})
     target_link_libraries(${exe} PRIVATE ${lib} doctest::doctest)
-    target_compile_options(${exe} PRIVATE ${RGBSEQ_WARNINGS})
+    target_compile_options(${exe} PRIVATE ${STRIPSEQ_WARNINGS})
 
     doctest_discover_tests(${exe} TEST_PREFIX "${name}:")
 endfunction()
@@ -122,15 +122,15 @@ endfunction()
 
 **`PUBLIC` on the definitions is the one word that must not be wrong**, because getting it wrong produces no diagnostic at all. With `PRIVATE`, the library compiles against an eight-byte `Color` while the tests compile against a six-byte one, and the two link cleanly — `Color::rgb(uint16_t, uint16_t, uint16_t)` mangles identically whether or not the class carries a fourth member, so neither the compiler nor the linker can see the mismatch. The result is a binary that writes past its own pixels, surfacing as corruption somewhere unrelated. `PUBLIC` on the include directory and on `cxx_std_20` is the same argument: the headers are what tests and consumers actually compile.
 
-**Five calls, not four.** The cross product of the two behavioural macros is four, and `default` is one of them — called with no definitions at all, so that `config.h`'s `#ifndef` values are exercised *as* the defaults. Setting both macros explicitly in every variant would leave the declared defaults untested, and a typo turning the default white channel on would pass the whole suite. The fifth is `tight`, at `RGBSEQ_MAX_STEPS=3 RGBSEQ_MAX_SEGMENTS=1`: the capacities are plain constants and do not need their own cross product, but one cheap variant catches anything that quietly assumes 8 — an off-by-one in the builder's capacity check, or a test with a hardcoded step count.
+**Five calls, not four.** The cross product of the two behavioural macros is four, and `default` is one of them — called with no definitions at all, so that `config.h`'s `#ifndef` values are exercised *as* the defaults. Setting both macros explicitly in every variant would leave the declared defaults untested, and a typo turning the default white channel on would pass the whole suite. The fifth is `tight`, at `STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1`: the capacities are plain constants and do not need their own cross product, but one cheap variant catches anything that quietly assumes 8 — an off-by-one in the builder's capacity check, or a test with a hardcoded step count.
 
-**The variants are test scaffolding, not the product.** Consumers link a separate canonical `rgbseq` target with an `RgbSequencer::rgbseq` alias, built with no definitions. Aliasing one of the variants instead would save a compile and quietly export that variant's `PUBLIC` definitions to every consumer, pinning their configuration from inside the library.
+**The variants are test scaffolding, not the product.** Consumers link a separate canonical `stripseq` target with an `StripSequencer::stripseq` alias, built with no definitions. Aliasing one of the variants instead would save a compile and quietly export that variant's `PUBLIC` definitions to every consumer, pinning their configuration from inside the library.
 
-The whole helper lives behind `RGBSEQ_BUILD_TESTS`. CMake target names are globally unique across a build tree, so a consumer pulling this in via `add_subdirectory` should see exactly one target rather than five libraries and five executables competing for names.
+The whole helper lives behind `STRIPSEQ_BUILD_TESTS`. CMake target names are globally unique across a build tree, so a consumer pulling this in via `add_subdirectory` should see exactly one target rather than five libraries and five executables competing for names.
 
 Tests that only make sense in one configuration guard on the macro rather than living in a separate file, so a test never silently stops running because someone forgot to add it to a list.
 
-**doctest** is the test framework, fetched with `FetchContent` and guarded by `RGBSEQ_BUILD_TESTS`, which defaults to `PROJECT_IS_TOP_LEVEL` so a consumer never builds our tests. It is a single header, compiles far faster than Catch2 or GoogleTest, and needs no separate build — which matters because the test suite is compiled five times, once per variant, and that cost is inherent: the tests see the headers, so they cannot be shared across configurations. doctest also ships the `doctest_discover_tests` module used above, which enumerates the binary's cases and registers each with CTest. That buys real parallelism under `ctest -j` and failure output that names the case, where a plain `add_test` per variant would report five results and tell you only which configuration broke.
+**doctest** is the test framework, fetched with `FetchContent` and guarded by `STRIPSEQ_BUILD_TESTS`, which defaults to `PROJECT_IS_TOP_LEVEL` so a consumer never builds our tests. It is a single header, compiles far faster than Catch2 or GoogleTest, and needs no separate build — which matters because the test suite is compiled five times, once per variant, and that cost is inherent: the tests see the headers, so they cannot be shared across configurations. doctest also ships the `doctest_discover_tests` module used above, which enumerates the binary's cases and registers each with CTest. That buys real parallelism under `ctest -j` and failure output that names the case, where a plain `add_test` per variant would report five results and tell you only which configuration broke.
 
 The **freestanding cross-compile check** is the cheapest possible proxy for "this actually works on the MCU": compile the library only — no tests, no link — with `arm-none-eabi-g++ -mcpu=cortex-m4 -ffreestanding -fno-exceptions -fno-rtti -Os`. It catches host-libc dependencies, accidental heap use through `operator new`, and code that only compiles because the host happens to be 64-bit. Run it in CI from Phase 0, where fixing a violation is one line, rather than in Phase 6, where it is an archaeology exercise.
 
@@ -140,7 +140,7 @@ CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. T
 
 - `cmake --build build && ctest` passes in all five variants on gcc and clang, RGBW among them and not as an afterthought.
 - The cross-compile job produces an object file.
-- The umbrella header compiles standalone (a `#include <rgbseq/rgbseq.h>`-only translation unit, which catches missing includes inside headers).
+- The umbrella header compiles standalone (a `#include <stripseq/stripseq.h>`-only translation unit, which catches missing includes inside headers).
 
 ## Phase 1 — Configuration, color and output conversion
 
@@ -165,7 +165,7 @@ CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. T
 
 *Brightness applies before gamma, in linear space.* The channel is scaled `v * brightness / 255` while still 16-bit and linear, and gamma encodes the result. Applying brightness after gamma encoding — scaling the 8-bit value — is the common shortcut and it is wrong: it makes brightness non-linear in perceived output and shifts hue as channels crush toward zero at different rates.
 
-*Gamma is a 256-entry `uint8_t` table indexed by the top 8 bits of the 16-bit channel.* This deserves its rationale written down, because it looks like a precision loss and is not one. The output is 8 bits, so at most 256 distinct values can leave the library no matter how the mapping is done; gamma compresses the low end so several input values map to the same output regardless. The 16-bit internal representation exists to keep **blending** accurate through long fades and multi-step lookups, not to produce more output levels than the wire format has. The extra eight bits are consumed by the conversion by design. The table costs ~256 bytes of flash and is compiled out entirely when `RGBSEQ_GAMMA=0`, in which case conversion is a plain `>> 8`.
+*Gamma is a 256-entry `uint8_t` table indexed by the top 8 bits of the 16-bit channel.* This deserves its rationale written down, because it looks like a precision loss and is not one. The output is 8 bits, so at most 256 distinct values can leave the library no matter how the mapping is done; gamma compresses the low end so several input values map to the same output regardless. The 16-bit internal representation exists to keep **blending** accurate through long fades and multi-step lookups, not to produce more output levels than the wire format has. The extra eight bits are consumed by the conversion by design. The table costs ~256 bytes of flash and is compiled out entirely when `STRIPSEQ_GAMMA=0`, in which case conversion is a plain `>> 8`.
 
 The W channel goes through the identical path. The library has no opinion about the emitter's chromaticity — that is the same refusal that keeps it from deriving W in the first place.
 
@@ -206,12 +206,12 @@ The W channel goes through the identical path. The library has no opinion about 
 // Declared, never defined, never constexpr. Calling it in a constant
 // expression is a compile error naming this function; calling it at run
 // time is a link error. Both are what we want.
-void rgbseq_invalid_sequence();
+void stripseq_invalid_sequence();
 
 consteval Sequence SequenceBuilder::build_const() const {
     Sequence out{};
     if (build(out) != Error::None)
-        rgbseq_invalid_sequence();
+        stripseq_invalid_sequence();
     return out;
 }
 ```
@@ -338,16 +338,16 @@ The module directory is thin by construction, and its only real job is translati
 
 ```cmake
 # zephyr/CMakeLists.txt
-if(CONFIG_RGBSEQ)
+if(CONFIG_STRIPSEQ)
   include(${CMAKE_CURRENT_LIST_DIR}/../cmake/sources.cmake)
   zephyr_library()
-  zephyr_library_sources(${RGBSEQ_SOURCES})
-  zephyr_include_directories(${RGBSEQ_INCLUDE_DIR})
+  zephyr_library_sources(${STRIPSEQ_SOURCES})
+  zephyr_include_directories(${STRIPSEQ_INCLUDE_DIR})
   zephyr_compile_definitions(
-    RGBSEQ_MAX_STEPS=${CONFIG_RGBSEQ_MAX_STEPS}
-    RGBSEQ_MAX_SEGMENTS=${CONFIG_RGBSEQ_MAX_SEGMENTS}
-    RGBSEQ_WHITE_CHANNEL=$<BOOL:${CONFIG_RGBSEQ_WHITE_CHANNEL}>
-    RGBSEQ_GAMMA=$<BOOL:${CONFIG_RGBSEQ_GAMMA}>)
+    STRIPSEQ_MAX_STEPS=${CONFIG_STRIPSEQ_MAX_STEPS}
+    STRIPSEQ_MAX_SEGMENTS=${CONFIG_STRIPSEQ_MAX_SEGMENTS}
+    STRIPSEQ_WHITE_CHANNEL=$<BOOL:${CONFIG_STRIPSEQ_WHITE_CHANNEL}>
+    STRIPSEQ_GAMMA=$<BOOL:${CONFIG_STRIPSEQ_GAMMA}>)
 endif()
 ```
 
@@ -362,14 +362,14 @@ Read out of `~/zephyr-workspace` rather than assumed. Recorded here so Phase 6 d
 - **`led_strip_update_rgb()` cannot drive the white die.** `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero, and `struct led_rgb` has no fourth channel. RGBW must use `led_strip_update_channels()`.
 - **`update_channels()` applies no color mapping**, so the adapter owns the permute. Against our neutral `R,G,B,W`, a `GRBW` strip is one swap of bytes 0 and 1 per pixel.
 - **I2S3 needs DMA that nothing enables by default.** `dma1` and `dmamux1` are `status = "disabled"` in `stm32h7.dtsi` and the board dts leaves them that way, while the I2S binding requires `dmas`. The overlay needs both set okay, plus `CONFIG_DMA=y`.
-- **The draft overlay's timing values are SK6812, not WS2812B** — `nibble-one = <0xC>` is 625 ns high against the binding default's 937.5 ns, and `reset-delay = <80>` agrees. Consistent with the RGBW mapping, and worth confirming from the part number since it also fixes `RGBSEQ_WHITE_CHANNEL=1`.
+- **The draft overlay's timing values are SK6812, not WS2812B** — `nibble-one = <0xC>` is 625 ns high against the binding default's 937.5 ns, and `reset-delay = <80>` agrees. Consistent with the RGBW mapping, and worth confirming from the part number since it also fixes `STRIPSEQ_WHITE_CHANNEL=1`.
 
 **Bring-up order, cheapest signal first.** Solid red confirms wiring, permute and power. Then a white-only color, because nothing else distinguishes a working `update_channels` path from `update_rgb`'s silent zero. Then blink for the frame loop and the hold path, comet for the stagger and its sign, rainbow for HSV and the ring seam. Last, load a static gradient and confirm the workqueue is genuinely idle rather than spinning — if it is not, the hold fold is returning 0 where it should return `hold_forever`, and that is a Phase 2 bug surfacing late.
 
 **Exit criteria:**
 
 - The sample builds and runs on the board.
-- Both `RGBSEQ_WHITE_CHANNEL` settings build.
+- Both `STRIPSEQ_WHITE_CHANNEL` settings build.
 - The bring-up sequence passes.
 
 ## Phase 7 — Hardening and release
@@ -426,4 +426,4 @@ Everything the sketch settled stays settled. These are genuinely open and are ca
 
 **Hardware disagrees with the host.** Expected in some form, and the bring-up order in Phase 6 exists to localise it. The one failure worth pre-empting is the white die staying dark, because the API that looks correct silently zeroes it and three-quarters of the strip looks right while it does.
 
-**The default capacities turn out to be wrong.** `RGBSEQ_MAX_STEPS=8` and `RGBSEQ_MAX_SEGMENTS=4` are guesses that the sketch reasons about but nothing has measured. Phase 7's footprint numbers are what turns them into informed defaults, and they are macros precisely so being wrong is cheap.
+**The default capacities turn out to be wrong.** `STRIPSEQ_MAX_STEPS=8` and `STRIPSEQ_MAX_SEGMENTS=4` are guesses that the sketch reasons about but nothing has measured. Phase 7's footprint numbers are what turns them into informed defaults, and they are macros precisely so being wrong is cheap.

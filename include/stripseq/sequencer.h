@@ -8,14 +8,14 @@
  * machine is argued in docs/API-SKETCH.md, "Sequencer".
  */
 
-#ifndef RGBSEQ_SEQUENCER_H_
-#define RGBSEQ_SEQUENCER_H_
+#ifndef STRIPSEQ_SEQUENCER_H_
+#define STRIPSEQ_SEQUENCER_H_
 
 #include <cstdint>
 
-#include "rgbseq/sequence.h"
+#include "stripseq/sequence.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 class Sequencer {
 public:
@@ -54,6 +54,6 @@ private:
     bool     playing_ = false;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 
-#endif  /* RGBSEQ_SEQUENCER_H_ */
+#endif  /* STRIPSEQ_SEQUENCER_H_ */

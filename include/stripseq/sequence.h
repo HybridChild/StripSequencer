@@ -10,16 +10,16 @@
  * the decisions beside each declaration are docs/API-SKETCH.md, "Sequence".
  */
 
-#ifndef RGBSEQ_SEQUENCE_H_
-#define RGBSEQ_SEQUENCE_H_
+#ifndef STRIPSEQ_SEQUENCE_H_
+#define STRIPSEQ_SEQUENCE_H_
 
 #include <cstdint>
 #include <type_traits>
 
-#include "rgbseq/color.h"
-#include "rgbseq/config.h"
+#include "stripseq/color.h"
+#include "stripseq/config.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 enum class Transition : uint8_t { Step, Linear, EaseIn, EaseOut, EaseInOut };
 
@@ -32,10 +32,10 @@ struct Step {
 /* Field order above is load-bearing, not stylistic. `duration_ms` follows the
  * one-byte `transition` so that it lands in the padding trailing `color`.
  * Putting the duration first -- the order that reads more naturally -- costs
- * four bytes per step in an RGB build, multiplied by RGBSEQ_MAX_STEPS in every
+ * four bytes per step in an RGB build, multiplied by STRIPSEQ_MAX_STEPS in every
  * sequencer. An RGBW build is 16 either way, since the eight-byte color leaves
  * the duration already aligned; only RGB is sensitive, and RGB is the default. */
-static_assert(sizeof(Step) == (RGBSEQ_WHITE_CHANNEL ? 16 : 12),
+static_assert(sizeof(Step) == (STRIPSEQ_WHITE_CHANNEL ? 16 : 12),
               "Step has picked up padding -- check field order.");
 
 /* What every lookup returns, built-in or replacement alike.
@@ -88,7 +88,7 @@ public:
     constexpr uint32_t total_duration_ms() const { return 0; }  /* stub */
 
 private:
-    Step     steps_[RGBSEQ_MAX_STEPS] = {};   /* capacity: always allocated in full */
+    Step     steps_[STRIPSEQ_MAX_STEPS] = {};   /* capacity: always allocated in full */
     uint8_t  count_ = 0;                      /* of those, how many are live */
     uint16_t repeats_ = 0;                    /* 0 = endless */
     Color    start_ = {};                     /* finite only; build() resolves the default */
@@ -154,6 +154,6 @@ private:
     bool landing_set_ = false;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 
-#endif  /* RGBSEQ_SEQUENCE_H_ */
+#endif  /* STRIPSEQ_SEQUENCE_H_ */

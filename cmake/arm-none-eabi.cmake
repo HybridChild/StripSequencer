@@ -6,7 +6,7 @@
 # while fixing it is one line rather than an archaeology exercise.
 #
 #   cmake -B build-cross -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
-#         -DRGBSEQ_BUILD_TESTS=OFF
+#         -DSTRIPSEQ_BUILD_TESTS=OFF
 #
 # Note where the flags are: in the toolchain file, which is the *consumer* side
 # of the boundary. The library itself still sets none, per the ground rule.

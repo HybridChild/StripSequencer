@@ -81,15 +81,15 @@ Two consequences follow from *when* it runs. Because listing happens at build ti
 
 ## 5. Why the suite is compiled five times
 
-The tests include the library's headers. The headers are what `RGBSEQ_WHITE_CHANNEL` changes. Therefore there is no such thing as a configuration-neutral test binary: a test compiled against a six-byte `Color` cannot meaningfully exercise a library built with an eight-byte one — and, as [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §6 shows, it will link cleanly anyway and lie to you.
+The tests include the library's headers. The headers are what `STRIPSEQ_WHITE_CHANNEL` changes. Therefore there is no such thing as a configuration-neutral test binary: a test compiled against a six-byte `Color` cannot meaningfully exercise a library built with an eight-byte one — and, as [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §6 shows, it will link cleanly anyway and lie to you.
 
 So the cost is inherent: five configurations means five compiles of every test file. It cannot be shared, only made cheap — and that is what drives the framework choice. A header-only framework with no separate build and a fast-compiling header is worth more here than a feature-rich one, because its compile time is multiplied by the number of variants and paid on every incremental build. This is a specific instance of a general point: **the right tool depends on the shape of the build, not only on the tool's features.**
 
 ## 6. The one-line translation unit, and what it does not prove
 
-`tests/umbrella_only.cpp` is a single `#include <rgbseq/rgbseq.h>` and nothing else. It exists because a header that silently depends on something else having been included first is a real and common bug: it works everywhere in your project and breaks in the first consumer who includes it on a clean page.
+`tests/umbrella_only.cpp` is a single `#include <stripseq/stripseq.h>` and nothing else. It exists because a header that silently depends on something else having been included first is a real and common bug: it works everywhere in your project and breaks in the first consumer who includes it on a clean page.
 
-Be precise about what it establishes, though. It proves the **umbrella** header is self-sufficient — that a consumer who includes only `rgbseq/rgbseq.h` gets a working set, in all five configurations. It does *not* prove each individual header stands alone: `sequence.h` could rely on `color.h` having been pulled in first, and the umbrella would still compile because it includes both. Proving the stronger property needs one such TU per header, generated or written out.
+Be precise about what it establishes, though. It proves the **umbrella** header is self-sufficient — that a consumer who includes only `stripseq/stripseq.h` gets a working set, in all five configurations. It does *not* prove each individual header stands alone: `sequence.h` could rely on `color.h` having been pulled in first, and the umbrella would still compile because it includes both. Proving the stronger property needs one such TU per header, generated or written out.
 
 That is a deliberate stopping point rather than an oversight — but it is the kind of stopping point worth writing down, because "we have a header self-containment test" invites people to assume the stronger claim.
 
@@ -158,17 +158,17 @@ CHECK(Strip::bytes_per_pixel == 3u);
 
 *Demonstrates §6.*
 
-Delete `#include <cstdint>` from the top of `include/rgbseq/color.h`.
+Delete `#include <cstdint>` from the top of `include/stripseq/color.h`.
 
 ```sh
 cmake --build build --target tests_default
 ```
 
 ```
-include/rgbseq/color.h:26:5: error: unknown type name 'uint16_t'
+include/stripseq/color.h:26:5: error: unknown type name 'uint16_t'
 ```
 
-**Revert it.** Then try the weaker version of the same mistake: delete `#include "rgbseq/config.h"` from `sequence.h` instead. Everything still compiles — `sequence.h` includes `color.h`, which includes `config.h` — and the umbrella TU is happy. **Revert that too.**
+**Revert it.** Then try the weaker version of the same mistake: delete `#include "stripseq/config.h"` from `sequence.h` instead. Everything still compiles — `sequence.h` includes `color.h`, which includes `config.h` — and the umbrella TU is happy. **Revert that too.**
 
 **Proves:** §6's limit exactly. The umbrella catches a header that depends on nothing having been included; it cannot catch one that depends on a *sibling* having been included first, because it includes the sibling too.
 

@@ -45,8 +45,8 @@ Rows are in the reading order above, so the column to scan for "can I start here
 
 | # | Guide | Answers | Assumes you know | Reference half |
 | - | ----- | ------- | ---------------- | -------------- |
-| 1 | [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) | What does `PUBLIC` mean, if not access control? | What a compiler and linker do | *(the root `CMakeLists.txt` and `cmake/rgbseq_variant.cmake`)* |
+| 1 | [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) | What does `PUBLIC` mean, if not access control? | What a compiler and linker do | *(the root `CMakeLists.txt` and `cmake/stripseq_variant.cmake`)* |
 | 2 | [`build-variants-guide.md`](build-variants-guide.md) | Why does one library need five builds? | #1 | [`../docs/API-SKETCH.md`](../docs/API-SKETCH.md), "Build-time configuration" |
 | 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become twenty test cases? | #2, for §5 | [`../docs/IMPLEMENTATION-PLAN.md`](../docs/IMPLEMENTATION-PLAN.md), Phase 0 and Phase 5 |
-| 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `RGBSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* |
+| 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `STRIPSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* |
 | 5 | [`cross-compiling-guide.md`](cross-compiling-guide.md) | What does compiling for a machine you cannot run actually prove? | #1 §3–§5, lightly; roughly what a microcontroller is | *(`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`)* |

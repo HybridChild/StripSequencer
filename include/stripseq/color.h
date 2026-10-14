@@ -10,18 +10,18 @@
  * recorded in docs/API-SKETCH.md, "Color".
  */
 
-#ifndef RGBSEQ_COLOR_H_
-#define RGBSEQ_COLOR_H_
+#ifndef STRIPSEQ_COLOR_H_
+#define STRIPSEQ_COLOR_H_
 
 #include <cstdint>
 
-#include "rgbseq/config.h"
+#include "stripseq/config.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 struct Color {
     uint16_t r, g, b;
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     uint16_t w;
 #endif
 
@@ -30,7 +30,7 @@ struct Color {
      * these factories the aggregate form is the implementation, and the fourth
      * channel is explicit in the one factory that carries it. */
     static constexpr Color rgb(uint16_t r, uint16_t g, uint16_t b) {
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
         /* The fourth channel is written rather than left to the aggregate's
          * value-initialisation, so that "rgb() does not light the white die"
          * is visible here and not inferred. */
@@ -54,7 +54,7 @@ struct Color {
         return Color{};   /* stub */
     }
 
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     static constexpr Color rgbw(uint16_t r, uint16_t g, uint16_t b, uint16_t w) {
         return Color{r, g, b, w};
     }
@@ -72,7 +72,7 @@ struct Color {
 
 /* Asserted here rather than in a test, because every size argument downstream
  * -- Step's field order, Strip::bytes_per_pixel -- is derived from it. */
-static_assert(sizeof(Color) == (RGBSEQ_WHITE_CHANNEL ? 8 : 6),
+static_assert(sizeof(Color) == (STRIPSEQ_WHITE_CHANNEL ? 8 : 6),
               "Color has picked up padding -- check the channel members.");
 
 namespace colors {
@@ -90,6 +90,6 @@ inline constexpr Color rgbwhite = Color::rgb8(255, 255, 255);  /* all three chan
 
 }  // namespace colors
 
-}  // namespace rgbseq
+}  // namespace stripseq
 
-#endif  /* RGBSEQ_COLOR_H_ */
+#endif  /* STRIPSEQ_COLOR_H_ */

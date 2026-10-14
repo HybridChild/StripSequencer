@@ -197,6 +197,6 @@ A CMake build acquires outside code in one of three ways — installed and found
 
 - **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §2–§3** — what an imported target's `INTERFACE_*` properties are, in the general form.
 - **[`testing-guide.md`](testing-guide.md) §4** — what the helper script from §2 does once you have it.
-- **The root `CMakeLists.txt`, the `RGBSEQ_BUILD_TESTS` block** — fifteen lines containing every idea in this guide.
+- **The root `CMakeLists.txt`, the `STRIPSEQ_BUILD_TESTS` block** — fifteen lines containing every idea in this guide.
 - **`/opt/homebrew/lib/cmake/doctest/`** (or wherever your package manager puts it) — four short files: the config, the version file, the targets, and the helper. Reading them once removes most of the mystery from `find_package` permanently.
 - **CMake's [`cmake-packages(7)`](https://cmake.org/cmake/help/latest/manual/cmake-packages.7.html)** — the reference half, including how to *ship* a config package when this library eventually installs itself.

@@ -35,7 +35,7 @@ Setting `CMAKE_SYSTEM_NAME` at all is what tells CMake it is cross-compiling; `G
 The file is passed at configure time and cannot be changed afterwards, which is why cross builds live in their own build directory:
 
 ```sh
-cmake -S . -B build-cross -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DRGBSEQ_BUILD_TESTS=OFF
+cmake -S . -B build-cross -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DSTRIPSEQ_BUILD_TESTS=OFF
 ```
 
 ## 2. The compiler check, and why it fails first
@@ -157,12 +157,12 @@ bits/requires_hosted.h:34:4: error: #error "This header is not available in free
 Add to `src/color.cpp`:
 
 ```cpp
-double rgbseq_scale(double a) { return a * 1.5; }
+double stripseq_scale(double a) { return a * 1.5; }
 ```
 
 ```sh
 ./scripts/cross-check.sh
-arm-none-eabi-nm -u build-cross/CMakeFiles/rgbseq.dir/src/color.cpp.obj
+arm-none-eabi-nm -u build-cross/CMakeFiles/stripseq.dir/src/color.cpp.obj
 ```
 
 ```
@@ -180,18 +180,18 @@ The cross-compile step passed. **Revert it.**
 Add to `src/sequence.cpp`:
 
 ```cpp
-int rgbseq_counter();
-int rgbseq_next() { static int x = rgbseq_counter(); return x; }
+int stripseq_counter();
+int stripseq_next() { static int x = stripseq_counter(); return x; }
 ```
 
 ```sh
 ./scripts/cross-check.sh
-arm-none-eabi-nm -C build-cross/CMakeFiles/rgbseq.dir/src/sequence.cpp.obj
+arm-none-eabi-nm -C build-cross/CMakeFiles/stripseq.dir/src/sequence.cpp.obj
 ```
 
 ```
-00000000 b guard variable for rgbseq_next()::x
-00000004 b rgbseq_next()::x
+00000000 b guard variable for stripseq_next()::x
+00000004 b stripseq_next()::x
          U __cxa_guard_acquire
          U __cxa_guard_release
 ```
@@ -207,13 +207,13 @@ arm-none-eabi-nm -C build-cross/CMakeFiles/rgbseq.dir/src/sequence.cpp.obj
 Add to `src/strip.cpp`:
 
 ```cpp
-int rgbseq_seed();
-int rgbseq_value = rgbseq_seed();
+int stripseq_seed();
+int stripseq_value = stripseq_seed();
 ```
 
 ```sh
 ./scripts/cross-check.sh
-arm-none-eabi-objdump -h build-cross/CMakeFiles/rgbseq.dir/src/strip.cpp.obj | grep -E 'init_array|text.startup'
+arm-none-eabi-objdump -h build-cross/CMakeFiles/stripseq.dir/src/strip.cpp.obj | grep -E 'init_array|text.startup'
 ```
 
 ```
@@ -224,7 +224,7 @@ arm-none-eabi-objdump -h build-cross/CMakeFiles/rgbseq.dir/src/strip.cpp.obj | g
 Now revert it and run the same command over every object:
 
 ```sh
-arm-none-eabi-objdump -h build-cross/CMakeFiles/rgbseq.dir/src/*.obj | grep -c init_array
+arm-none-eabi-objdump -h build-cross/CMakeFiles/stripseq.dir/src/*.obj | grep -c init_array
 ```
 
 ```
@@ -240,7 +240,7 @@ arm-none-eabi-objdump -h build-cross/CMakeFiles/rgbseq.dir/src/*.obj | grep -c i
 Comment out `set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)` in `cmake/arm-none-eabi.cmake` and configure into a fresh directory:
 
 ```sh
-rm -rf /tmp/xc && cmake -S . -B /tmp/xc -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DRGBSEQ_BUILD_TESTS=OFF
+rm -rf /tmp/xc && cmake -S . -B /tmp/xc -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DSTRIPSEQ_BUILD_TESTS=OFF
 ```
 
 ```

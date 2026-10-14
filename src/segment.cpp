@@ -1,8 +1,8 @@
 /* Segment: the per-pixel loop, the stagger, and the finished() question. */
 
-#include "rgbseq/segment.h"
+#include "stripseq/segment.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 Segment::Segment(uint16_t first, uint16_t count, Sequencer& seq)
     : first_(first), count_(count), sequencer_(&seq) {}
@@ -26,4 +26,4 @@ uint32_t Segment::paint(uint8_t* /*buffer*/, uint16_t /*pixel_count*/,
     return hold_forever;   /* stub */
 }
 
-}  // namespace rgbseq
+}  // namespace stripseq

@@ -1,4 +1,4 @@
-# RgbSequencer — Design
+# StripSequencer — Design
 
 A library for animating addressable LED strips. It targets short strips (tens of pixels, up to a hundred or so), simple animations, and any platform that can give you a millisecond counter and a pixel buffer.
 

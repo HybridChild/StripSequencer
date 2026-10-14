@@ -1,8 +1,8 @@
 /* Strip: the segment list and the frame loop. */
 
-#include "rgbseq/strip.h"
+#include "stripseq/strip.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 bool Strip::add(const Segment& /*s*/) { return false; }   /* stub */
 bool Strip::remove(uint8_t /*at*/) { return false; }      /* stub */
@@ -21,4 +21,4 @@ uint32_t Strip::render(uint32_t /*now_ms*/) {
     return hold_forever;   /* stub */
 }
 
-}  // namespace rgbseq
+}  // namespace stripseq

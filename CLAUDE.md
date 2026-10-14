@@ -40,4 +40,4 @@ Follow the shared skeleton so every guide navigates the same way: an opening roa
 
 ## Bench hardware
 
-A Nucleo-H753ZI driving an 11-pixel RGBW strip over I2S3 on PB2, via `worldsemi,ws2812-i2s`. The one fact that reaches back into every earlier phase: the board runs `RGBSEQ_WHITE_CHANNEL=1`, which is **not** the library default, so RGBW is a first-class entry in the host test matrix rather than a variant. Phase 6 of the plan lists what has already been verified against the driver source; check there before re-deriving it.
+A Nucleo-H753ZI driving an 11-pixel RGBW strip over I2S3 on PB2, via `worldsemi,ws2812-i2s`. The one fact that reaches back into every earlier phase: the board runs `STRIPSEQ_WHITE_CHANNEL=1`, which is **not** the library default, so RGBW is a first-class entry in the host test matrix rather than a variant. Phase 6 of the plan lists what has already been verified against the driver source; check there before re-deriving it.

@@ -58,4 +58,4 @@ jobs:
         run: ./scripts/cross-check.sh
 
       - name: Check the archive exists
-        run: arm-none-eabi-nm build-cross/librgbseq.a
+        run: arm-none-eabi-nm build-cross/libstripseq.a

@@ -1,4 +1,4 @@
-# RgbSequencer — API sketch
+# StripSequencer — API sketch
 
 The calling surface for the mechanism described in [DESIGN.md](DESIGN.md). Signatures only, no bodies.
 
@@ -73,22 +73,22 @@ C++20 is a real requirement rather than a preference, and two things need it. `c
 Four knobs, all overridable from the build system.
 
 ```cpp
-// rgbseq/config.h
+// stripseq/config.h
 
-#ifndef RGBSEQ_MAX_STEPS
-#define RGBSEQ_MAX_STEPS 8        // steps a sequence can hold; sets sequencer size
+#ifndef STRIPSEQ_MAX_STEPS
+#define STRIPSEQ_MAX_STEPS 8        // steps a sequence can hold; sets sequencer size
 #endif
 
-#ifndef RGBSEQ_MAX_SEGMENTS
-#define RGBSEQ_MAX_SEGMENTS 4     // segments a strip can hold; sets strip size
+#ifndef STRIPSEQ_MAX_SEGMENTS
+#define STRIPSEQ_MAX_SEGMENTS 4     // segments a strip can hold; sets strip size
 #endif
 
-#ifndef RGBSEQ_WHITE_CHANNEL
-#define RGBSEQ_WHITE_CHANNEL 0    // 1 adds the fourth channel everywhere
+#ifndef STRIPSEQ_WHITE_CHANNEL
+#define STRIPSEQ_WHITE_CHANNEL 0    // 1 adds the fourth channel everywhere
 #endif
 
-#ifndef RGBSEQ_GAMMA
-#define RGBSEQ_GAMMA 1            // 1 links the correction table (~256 bytes)
+#ifndef STRIPSEQ_GAMMA
+#define STRIPSEQ_GAMMA 1            // 1 links the correction table (~256 bytes)
 #endif
 ```
 
@@ -117,14 +117,14 @@ What this costs is per-strip sizing: an indicator strip needing six segments for
 Sixteen bits per channel, with white present only when the build asks for it.
 
 ```cpp
-// rgbseq/color.h
+// stripseq/color.h
 #include <cstdint>
 
-namespace rgbseq {
+namespace stripseq {
 
 struct Color {
     uint16_t r, g, b;
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     uint16_t w;
 #endif
 
@@ -133,7 +133,7 @@ struct Color {
     static constexpr Color rgb(uint16_t r, uint16_t g, uint16_t b);
     static constexpr Color rgb8(uint8_t r, uint8_t g, uint8_t b);      // 8-bit convenience, scaled up
     static constexpr Color hsv(uint16_t hue, uint8_t sat, uint8_t val); // hue 0..65535; leaves w at 0
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     static constexpr Color rgbw(uint16_t r, uint16_t g, uint16_t b, uint16_t w);
 #endif
 
@@ -155,7 +155,7 @@ inline constexpr Color rgbwhite = Color::rgb8(255, 255, 255);  // all three chan
 // of use, where the channels are visible.
 }
 
-}  // namespace rgbseq
+}  // namespace stripseq
 ```
 
 `inline constexpr` keeps these constant-initialised, so they live in flash and run no code before `main`.
@@ -169,9 +169,9 @@ This matches the field: Adafruit NeoPixel and NeoPixelBus expose the channel and
 Pure description. A sequence holds its steps inline, so a sequencer can own one by value and get snapshot semantics — rebuilding a sequence cannot disturb one already running.
 
 ```cpp
-// rgbseq/sequence.h
+// stripseq/sequence.h
 
-namespace rgbseq {
+namespace stripseq {
 
 enum class Transition : uint8_t { Step, Linear, EaseIn, EaseOut, EaseInOut };
 
@@ -184,10 +184,10 @@ struct Step {
 // Field order above is load-bearing, not stylistic. `duration_ms` follows the
 // one-byte `transition` so that it lands in the padding trailing `color`.
 // Putting the duration first -- the order that reads more naturally -- costs
-// four bytes per step in an RGB build, multiplied by RGBSEQ_MAX_STEPS in every
+// four bytes per step in an RGB build, multiplied by STRIPSEQ_MAX_STEPS in every
 // sequencer. An RGBW build is 16 either way, since the eight-byte color leaves
 // the duration already aligned; only RGB is sensitive, and RGB is the default.
-static_assert(sizeof(Step) == (RGBSEQ_WHITE_CHANNEL ? 16 : 12),
+static_assert(sizeof(Step) == (STRIPSEQ_WHITE_CHANNEL ? 16 : 12),
               "Step has picked up padding -- check field order.");
 
 // What every lookup returns, built-in or replacement alike.
@@ -240,7 +240,7 @@ public:
     constexpr uint32_t total_duration_ms() const;  // loop x repeats
 
 private:
-    Step     steps_[RGBSEQ_MAX_STEPS] = {};   // capacity: always allocated in full
+    Step     steps_[STRIPSEQ_MAX_STEPS] = {};   // capacity: always allocated in full
     uint8_t  count_ = 0;                      // of those, how many are live
     uint16_t repeats_ = 0;                    // 0 = endless
     Color    start_ = {};                     // finite only; build() resolves the default
@@ -280,7 +280,7 @@ private:
     bool landing_set_ = false;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 ```
 
 **Which of the two you call is decided by where the values come from, not by where the call sits.** `build_const()` is `consteval`, so it is legal anywhere the whole expression is a constant expression — including inside an ordinary function, which is why the cookbook uses it in runtime code. The moment a color or duration comes from a variable, the expression is no longer constant and `build_const()` stops compiling; that is when `build()` takes over:
@@ -297,9 +297,9 @@ seq.load(s);
 The playhead and the state around it. It owns a copy of its sequence.
 
 ```cpp
-// rgbseq/sequencer.h
+// stripseq/sequencer.h
 
-namespace rgbseq {
+namespace stripseq {
 
 class Sequencer {
 public:
@@ -337,7 +337,7 @@ private:
     bool     playing_ = false;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 ```
 
 Nothing stores a playhead as such. `origin_ms_` and `frozen_` are the two representations, `playing_` says which is authoritative, and the value is derived on every call — a stored playhead that got advanced each frame would be the tape model DESIGN.md rejects.
@@ -404,9 +404,9 @@ Every operation is total. There are no state-dependent refusals to document, whi
 The only part of the design that knows pixels exist.
 
 ```cpp
-// rgbseq/segment.h
+// stripseq/segment.h
 
-namespace rgbseq {
+namespace stripseq {
 
 // Step 1 of the render loop: where does this pixel look?
 //
@@ -515,7 +515,7 @@ private:
     ColorFn    what_  = nullptr;
 };                                 // 20 bytes on a 32-bit target
 
-}  // namespace rgbseq
+}  // namespace stripseq
 ```
 
 ## Strip
@@ -523,15 +523,15 @@ private:
 The segment list and the frame loop. The strip owns its segments; the pixel buffer is yours.
 
 ```cpp
-// rgbseq/strip.h
+// stripseq/strip.h
 
-namespace rgbseq {
+namespace stripseq {
 
 class Strip {
 public:
     // Neutral packed layout: R,G,B[,W], one byte per channel, no padding.
     // Channel order is the platform's business, not the library's.
-    static constexpr size_t bytes_per_pixel = RGBSEQ_WHITE_CHANNEL ? 4 : 3;
+    static constexpr size_t bytes_per_pixel = STRIPSEQ_WHITE_CHANNEL ? 4 : 3;
 
     // The buffer's size is deduced rather than passed, and the pixel count
     // follows from it, so neither can drift from the array it describes.
@@ -584,14 +584,14 @@ public:
 private:
     // Owned outright, which is the point: there is no array to hand in, so two
     // strips cannot be pointed at the same segments.
-    Segment  segments_[RGBSEQ_MAX_SEGMENTS];
+    Segment  segments_[STRIPSEQ_MAX_SEGMENTS];
     uint8_t  count_ = 0;
     uint8_t* buffer_ = nullptr;
     uint16_t pixel_count_ = 0;
     uint8_t  brightness_ = 255;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 ```
 
 ## Putting it together
@@ -637,7 +637,7 @@ The segment asks the sequencer for two things, a playhead and the sequence it ow
 Setup is shown once and applies to every recipe below.
 
 ```cpp
-using namespace rgbseq;
+using namespace stripseq;
 
 static constexpr uint16_t kPixels = 30;
 
@@ -645,7 +645,7 @@ static uint8_t   buffer[kPixels * Strip::bytes_per_pixel];
 static Sequencer seq;
 
 constinit static Strip strip(buffer);   // pixel count deduced from the buffer;
-                                        // segment capacity from RGBSEQ_MAX_SEGMENTS
+                                        // segment capacity from STRIPSEQ_MAX_SEGMENTS
 ```
 
 **Blink** — the whole strip flashing together.
@@ -868,7 +868,7 @@ void frame_work(struct k_work* work) {
     strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
 
-#if RGBSEQ_WHITE_CHANNEL
+#if STRIPSEQ_WHITE_CHANNEL
     permute_in_place(buffer, kPixels);           // into the chip's channel order
     led_strip_update_channels(dev, buffer, sizeof(buffer));
 #else

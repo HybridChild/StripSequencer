@@ -18,9 +18,9 @@ BUILD_DIR="${1:-build-cross}"
 
 cmake -S "$REPO" -B "$REPO/$BUILD_DIR" -G Ninja \
       -DCMAKE_TOOLCHAIN_FILE="$REPO/cmake/arm-none-eabi.cmake" \
-      -DRGBSEQ_BUILD_TESTS=OFF
+      -DSTRIPSEQ_BUILD_TESTS=OFF
 cmake --build "$REPO/$BUILD_DIR"
 
 # An archive that exists is the exit criterion; listing it is what makes the
 # check readable in CI output.
-arm-none-eabi-size "$REPO/$BUILD_DIR"/CMakeFiles/rgbseq.dir/src/*.obj
+arm-none-eabi-size "$REPO/$BUILD_DIR"/CMakeFiles/stripseq.dir/src/*.obj

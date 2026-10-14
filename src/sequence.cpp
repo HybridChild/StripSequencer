@@ -2,12 +2,12 @@
  * call -- and the easing curves behind it.
  */
 
-#include "rgbseq/sequence.h"
+#include "stripseq/sequence.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 Sample Sequence::at(int32_t /*playhead_ms*/) const {
     return Sample{colors::black, hold_forever};   /* stub */
 }
 
-}  // namespace rgbseq
+}  // namespace stripseq

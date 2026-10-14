@@ -9,22 +9,22 @@
  * callbacks. Everything platform-shaped lives outside.
  */
 
-#ifndef RGBSEQ_STRIP_H_
-#define RGBSEQ_STRIP_H_
+#ifndef STRIPSEQ_STRIP_H_
+#define STRIPSEQ_STRIP_H_
 
 #include <cstddef>
 #include <cstdint>
 
-#include "rgbseq/config.h"
-#include "rgbseq/segment.h"
+#include "stripseq/config.h"
+#include "stripseq/segment.h"
 
-namespace rgbseq {
+namespace stripseq {
 
 class Strip {
 public:
     /* Neutral packed layout: R,G,B[,W], one byte per channel, no padding.
      * Channel order is the platform's business, not the library's. */
-    static constexpr size_t bytes_per_pixel = RGBSEQ_WHITE_CHANNEL ? 4 : 3;
+    static constexpr size_t bytes_per_pixel = STRIPSEQ_WHITE_CHANNEL ? 4 : 3;
 
     /* The buffer's size is deduced rather than passed, and the pixel count
      * follows from it, so neither can drift from the array it describes.
@@ -84,13 +84,13 @@ public:
 private:
     /* Owned outright, which is the point: there is no array to hand in, so two
      * strips cannot be pointed at the same segments. */
-    Segment  segments_[RGBSEQ_MAX_SEGMENTS];
+    Segment  segments_[STRIPSEQ_MAX_SEGMENTS];
     uint8_t  count_ = 0;
     uint8_t* buffer_ = nullptr;
     uint16_t pixel_count_ = 0;
     uint8_t  brightness_ = 255;
 };
 
-}  // namespace rgbseq
+}  // namespace stripseq
 
-#endif  /* RGBSEQ_STRIP_H_ */
+#endif  /* STRIPSEQ_STRIP_H_ */

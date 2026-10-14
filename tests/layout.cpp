@@ -3,42 +3,42 @@
  *
  * The static_asserts at the top are the load-bearing part, and they exist for
  * one specific failure. If `target_compile_definitions` in
- * cmake/rgbseq_variant.cmake were PRIVATE rather than PUBLIC, the library would
- * compile against an eight-byte Color while the tests compiled against a
+ * cmake/stripseq_variant.cmake were PRIVATE rather than PUBLIC, the library
+ * would compile against an eight-byte Color while the tests compiled against a
  * six-byte one -- and the two would link cleanly, because
  * Color::rgb(uint16_t, uint16_t, uint16_t) mangles identically either way.
  * Neither the compiler nor the linker can see that; the result is a binary that
  * writes past its own pixels.
  *
  * So the variant helper hands the *test* target a second, independent copy of
- * each definition, named RGBSEQ_EXPECT_*. The library gets its copy through the
- * PUBLIC one. If the PUBLIC propagation ever breaks, the two disagree here and
- * the build stops with the message below.
+ * each definition, named STRIPSEQ_EXPECT_*. The library gets its copy through
+ * the PUBLIC one. If the PUBLIC propagation ever breaks, the two disagree here
+ * and the build stops with the message below.
  */
 
 #include <doctest/doctest.h>
 
 #include <cstdint>
 
-#include <rgbseq/rgbseq.h>
+#include <stripseq/stripseq.h>
 
-using namespace rgbseq;
+using namespace stripseq;
 
-#define RGBSEQ_PROPAGATION_MSG \
+#define STRIPSEQ_PROPAGATION_MSG \
     "The variant's definitions did not reach the tests. Check that " \
-    "target_compile_definitions in cmake/rgbseq_variant.cmake is PUBLIC."
+    "target_compile_definitions in cmake/stripseq_variant.cmake is PUBLIC."
 
-#ifdef RGBSEQ_EXPECT_WHITE_CHANNEL
-static_assert(RGBSEQ_WHITE_CHANNEL == RGBSEQ_EXPECT_WHITE_CHANNEL, RGBSEQ_PROPAGATION_MSG);
+#ifdef STRIPSEQ_EXPECT_WHITE_CHANNEL
+static_assert(STRIPSEQ_WHITE_CHANNEL == STRIPSEQ_EXPECT_WHITE_CHANNEL, STRIPSEQ_PROPAGATION_MSG);
 #endif
-#ifdef RGBSEQ_EXPECT_GAMMA
-static_assert(RGBSEQ_GAMMA == RGBSEQ_EXPECT_GAMMA, RGBSEQ_PROPAGATION_MSG);
+#ifdef STRIPSEQ_EXPECT_GAMMA
+static_assert(STRIPSEQ_GAMMA == STRIPSEQ_EXPECT_GAMMA, STRIPSEQ_PROPAGATION_MSG);
 #endif
-#ifdef RGBSEQ_EXPECT_MAX_STEPS
-static_assert(RGBSEQ_MAX_STEPS == RGBSEQ_EXPECT_MAX_STEPS, RGBSEQ_PROPAGATION_MSG);
+#ifdef STRIPSEQ_EXPECT_MAX_STEPS
+static_assert(STRIPSEQ_MAX_STEPS == STRIPSEQ_EXPECT_MAX_STEPS, STRIPSEQ_PROPAGATION_MSG);
 #endif
-#ifdef RGBSEQ_EXPECT_MAX_SEGMENTS
-static_assert(RGBSEQ_MAX_SEGMENTS == RGBSEQ_EXPECT_MAX_SEGMENTS, RGBSEQ_PROPAGATION_MSG);
+#ifdef STRIPSEQ_EXPECT_MAX_SEGMENTS
+static_assert(STRIPSEQ_MAX_SEGMENTS == STRIPSEQ_EXPECT_MAX_SEGMENTS, STRIPSEQ_PROPAGATION_MSG);
 #endif
 
 /* File scope, constinit: the ground rule is that nothing in this library runs
@@ -49,15 +49,15 @@ static uint8_t buffer[11 * Strip::bytes_per_pixel];
 constinit static Strip strip(buffer);
 
 TEST_CASE("color and step layout follow the white-channel setting") {
-    CHECK(sizeof(Color) == (RGBSEQ_WHITE_CHANNEL ? 8u : 6u));
-    CHECK(sizeof(Step) == (RGBSEQ_WHITE_CHANNEL ? 16u : 12u));
-    CHECK(Strip::bytes_per_pixel == (RGBSEQ_WHITE_CHANNEL ? 4u : 3u));
+    CHECK(sizeof(Color) == (STRIPSEQ_WHITE_CHANNEL ? 8u : 6u));
+    CHECK(sizeof(Step) == (STRIPSEQ_WHITE_CHANNEL ? 16u : 12u));
+    CHECK(Strip::bytes_per_pixel == (STRIPSEQ_WHITE_CHANNEL ? 4u : 3u));
 }
 
 TEST_CASE("capacities are the ones this variant was built with") {
-    CHECK(RGBSEQ_MAX_STEPS >= 1);
-    CHECK(RGBSEQ_MAX_SEGMENTS >= 1);
-    CHECK(sizeof(Sequence) >= sizeof(Step) * RGBSEQ_MAX_STEPS);
+    CHECK(STRIPSEQ_MAX_STEPS >= 1);
+    CHECK(STRIPSEQ_MAX_SEGMENTS >= 1);
+    CHECK(sizeof(Sequence) >= sizeof(Step) * STRIPSEQ_MAX_STEPS);
 }
 
 TEST_CASE("a constinit strip is usable and links against the library") {
