@@ -10,6 +10,14 @@ project(RgbSequencer VERSION 0.1.0 LANGUAGES CXX)
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/sources.cmake)
 
+# These seed each target's properties at the moment the target is created, so
+# they must come before the first add_library -- set any later, they silently
+# miss every target defined above them.
+if(PROJECT_IS_TOP_LEVEL)
+    set(CMAKE_CXX_EXTENSIONS OFF)              # -std=c++20, not -std=gnu++20
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)      # for clangd
+endif()
+
 # ---------------------------------------------------------------------------
 # The canonical library
 #
@@ -36,9 +44,6 @@ target_compile_features(rgbseq PUBLIC cxx_std_20)
 # ---------------------------------------------------------------------------
 
 if(PROJECT_IS_TOP_LEVEL)
-    set(CMAKE_CXX_EXTENSIONS OFF)              # -std=c++20, not -std=gnu++20
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)      # for clangd
-
     # -Wconversion is deliberately absent. This codebase mixes uint8_t,
     # uint16_t, int32_t and uint32_t in nearly every expression, and the warning
     # would demand a cast in most of them.
