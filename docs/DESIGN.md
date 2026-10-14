@@ -319,6 +319,7 @@ Written down so scope creep has to argue its case.
 - No palettes.
 - No power or current limiting.
 - No playlists, scene management, or sequences that chain into other sequences.
+- No endless sequence that holds a start color until each pixel first reaches it. Negative playheads [wrap](#what-happens-off-the-ends) on an endless sequence, and the static gradient, Twinkle and `seek` all depend on that.
 - No per-pixel state of any kind inside the library.
 - No transport and no channel ordering: getting pixels to the hardware, in whatever order the chip wants them, belongs to the platform driver.
 - No color-space policy — white is carried, never derived.
