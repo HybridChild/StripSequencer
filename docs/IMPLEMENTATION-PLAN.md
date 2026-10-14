@@ -376,6 +376,16 @@ Read out of `~/zephyr-workspace` rather than assumed. Recorded here so Phase 6 d
 
 **Goal:** know what it costs, prove the constraints hold mechanically, and make it usable by someone who was not here.
 
+**Deliverables:**
+
+- `-Wall -Wextra -Wpedantic -Wshadow -Wconversion` enabled on the library and its tests.
+- Host test runs under UBSan and ASan.
+- A fuzz harness over `SequenceBuilder` and `Sequence::at`.
+- A CI check of the cross-compiled objects for dynamic initialisation.
+- Footprint measurements in the README.
+- The README.
+- A `v0.1.0` tag.
+
 **Implementation notes.**
 
 Turn on `-Wall -Wextra -Wpedantic -Wshadow -Wconversion` and reach zero. `-Wconversion` is the one that matters here and the one worth enabling last, because this codebase mixes `uint8_t`, `uint16_t`, `int32_t` and `uint32_t` in nearly every expression, and it will find genuine truncations alongside a lot of noise that needs explicit casts.
@@ -387,6 +397,16 @@ Check the no-dynamic-initialisation rule mechanically rather than by reading: `n
 Measure and publish the footprint — flash and RAM for each of the four behavioural configurations, plus per-frame cycle cost for a 60-pixel strip — in the README. DESIGN.md and the sketch both make size arguments (a `Sequence` at ~116 bytes, a `Segment` at 20, the macro-versus-template trade); those arguments should end up with measured numbers behind them.
 
 Then the README: what it is, the three-line blink, the four macros, how to consume it standalone and as a Zephyr module, and links to the two design documents. Tag `v0.1.0`.
+
+**Exit criteria:**
+
+- Zero warnings in every variant on gcc and clang.
+- The host tests pass under UBSan and ASan with no reports.
+- The fuzz harness runs over random steps and random playheads, extremes included, with no sanitizer report.
+- CI fails when `.init_array` in a cross-compiled object is non-empty or a `__cxa_guard` symbol appears.
+- The README gives flash and RAM for each of the four behavioural configurations and the per-frame cycle cost for a 60-pixel strip.
+- Any golden hash a warning fix invalidates is regenerated deliberately and its diff reviewed.
+- `v0.1.0` is tagged.
 
 ## Decisions deferred to their phase
 
