@@ -43,7 +43,7 @@ cmake/
   sources.cmake             # STRIPSEQ_SOURCES / STRIPSEQ_INCLUDE_DIR, shared with the Zephyr module
   stripseq_variant.cmake    # helper that builds one (library, test) pair per configuration
   arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
-scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand
+scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand; clean.sh deletes the build trees
 .github/workflows/ci.yml
 include/stripseq/
   config.h                  # the four macros, each #ifndef-guarded
