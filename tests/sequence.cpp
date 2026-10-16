@@ -7,7 +7,7 @@
  * those, then by what the builder accepts and refuses.
  *
  * Nothing here assumes STRIPSEQ_MAX_STEPS is 8: the tight variant builds with
- * 3, and no sequence below has more steps than that unless it is counting up
+ * 6, and no sequence below has more steps than that unless it is counting up
  * to the capacity on purpose.
  */
 

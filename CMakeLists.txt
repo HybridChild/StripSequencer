@@ -105,10 +105,12 @@ if(STRIPSEQ_BUILD_TESTS)
     # `tight`: the capacities are plain constants and do not need their own
     # cross product, but one cheap variant catches anything that quietly assumes
     # 8 -- an off-by-one in the builder's capacity check, or a test with a
-    # hardcoded step count.
+    # hardcoded step count. Its values are the most the cookbook needs, Rainbow's
+    # six steps and the overlay's two segments, so the recipes run there exactly
+    # at capacity rather than not at all.
     stripseq_add_variant(default)
     stripseq_add_variant(rgbw          STRIPSEQ_WHITE_CHANNEL=1)
     stripseq_add_variant(nogamma       STRIPSEQ_GAMMA=0)
     stripseq_add_variant(rgbw_nogamma  STRIPSEQ_WHITE_CHANNEL=1 STRIPSEQ_GAMMA=0)
-    stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1)
+    stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=6 STRIPSEQ_MAX_SEGMENTS=2)
 endif()

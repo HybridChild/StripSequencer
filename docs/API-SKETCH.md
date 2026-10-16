@@ -474,6 +474,10 @@ using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
 // Fit intent: the delay that spreads total_ms evenly across count pixels.
 // A free function rather than a Segment method, because the result is just a
 // delay -- once computed there is nothing about it left to remember.
+//
+// Rounded to the nearest 1/256 ms, so the accumulated error across a ring
+// stays under 1 ms up to 511 pixels; a floor reaches it at 257. A count
+// of 0 gives 0, and a delay too large for int32_t saturates.
 constexpr int32_t spread(uint32_t total_ms, uint16_t count);
 
 class Segment {

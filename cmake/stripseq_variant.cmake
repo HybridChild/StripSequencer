@@ -2,7 +2,7 @@
 #
 #   stripseq_add_variant(default)                       # config.h's own defaults
 #   stripseq_add_variant(rgbw   STRIPSEQ_WHITE_CHANNEL=1)
-#   stripseq_add_variant(tight  STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1)
+#   stripseq_add_variant(tight  STRIPSEQ_MAX_STEPS=6 STRIPSEQ_MAX_SEGMENTS=2)
 #
 # STRIPSEQ_WHITE_CHANNEL and STRIPSEQ_GAMMA change compiled behaviour rather
 # than just a constant -- the first changes sizeof(Color), sizeof(Step) and

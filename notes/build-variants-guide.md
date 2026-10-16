@@ -76,7 +76,7 @@ stripseq_add_variant(default)                                        # config.h'
 stripseq_add_variant(rgbw          STRIPSEQ_WHITE_CHANNEL=1)
 stripseq_add_variant(nogamma       STRIPSEQ_GAMMA=0)
 stripseq_add_variant(rgbw_nogamma  STRIPSEQ_WHITE_CHANNEL=1 STRIPSEQ_GAMMA=0)
-stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=3 STRIPSEQ_MAX_SEGMENTS=1)
+stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=6 STRIPSEQ_MAX_SEGMENTS=2)
 ```
 
 **Each call passes only its deviations from the defaults, and `default` passes nothing at all.** That is deliberate and easy to get wrong in the other direction. Writing `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 STRIPSEQ_GAMMA=1)` looks more explicit and is strictly worse: the values in `config.h` would then never be compiled by anything, and a typo turning the declared default white channel on would pass the entire suite, because every variant overrode it. A default is only tested by *not* setting it.
@@ -192,7 +192,7 @@ In `tests/layout.cpp`, replace `CHECK(sizeof(Sequence) >= sizeof(Step) * STRIPSE
 ./scripts/build.sh && ./scripts/test.sh
 ```
 
-Four variants pass. `tight:` fails, because there is no room for eight steps in a build configured for three. **Revert it.**
+Four variants pass. `tight:` fails, because there is no room for eight steps in a build configured for six. **Revert it.**
 
 **Proves:** one variant at awkward capacities catches the whole class of "assumes the default" mistakes, without a cross product over values that do not change meaning.
 
