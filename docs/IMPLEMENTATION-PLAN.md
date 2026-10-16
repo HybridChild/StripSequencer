@@ -42,6 +42,7 @@ CMakeLists.txt              # standalone build; library + optional tests
 cmake/
   sources.cmake             # STRIPSEQ_SOURCES / STRIPSEQ_INCLUDE_DIR, shared with the Zephyr module
   stripseq_variant.cmake    # helper that builds one (library, test) pair per configuration
+  stripseq_compile_fail.cmake  # configure-time check that build_const() rejects invalid sequences
   arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
 scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand; clean.sh deletes the build trees
 .github/workflows/ci.yml
@@ -61,6 +62,7 @@ src/
   strip.cpp
 tests/
   ...                       # one file per header, plus cookbook.cpp
+  compile_fail/             # probes that must not compile, driven by stripseq_compile_fail.cmake
 zephyr/
   module.yml                # makes the repo a Zephyr module
   CMakeLists.txt            # zephyr_library() over the same source list
@@ -200,34 +202,46 @@ The W channel goes through the identical path. The library has no opinion about 
 
 *The builder needs a sticky error.* `fade_to` called nine times against a capacity of eight must not clobber the ninth or silently drop it; the builder records the first `Error` it hits and every later call is a no-op until `build()` reports it. Without this, over-long sequences fail in whichever way the copy loop happens to fail.
 
-*`build_const()` cannot use `throw` to fail.* The usual `consteval` trick — throw on invalid input, which is a compile error in a constant expression — is ill-formed under `-fno-exceptions`, which is how Zephyr builds C++ by default. The portable form is to call a **declared-but-not-`constexpr`** function on the error path:
+*`build_const()` cannot use `throw` to fail.* The usual `consteval` trick — throw on invalid input, which is a compile error in a constant expression — is ill-formed under `-fno-exceptions`, which is how Zephyr builds C++ by default. The portable form is to call a **declared-but-not-`constexpr`** function on the error path, one per `Error`:
 
 ```cpp
-// Declared, never defined, never constexpr. Calling it in a constant
-// expression is a compile error naming this function; calling it at run
+// Declared, never defined, never constexpr. Calling one in a constant
+// expression is a compile error naming that function; calling it at run
 // time is a link error. Both are what we want.
-void stripseq_invalid_sequence();
+namespace invalid_sequence {
+void sequence_has_no_steps();
+void sequence_has_a_zero_duration_fade();
+// ... one for each Error
+}
 
 consteval Sequence SequenceBuilder::build_const() const {
     Sequence out{};
-    if (build(out) != Error::None)
-        stripseq_invalid_sequence();
+    switch (build(out)) {
+    case Error::None:             break;
+    case Error::NoSteps:          invalid_sequence::sequence_has_no_steps(); break;
+    case Error::ZeroDurationFade: invalid_sequence::sequence_has_a_zero_duration_fade(); break;
+    // ...
+    }
     return out;
 }
 ```
 
-The diagnostic quality is worth checking on both gcc and clang while writing this, since it is the error message every user of a malformed compile-time sequence will read.
+One function per error rather than one for all is what the diagnostic is for: it is the message every user of a malformed compile-time sequence reads, so the function's name is written to be that message. Clang prints only the unqualified name, so each name reads as a sentence on its own. The names also let the `try_compile` check assert that each probe failed for its own reason — a probe that fails some other way, a missing include or a different rule firing first, fails the check rather than passing it.
 
-**Decisions to make in this phase.** What an *unset* `start_color` or `landing_color` means on a finite sequence. The builder tracks set versus unset and `build()` writes the resolved color into the `Sequence`, so the two candidates are black, or the adjacent step's color (first step's color before the start, last step's color after the end). Recommendation: **black** before the start and the **last step's color** after the end — a finite sequence that runs to completion and then blanks is almost never wanted, whereas one that starts dark is the wipe recipe's default. Whichever is chosen, it needs a sentence in the sketch beside the builder.
+*An unset `start_color` is black, and an unset `landing_color` is the last step's color.* The builder tracks set versus unset and `build()` writes the resolved color into the `Sequence`, so `at()` never branches on it. The alternative is the adjacent step's color at both ends, and the start end rules it out: the first pass fades *from* `start_color`, which is what puts the wipe's wavefront mid-transition, so a default of the first step's color would turn a one-step finite fade into a fade from a color to itself. At the other end, a finite sequence that runs to completion and then blanks is almost never wanted. The rule is recorded in the sketch beside the builder.
 
-**Guide.** Constant initialisation — "why does nothing here run before `main`?" `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. It belongs to this phase because `build_const()` is what makes `consteval` real; written any earlier, the material would have to be rewritten once it is. [`cross-compiling-guide.md`](../notes/cross-compiling-guide.md) §5–§6 already covers the object-file evidence, and its Exercises 3 and 4 show the two costs directly, so the guide builds on those rather than repeating them.
+**Guides.** Two, and a section of a third.
+
+- [`constant-initialisation-guide.md`](../notes/constant-initialisation-guide.md) — "why does nothing here run before `main`?" `constexpr`, `inline constexpr`, `constinit`, `consteval`, and what a function-local static costs on a target with no threads. It belongs to this phase because `build_const()` is what makes `consteval` real; written any earlier, the material would have to be rewritten once it is. [`cross-compiling-guide.md`](../notes/cross-compiling-guide.md) §5–§6 already covers the object-file evidence, and its Exercises 3 and 4 show the two costs directly, so the guide builds on those rather than repeating them.
+- [`integer-arithmetic-guide.md`](../notes/integer-arithmetic-guide.md) — exact arithmetic with no floating point: the signed remainder behind the ring, negating `INT32_MIN`, overflow in intermediates, why the curves stay monotonic, and the 64-bit division a Cortex-M calls a library for. `at()`, `lerp` and the easing curves are the first arithmetic in the library, so this is where the material is.
+- [`testing-guide.md`](../notes/testing-guide.md) §7 — tests that must not compile: why the `build_const()` check is a `try_compile` at configure time, why each probe names its failure, and why the probe's headers are configure dependencies.
 
 **Exit criteria:**
 
 - `at()` tested across negative, zero, mid-step, exact-boundary, past-end and far-negative playheads, for endless and finite sequences, with and without start/landing colors.
 - Every `Error` produced by a builder that triggers it.
 - `TooLong` accepted at exactly 2^29 ms and rejected one past it, including through a loop and repeat count whose product overflows `uint32_t`.
-- A `build_const()` compile-failure test (CMake `try_compile` asserting failure).
+- A `build_const()` compile-failure test (CMake `try_compile` asserting failure), re-run by the next build after any change to the headers it compiles.
 - The `Step` layout assertion passing in both builds.
 
 ## Phase 3 — Sequencer
@@ -414,7 +428,6 @@ Everything the sketch settled stays settled. These are genuinely open and are ca
 
 | Decision | Phase | Recommendation |
 | --- | --- | --- |
-| Meaning of an unset `start_color` / `landing_color` on a finite sequence | 2 | Black before the start; last step's color after the end |
 | Whether `add()` rejects a segment that exceeds the buffer | 4 | Yes — it is the only place the strip and the segment's extent are both known |
 | Whether `set_pixel_delay` rejects a delay that would overflow the stagger | 4 | Yes — it keeps the check out of the per-pixel loop and reuses the existing `bool` |
 

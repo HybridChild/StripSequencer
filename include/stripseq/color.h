@@ -64,9 +64,22 @@ struct Color {
      * ColorFn is the one place outside the library that needs it. Covers all
      * channels, w included. t: 0 = a, 65535 = b. Works in the same linear
      * 16-bit space the sequence does -- gamma is applied later, at the 8-bit
-     * conversion, so blending here is unaffected by it. */
-    static constexpr Color lerp(Color a, Color /*b*/, uint16_t /*t*/) {
-        return a;         /* stub */
+     * conversion, so blending here is unaffected by it.
+     *
+     * Each channel is (x * (65535 - t) + y * t) / 65535, in uint32_t -- the
+     * largest the numerator can be is 65535^2, which fits. Exact at both ends
+     * and monotonic in t. Never x + (y - x) * t / 65535: it needs a signed
+     * intermediate, and is easy to get wrong in the direction where y < x. */
+    static constexpr Color lerp(Color a, Color b, uint16_t t) {
+        const auto mix = [t](uint16_t x, uint16_t y) {
+            return static_cast<uint16_t>(
+                (uint32_t{x} * (65535u - t) + uint32_t{y} * t) / 65535u);
+        };
+#if STRIPSEQ_WHITE_CHANNEL
+        return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.w, b.w)};
+#else
+        return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b)};
+#endif
     }
 };
 

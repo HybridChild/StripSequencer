@@ -68,7 +68,10 @@ enum class Error : uint8_t {
     LandingColorOnEndless,   /* an endless sequence never lands */
     StartColorOnEndless,     /* negative playheads wrap, so nothing is ever "before" */
     TooLong,                 /* over 2^29 ms in total, or per loop if endless */
+    ZeroLengthLoop,          /* an endless loop of 0 ms has nowhere to wrap to */
 };
+
+class SequenceBuilder;
 
 class Sequence {
 public:
@@ -83,11 +86,25 @@ public:
 
     /* These two are here for the library's own use rather than the caller's:
      * Sequencer needs the loop length to re-base an endless origin, and
-     * Segment::finished() needs the total. Endless reads as hold_forever. */
-    constexpr uint32_t loop_duration_ms() const { return 0; }   /* stub */
-    constexpr uint32_t total_duration_ms() const { return 0; }  /* stub */
+     * Segment::finished() needs the total. Endless reads as hold_forever.
+     *
+     * Neither can overflow: the builder rejects anything over 2^29 ms. */
+    constexpr uint32_t loop_duration_ms() const {
+        uint32_t sum = 0;
+        for (uint8_t i = 0; i < count_; ++i)
+            sum += steps_[i].duration_ms;
+        return sum;
+    }
+    constexpr uint32_t total_duration_ms() const {
+        return repeats_ == 0 ? hold_forever : loop_duration_ms() * repeats_;
+    }
 
 private:
+    /* The builder is the only writer. Nothing else can produce a Sequence with
+     * steps in it, so every rule build() checks holds for every Sequence that
+     * at() is ever asked about. */
+    friend class SequenceBuilder;
+
     Step     steps_[STRIPSEQ_MAX_STEPS] = {};   /* capacity: always allocated in full */
     uint8_t  count_ = 0;                      /* of those, how many are live */
     uint16_t repeats_ = 0;                    /* 0 = endless */
@@ -102,47 +119,178 @@ private:
 static_assert(std::is_trivially_copyable_v<Sequence>,
               "Sequence must stay a plain value -- Sequencer::load() copies it.");
 
+/* The compile-time failure path of SequenceBuilder::build_const(), one function
+ * per Error.
+ *
+ * Declared, never defined, never constexpr. Calling one in a constant
+ * expression is a compile error, and the diagnostic names the function -- so
+ * the name is the error message every user of a malformed compile-time
+ * sequence reads, and says what is wrong rather than only that something is.
+ * Calling one at run time would be a link error, but build_const() is consteval
+ * and so never runs then.
+ *
+ * Not `throw`: a throw in a constant expression is the usual consteval trick,
+ * and it is ill-formed under -fno-exceptions, which is how Zephyr builds C++. */
+namespace invalid_sequence {
+void sequence_has_no_steps();
+void sequence_has_more_steps_than_STRIPSEQ_MAX_STEPS();
+void sequence_has_a_zero_duration_fade();
+void sequence_repeat_count_is_zero();
+void sequence_is_endless_but_has_a_landing_color();
+void sequence_is_endless_but_has_a_start_color();
+void sequence_is_longer_than_2_pow_29_ms();
+void sequence_is_endless_but_its_loop_is_0_ms();
+}  // namespace invalid_sequence
+
 class SequenceBuilder {
 public:
     constexpr SequenceBuilder() = default;
 
-    constexpr SequenceBuilder& fade_to(Color /*c*/, uint32_t /*ms*/,
-                                       Transition /*t*/ = Transition::Linear) {
-        return *this;   /* stub */
+    /* Every call below is a no-op once one has failed. The error is sticky:
+     * the first one is kept and build() reports it, so a tenth fade_to against
+     * a capacity of eight neither clobbers the eighth nor vanishes silently. */
+
+    constexpr SequenceBuilder& fade_to(Color c, uint32_t ms,
+                                       Transition t = Transition::Linear) {
+        if (error_ != Error::None)
+            return *this;
+        if (ms == 0 && t != Transition::Step)
+            error_ = Error::ZeroDurationFade;
+        else if (seq_.count_ == STRIPSEQ_MAX_STEPS)
+            error_ = Error::TooManySteps;
+        else
+            seq_.steps_[seq_.count_++] = Step{c, t, ms};
+        return *this;
     }
-    constexpr SequenceBuilder& hold(Color /*c*/, uint32_t /*ms*/) {   /* sugar for Transition::Step */
-        return *this;   /* stub */
+    constexpr SequenceBuilder& hold(Color c, uint32_t ms) {   /* sugar for Transition::Step */
+        return fade_to(c, ms, Transition::Step);
     }
-    constexpr SequenceBuilder& endless() {                            /* the default */
-        return *this;   /* stub */
+    constexpr SequenceBuilder& endless() {                    /* the default */
+        if (error_ == Error::None)
+            seq_.repeats_ = 0;
+        return *this;
     }
-    constexpr SequenceBuilder& repeat(uint16_t /*times*/) {
-        return *this;   /* stub */
+    constexpr SequenceBuilder& repeat(uint16_t times) {
+        if (error_ != Error::None)
+            return *this;
+        if (times == 0)
+            error_ = Error::ZeroRepeatCount;   /* endless() is how to say "forever" */
+        else
+            seq_.repeats_ = times;
+        return *this;
     }
-    constexpr SequenceBuilder& start_color(Color /*c*/) {             /* finite only */
-        start_set_ = true;
-        return *this;   /* stub */
+    /* Finite only. Left unset, build() resolves start_color to black and
+     * landing_color to the last step's color: a sequence that starts dark is
+     * the wipe's default, and one that blanks as soon as it finishes is almost
+     * never wanted. The first pass fades from start_color, so a default of the
+     * first step's color would make a one-step finite fade no fade at all. */
+    constexpr SequenceBuilder& start_color(Color c) {
+        if (error_ == Error::None) {
+            seq_.start_ = c;
+            start_set_ = true;
+        }
+        return *this;
     }
-    constexpr SequenceBuilder& landing_color(Color /*c*/) {           /* finite only */
-        landing_set_ = true;
-        return *this;   /* stub */
+    constexpr SequenceBuilder& landing_color(Color c) {
+        if (error_ == Error::None) {
+            seq_.landing_ = c;
+            landing_set_ = true;
+        }
+        return *this;
     }
 
     /* Runtime path: reports rather than traps, because a sequence assembled from
-     * user input can legitimately be invalid. */
-    [[nodiscard]] constexpr Error build(Sequence& /*out*/) const {
-        return Error::None;   /* stub */
+     * user input can legitimately be invalid. `out` is written only on success,
+     * so a rejected rebuild leaves the previous sequence intact.
+     *
+     * The finite-only colors are checked here rather than in their setters,
+     * because the calls may come in any order: the wipe recipe sets
+     * start_color() before repeat() has made the sequence finite. */
+    [[nodiscard]] constexpr Error build(Sequence& out) const {
+        if (error_ != Error::None)
+            return error_;
+        if (seq_.count_ == 0)
+            return Error::NoSteps;
+        if (seq_.repeats_ == 0 && landing_set_)
+            return Error::LandingColorOnEndless;
+        if (seq_.repeats_ == 0 && start_set_)
+            return Error::StartColorOnEndless;
+
+        /* In uint64_t, because both the sum and the product overflow uint32_t
+         * long before they look suspicious: eight steps of 2^29 ms, or one loop
+         * of 2^16 ms repeated 2^16 times. Neither can overflow uint64_t, whose
+         * largest possible value here is 8 x (2^32 - 1) x (2^16 - 1). */
+        uint64_t loop = 0;
+        for (uint8_t i = 0; i < seq_.count_; ++i)
+            loop += seq_.steps_[i].duration_ms;
+        const uint64_t total = seq_.repeats_ == 0 ? loop : loop * seq_.repeats_;
+        if (total > max_duration_ms)
+            return Error::TooLong;
+        /* Only endless: a finite sequence of 0 ms is a clean edge, start_color
+         * before zero and landing_color from it, while an endless one would
+         * leave at() taking a playhead modulo 0. */
+        if (seq_.repeats_ == 0 && loop == 0)
+            return Error::ZeroLengthLoop;
+
+        out = seq_;
+        if (seq_.repeats_ != 0) {
+            if (!start_set_)
+                out.start_ = colors::black;
+            if (!landing_set_)
+                out.landing_ = seq_.steps_[seq_.count_ - 1].color;
+        }
+        return Error::None;
     }
 
     /* Compile-time path: the same rules, enforced by constant evaluation.
      * consteval, so an invalid sequence is a compile error rather than a
-     * runtime check that cannot fail. The failure path cannot use throw:
-     * -fno-exceptions is how Zephyr builds C++ by default. */
+     * runtime check that cannot fail. The error path calls one of the
+     * functions in invalid_sequence above, which is what makes it an error. */
     consteval Sequence build_const() const {
-        return Sequence{};    /* stub */
+        Sequence out{};
+        using namespace invalid_sequence;
+        switch (build(out)) {
+        case Error::None:
+            break;
+        case Error::NoSteps:
+            sequence_has_no_steps();
+            break;
+        case Error::TooManySteps:
+            sequence_has_more_steps_than_STRIPSEQ_MAX_STEPS();
+            break;
+        case Error::ZeroDurationFade:
+            sequence_has_a_zero_duration_fade();
+            break;
+        case Error::ZeroRepeatCount:
+            sequence_repeat_count_is_zero();
+            break;
+        case Error::LandingColorOnEndless:
+            sequence_is_endless_but_has_a_landing_color();
+            break;
+        case Error::StartColorOnEndless:
+            sequence_is_endless_but_has_a_start_color();
+            break;
+        case Error::TooLong:
+            sequence_is_longer_than_2_pow_29_ms();
+            break;
+        case Error::ZeroLengthLoop:
+            sequence_is_endless_but_its_loop_is_0_ms();
+            break;
+        }
+        return out;
     }
 
 private:
+    /* The limit is what lets the sequencer cap a finite playhead at 2^30 ms and
+     * still have every segment finish, and lets it re-base an endless one long
+     * before the playhead runs out of range -- see Sequencer::playhead(). */
+    static constexpr uint64_t max_duration_ms = uint64_t{1} << 29;
+
+    /* The sequence under construction. build() copies it out and fills in the
+     * defaults the two flags below call for. */
+    Sequence seq_ = {};
+    Error    error_ = Error::None;
+
     /* Whether start_color() and landing_color() were called. Color has no spare
      * value to mean "unset" -- black is a legitimate start color -- and the
      * builder needs the distinction twice: to reject either call on an endless

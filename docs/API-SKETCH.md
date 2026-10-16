@@ -220,6 +220,7 @@ enum class Error : uint8_t {
     LandingColorOnEndless,   // an endless sequence never lands
     StartColorOnEndless,     // negative playheads wrap, so nothing is ever "before"
     TooLong,                 // over 2^29 ms in total, or per loop if endless
+    ZeroLengthLoop,          // an endless loop of 0 ms has nowhere to wrap to
 };
 
 class Sequence {
@@ -255,8 +256,13 @@ public:
     constexpr SequenceBuilder& hold(Color c, uint32_t ms);         // sugar for Transition::Step
     constexpr SequenceBuilder& endless();                          // the default
     constexpr SequenceBuilder& repeat(uint16_t times);
-    constexpr SequenceBuilder& start_color(Color c);               // finite only
-    constexpr SequenceBuilder& landing_color(Color c);             // finite only
+    // Finite only. Left unset, build() resolves start_color to black and
+    // landing_color to the last step's color: a sequence that starts dark is
+    // the wipe's default, and one that blanks as soon as it finishes is almost
+    // never wanted. The first pass fades from start_color, so a default of the
+    // first step's color would make a one-step finite fade no fade at all.
+    constexpr SequenceBuilder& start_color(Color c);
+    constexpr SequenceBuilder& landing_color(Color c);
 
     // Runtime path: reports rather than traps, because a sequence assembled from
     // user input can legitimately be invalid.
@@ -265,7 +271,8 @@ public:
     // Compile-time path: the same rules, enforced by constant evaluation.
     // consteval, so an invalid sequence is a compile error rather than a
     // runtime check that cannot fail. Named as build()'s sibling, for when the
-    // rules are checked.
+    // rules are checked. The error path calls one of invalid_sequence's
+    // functions, below.
     consteval Sequence build_const() const;
 
 private:
@@ -279,6 +286,21 @@ private:
     bool start_set_ = false;
     bool landing_set_ = false;
 };
+
+// build_const()'s failure path, one function per Error. Declared, never
+// defined, never constexpr: calling one in a constant expression is a compile
+// error, and the diagnostic names the function, so the name is the message.
+// Not `throw`, which is ill-formed under -fno-exceptions, Zephyr's default.
+namespace invalid_sequence {
+void sequence_has_no_steps();
+void sequence_has_more_steps_than_STRIPSEQ_MAX_STEPS();
+void sequence_has_a_zero_duration_fade();
+void sequence_repeat_count_is_zero();
+void sequence_is_endless_but_has_a_landing_color();
+void sequence_is_endless_but_has_a_start_color();
+void sequence_is_longer_than_2_pow_29_ms();
+void sequence_is_endless_but_its_loop_is_0_ms();
+}
 
 }  // namespace stripseq
 ```

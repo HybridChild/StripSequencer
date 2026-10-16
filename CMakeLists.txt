@@ -86,9 +86,16 @@ if(STRIPSEQ_BUILD_TESTS)
     set(STRIPSEQ_TEST_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/tests/doctest_main.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/umbrella_only.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp)
 
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_compile_fail.cmake)
+
+    # The tests that must fail to compile, run here at configure time; see the
+    # file for why they cannot be test cases.
+    stripseq_check_build_const()
 
     # Five, not four. The cross product of the two behavioural macros is four,
     # and `default` is one of them -- called with no definitions at all, so that
