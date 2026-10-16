@@ -270,6 +270,11 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 
 `play()` on an already-playing sequencer must be a no-op, not a restart: recomputing the origin from the current playhead is the identity. Worth an explicit test, because getting it wrong turns any redundant `play()` call into a visible jump.
 
+**Guides.** One, and a section of another.
+
+- [`wrapping-clocks-guide.md`](../notes/wrapping-clocks-guide.md) — keeping a position from a clock that wraps: deriving it rather than counting it, subtracting before converting, the 24.8-day limit on the difference rather than the 49.7-day wrap of the clock, moving the origin to stay inside it, and testing sixty days in milliseconds. The `Sequencer` is the whole of the material, so the guide belongs to the phase that writes it.
+- [`testing-guide.md`](../notes/testing-guide.md) §8 — tests that pass for the wrong reason: planting bugs to find what the suite misses, the equivalent mutant `pause()` turned out to guard against, and the division by zero that arm64 forgives, x86-64 traps and a Cortex-M under Zephyr faults on, which is the case for running the host suite under UBSan.
+
 **Exit criteria:**
 
 - `pause`/`play` round-trips preserve the playhead exactly.

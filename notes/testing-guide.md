@@ -2,7 +2,7 @@
 
 *A from-first-principles guide to how a test framework and a test runner divide the work, using doctest and CTest.*
 
-This is a teaching document, not project documentation. It explains what a C++ test framework actually does, why CTest is a separate layer that knows nothing about your framework, and what test *discovery* buys over the naive wiring. The running example is this repository's suite: one set of test cases compiled into five differently configured binaries, and reported by CTest as one independent result per case per configuration. It assumes [`build-variants-guide.md`](build-variants-guide.md) for where the five come from.
+This is a teaching document, not project documentation. It explains what a C++ test framework actually does, why CTest is a separate layer that knows nothing about your framework, what test *discovery* buys over the naive wiring, and how to find out what a passing suite does not see. The running example is this repository's suite: one set of test cases compiled into five differently configured binaries, and reported by CTest as one independent result per case per configuration. It assumes [`build-variants-guide.md`](build-variants-guide.md) for where the five come from.
 
 **The shape of this document:**
 
@@ -11,8 +11,9 @@ This is a teaching document, not project documentation. It explains what a C++ t
 - **§5** — the cost this repo pays: the suite is compiled once per configuration, and why that drives the choice of framework.
 - **§6** — the one-line translation unit, and the honest limit of what it proves.
 - **§7** — tests that must *not* compile, which no test framework can run, and what `try_compile` does instead.
-- **§8** — seven exercises.
-- **§9–§10** — the model in a paragraph, and where to go next.
+- **§8** — tests that pass for the wrong reason: planting bugs to see which ones the suite misses, and a bug the host hardware hides.
+- **§9** — nine exercises.
+- **§10–§11** — the model in a paragraph, and where to go next.
 
 ---
 
@@ -106,19 +107,51 @@ So the test has to be a whole compiler run, observed from outside — and the th
 
 Four decisions in that file are the general lessons.
 
-**Failing is not enough; name the failure.** A probe that fails to compile proves nothing on its own, because it might have failed for an unrelated reason — a typo, a missing include, a header that moved, or a *different* rule firing first. So each case carries the name of the failure function its sequence should reach, and the compiler's output must contain that name. Because `build_const()` names each error after itself, this checks *which* error, not merely *an* error. §8 Exercise 5 shows the difference: with one rule removed, the probe for it still fails to compile — because another rule caught the same sequence — and only the name check notices.
+**Failing is not enough; name the failure.** A probe that fails to compile proves nothing on its own, because it might have failed for an unrelated reason — a typo, a missing include, a header that moved, or a *different* rule firing first. So each case carries the name of the failure function its sequence should reach, and the compiler's output must contain that name. Because `build_const()` names each error after itself, this checks *which* error, not merely *an* error. §9 Exercise 5 shows the difference: with one rule removed, the probe for it still fails to compile — because another rule caught the same sequence — and only the name check notices.
 
 **A positive control.** Case 0 is a valid sequence, through the same probe file with the same flags, and it must compile. Without it, a probe broken for every case — a wrong include path, a renamed header — would make every negative case pass, because every one of them would fail to compile.
 
-**`try_compile`, never `check_cxx_source_compiles`.** CMake's `check_*()` modules look like the obvious tool, and they are built for feature detection: whether the compiler supports a flag does not change between configures, so once a result is in the cache they skip the check and report the cached answer. For a test that is fatal — it would pass once per build tree and report that first answer forever, whatever the headers became (§8 Exercise 7). `try_compile` itself always compiles. It does store its result as a cache entry — CMake 3.25 added `NO_CACHE` to stop that, and this project's minimum is 3.21 — but it never reads one back.
+**`try_compile`, never `check_cxx_source_compiles`.** CMake's `check_*()` modules look like the obvious tool, and they are built for feature detection: whether the compiler supports a flag does not change between configures, so once a result is in the cache they skip the check and report the cached answer. For a test that is fatal — it would pass once per build tree and report that first answer forever, whatever the headers became (§9 Exercise 7). `try_compile` itself always compiles. It does store its result as a cache entry — CMake 3.25 added `NO_CACHE` to stop that, and this project's minimum is 3.21 — but it never reads one back.
 
-**Make the build reconfigure when the probe's inputs change.** A configure-time check runs when CMake configures, and editing a header is not something CMake configures for: it tracks the headers each object file includes, so `cmake --build` after an edit to `sequence.h` recompiles every test, and runs no probe. A mistake that only the probes can see — a failure branch that no longer calls its function — would survive an edit, a build and a full `ctest` run. The fix is the directory property `CMAKE_CONFIGURE_DEPENDS`: every file listed there is a dependency of the build system itself, so a change to one makes the next build start with *Re-running CMake*. The check lists the probe and every header it reaches, which costs nine small compiles on any build after one of them changes. The list is maintained by hand, so a new `#include` in `sequence.h` has to be added to it (§8 Exercise 6).
+**Make the build reconfigure when the probe's inputs change.** A configure-time check runs when CMake configures, and editing a header is not something CMake configures for: it tracks the headers each object file includes, so `cmake --build` after an edit to `sequence.h` recompiles every test, and runs no probe. A mistake that only the probes can see — a failure branch that no longer calls its function — would survive an edit, a build and a full `ctest` run. The fix is the directory property `CMAKE_CONFIGURE_DEPENDS`: every file listed there is a dependency of the build system itself, so a change to one makes the next build start with *Re-running CMake*. The check lists the probe and every header it reaches, which costs nine small compiles on any build after one of them changes. The list is maintained by hand, so a new `#include` in `sequence.h` has to be added to it (§9 Exercise 6).
+
+## 8. Tests that pass for the wrong reason
+
+A green suite says that nothing the tests looked at went wrong. It says nothing about what they did not look at, and the only way to find that out is to break the code on purpose and see whether anything notices. Each deliberate bug is a *mutant*; a test that fails because of it *kills* it; one that survives every test is a finding. Tools exist that plant thousands mechanically — Mull, for C++ under Clang — but planting a handful by hand, at the lines you were least sure of, teaches more per minute, and needs nothing but an editor.
+
+Done to `Sequencer` (§9 Exercise 8), seven mutants give this:
+
+| Planted in `src/sequencer.cpp` | Killed by |
+| --- | --- |
+| `play()` no longer re-bases or caps the playhead it restores | play after a seek near INT32_MAX does not overflow |
+| `play()` loses its guard, so a second `play()` restarts | play while playing and pause while paused change nothing |
+| the finite cap clamps the answer but leaves the origin | a finite sequence left playing for 60 days …; play after a seek near INT32_MAX … |
+| re-basing also applies to negative playheads | a negative playhead plays toward 0 and is left alone until then |
+| `pause()` stores `now - origin` instead of asking `playhead()` | a finite sequence left playing for 60 days …; play while playing … |
+| `pause()` gains a guard, `if (!playing_) return;` | nothing |
+| re-basing loses its check for a zero-length loop | nothing, on Apple Silicon |
+
+The five that die are the suite working. The two that survive are the two kinds of survivor worth being able to tell apart.
+
+**An equivalent mutant: the code did not matter.** `pause()` stores `playhead(now)`, and while paused `playhead()` answers the stored value without reading anything else. So pausing twice stores the same value twice, with or without a guard against it, and no test can tell the difference because there is no difference. No new test is the right response. The right response is to understand why — and then, usually, to delete the code that does not matter, with a comment saying why it is not needed, which is what `Sequencer::pause()` has. A survivor is either a gap in the tests or a line that cannot change behaviour; deciding which is the work, and either answer improves something.
+
+**A mutant hidden by the hardware: the test passed for the wrong reason.** `tests/sequencer.cpp` has a case named for exactly the third survivor — "an empty sequence left playing does not divide by zero" — and with the guard deleted it still passes on an Apple Silicon Mac. The division happens. The test cannot see it.
+
+Integer division by zero is undefined behaviour in C++, and what actually happens is whatever the processor's divide instruction does:
+
+- **arm64** (Apple Silicon): `UDIV` by zero returns 0, without trapping. The compiler computes `p % loop` as `p - (p / loop) * loop`, which with a zero quotient is `p` — so the mutated code returns the elapsed time, which is exactly the right answer for an empty sequence. Every check passes.
+- **x86-64:** `DIV` by zero raises a divide-error exception, and the process dies with `SIGFPE`. The same test crashes.
+- **Cortex-M3/M4/M7** — this project's target: `UDIV` by zero returns 0 by default, like arm64, unless the `DIV_0_TRP` bit in the Configuration and Control Register is set, in which case it is a usage fault. Zephyr sets it at boot, in `z_arm_fault_init()` (`arch/arm/core/cortex_m/fault.c:1129`), and reports the result as "Division by zero" (`arch/arm/core/cortex_m/fault.c:499`). On the bench board, the mutant would fault the first time an empty sequence played.
+
+Three machines, three behaviours, and the one the tests happened to run on was the most forgiving. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
+
+What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 too (§9 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
 
 ---
 
-## 8. Exercises
+## 9. Exercises
 
-Seven, all on the host.
+Nine, all on the host.
 
 ```sh
 ./scripts/build.sh
@@ -294,13 +327,110 @@ The second configure removed the definition the snippet needs, and still reporte
 
 **Proves:** the `check_*()` modules answer "has this ever compiled in this build tree?", which is the right question for a compiler feature and the wrong one for a test. `try_compile` answers "does this compile now?".
 
+### Exercise 8 — Plant a bug and see who notices
+
+*Demonstrates §8: what a mutant is, and the two kinds of survivor.*
+
+Make each change below to `src/sequencer.cpp` on its own, rebuild, run, and revert before the next:
+
+```sh
+cmake --build build --target tests_default && ./build/tests_default | grep -E '^TEST CASE|test cases:'
+```
+
+1. In `Sequencer::play()`, delete `(void)playhead(now_ms);`.
+2. In `Sequencer::play()`, change `if (playing_)` to `if (false)`.
+3. In `Sequencer::playhead()`, delete the line `origin_ms_ = now_ms - static_cast<uint32_t>(finite_cap_ms);`.
+4. In `Sequencer::playhead()`, delete `p < 0 || `.
+5. In `Sequencer::pause()`, replace `playhead(now_ms)` with `static_cast<int32_t>(now_ms - origin_ms_)`.
+6. In `Sequencer::pause()`, add `if (!playing_) return;` as its first line.
+
+The first five each print the failing case names from the table in §8, then a summary such as:
+
+```
+TEST CASE:  play after a seek near INT32_MAX does not overflow
+[doctest] test cases:    52 |    51 passed | 1 failed | 0 skipped
+```
+
+The sixth prints only the summary, with nothing failed. Before reverting it, work out why no test could fail: trace `pause()` twice in a row by hand, and look at what `playhead()` reads while `playing_` is false.
+
+**Proves:** a mutant that dies shows a test doing its job, and the case that kills it is the one that documents why the line exists. One that survives is either a missing test or code that cannot matter — and only reading the code says which.
+
+### Exercise 9 — One remainder, three machines
+
+*Demonstrates §8: undefined behaviour the host forgives.*
+
+First, outside the repository. From the repository root:
+
+```sh
+REPO=$PWD
+mkdir -p /tmp/stripseq-lab && cd /tmp/stripseq-lab
+```
+
+```cpp
+// divzero.cpp
+#include <cstdint>
+#include <cstdio>
+
+uint32_t into_loop(uint32_t p, uint32_t loop) { return p % loop; }
+
+int main() {
+    volatile uint32_t loop = 0;   // what an empty sequence reports
+    std::printf("1730 %% 0 = %u\n", into_loop(1730, loop));
+}
+```
+
+```sh
+c++ -std=c++20 divzero.cpp -o divzero && ./divzero; echo "exit $?"
+c++ -std=c++20 -arch x86_64 divzero.cpp -o divzero_x86 && ./divzero_x86; echo "exit $?"
+c++ -std=c++20 -fsanitize=undefined divzero.cpp -o divzero_ub && ./divzero_ub; echo "exit $?"
+```
+
+On an Apple Silicon Mac, with Rosetta installed for the middle one:
+
+```
+1730 % 0 = 1730
+exit 0
+exit 136
+divzero.cpp:5:58: runtime error: division by zero
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior divzero.cpp:5:58
+1730 % 0 = 1730
+exit 0
+```
+
+The x86-64 build prints nothing and exits with 136, which is 128 + 8, signal 8 being `SIGFPE`; an interactive shell adds its own line naming the floating-point exception, though no floating point is involved. The UBSan build reports the division and then, like arm64, carries on.
+
+Now the library. In `Sequencer::playhead()`, delete `loop == 0 || `, and run the case named for this bug in the ordinary build and in a UBSan one:
+
+```sh
+cd "$REPO"
+cmake --build build --target tests_default && ./build/tests_default -tc='an empty sequence left*'
+cmake -S . -B build-ubsan -G Ninja -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-sanitize-recover=all"
+cmake --build build-ubsan --target tests_default && ./build-ubsan/tests_default -tc='an empty sequence left*'
+```
+
+The ordinary build passes on Apple Silicon. The UBSan one:
+
+```
+src/sequencer.cpp:63:61: runtime error: division by zero
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:63:61
+===============================================================================
+tests/sequencer.cpp:402:
+TEST CASE:  an empty sequence left playing does not divide by zero
+
+tests/sequencer.cpp:402: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
+```
+
+`-fno-sanitize-recover=all` makes the first report abort the process, which doctest reports as a crash in the case that was running. **Revert it**, rebuild `build-ubsan`, and the case passes there too. `build-ubsan` matches the `build*/` pattern, so it is ignored by git and removed by `scripts/clean.sh`.
+
+**Proves:** the same remainder returns the right answer, kills the process, or is reported, depending only on the machine. A test that passes on the forgiving one proves nothing about the others, and the sanitizer is what makes the test mean the same thing everywhere.
+
 ---
 
-## 9. The model in one paragraph
+## 10. The model in one paragraph
 
-A test framework and a test runner solve different problems, and the seam between them is where the useful choices live. The framework — doctest here, a single header — collects cases through namespace-scope objects that register themselves before `main`, runs them, and reports values rather than just failures. CTest knows none of that: to it a test is a command line that passes if the process exits zero, so the two layers must be joined either by one test per binary or by one test per case, and the second is worth having because it gives per-case names, real parallelism, and a failure that diagnoses itself. Discovery bridges them by running the freshly linked binary with `--list-test-cases` at build time and generating ordinary `add_test` calls with `--test-case=` filters — which means new cases appear only after a build, and a cross-compiled suite cannot be discovered at all. What that costs is set by the shape of the build rather than the framework: because tests include the headers that build-time macros change, the whole suite compiles once per configuration, and a header-only framework's compile speed is multiplied by the number of variants on every build. One kind of test sits outside both layers: a promise that some code *fails* to compile cannot live in a file that has to compile, so it becomes a compiler run that CMake's `try_compile` performs at configure time: each probe must fail, must fail by naming the expected error, and is paired with a control that must succeed — and the headers it compiles are configure dependencies, so a change to them makes the next build run it again.
+A test framework and a test runner solve different problems, and the seam between them is where the useful choices live. The framework — doctest here, a single header — collects cases through namespace-scope objects that register themselves before `main`, runs them, and reports values rather than just failures. CTest knows none of that: to it a test is a command line that passes if the process exits zero, so the two layers must be joined either by one test per binary or by one test per case, and the second is worth having because it gives per-case names, real parallelism, and a failure that diagnoses itself. Discovery bridges them by running the freshly linked binary with `--list-test-cases` at build time and generating ordinary `add_test` calls with `--test-case=` filters — which means new cases appear only after a build, and a cross-compiled suite cannot be discovered at all. What that costs is set by the shape of the build rather than the framework: because tests include the headers that build-time macros change, the whole suite compiles once per configuration, and a header-only framework's compile speed is multiplied by the number of variants on every build. One kind of test sits outside both layers: a promise that some code *fails* to compile cannot live in a file that has to compile, so it becomes a compiler run that CMake's `try_compile` performs at configure time: each probe must fail, must fail by naming the expected error, and is paired with a control that must succeed — and the headers it compiles are configure dependencies, so a change to them makes the next build run it again. And a green result, of either kind, says only that nothing the tests looked at went wrong on this machine: planting bugs on purpose shows what the tests do not look at, a survivor is either a missing test or code that cannot matter, and undefined behaviour can pass a test on a forgiving processor and crash on another — which is why a sanitizer build, not a second machine, is what makes a test mean the same thing everywhere.
 
-## 10. Where to go next
+## 11. Where to go next
 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
@@ -308,4 +438,6 @@ A test framework and a test runner solve different problems, and the seam betwee
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 5** — where the suite becomes an acceptance test: the eleven cookbook recipes compiled unmodified, with property assertions and golden-frame hashes.
+- **[`wrapping-clocks-guide.md`](wrapping-clocks-guide.md)** — the code §8's mutants were planted in: what each guarded line in `Sequencer` is for, and the exercises that break them one at a time.
+- **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — the sanitizer builds §8 argues for, run over the whole suite.
 - **doctest's own `doctest.cmake`** — the ~200 lines behind §4, and short enough to read once to see that discovery really is just generated `add_test` calls.
