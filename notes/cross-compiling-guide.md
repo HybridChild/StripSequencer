@@ -261,7 +261,7 @@ Cross-compiling means the machine running the compiler is not the machine runnin
 
 ## 9. Where to go next
 
-- **`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`** — twenty lines and fifteen; after this guide, every line in them should be one of §1–§3.
+- **`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`** — two short files; after this guide, every line in them should be one of §1–§3.
 - **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §4–§5** — the other half of §3: what a library may say about the toolchain, and why `cxx_std_20` is the only thing this one says.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — where §6's `nm` and `objdump` observations become CI checks, alongside UBSan, ASan and the footprint numbers.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 6** — the real thing this check is a cheap proxy for: the library built inside Zephyr for an actual Cortex-M7, where the linker finally gets a say.
