@@ -266,6 +266,8 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 
 *Finite sequences cannot re-base*, since their position is absolute, but left playing they need the same protection: the Wipe recipe never pauses, and its playhead would overflow `int32_t` after about 24.8 days and show `start_color`. Cap it at a large constant, 2^30 (about 12.4 days), by moving the origin: when the derived playhead exceeds the cap, set `origin_ms_ = now_ms - cap` and return the cap. Clamping only the returned value is not enough, because the unsigned difference underneath keeps growing and the cast turns it negative at 24.8 days regardless. The cap is a constant rather than `total_duration_ms()` because `finished()` compares the playhead *minus a stagger* against the total; the builder's 2^29 limit on the total and Phase 4's overflow guard on the stagger keep a capped playhead minus any stagger past the end of every finite sequence. Capping cannot change behaviour, because everything past the end of a finite timeline reports the landing color and `hold_forever` regardless.
 
+*`play()` re-bases or caps once, at the instant it starts following the clock.* A playhead sought near `INT32_MAX` and then played would otherwise overflow before the next `playhead()` call could move it, and a finite sequence would show `start_color`. `seek` stays exact, so a paused progress bar reads back what it set. `pause()` records `playhead(now)` for the same reason: one function turns a clock reading into a playhead.
+
 `play()` on an already-playing sequencer must be a no-op, not a restart: recomputing the origin from the current playhead is the identity. Worth an explicit test, because getting it wrong turns any redundant `play()` call into a visible jump.
 
 **Exit criteria:**
@@ -275,7 +277,8 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 - `play` while playing and `pause` while paused leave the playhead exactly where it was.
 - Re-basing over a simulated ten-day run keeps positions identical to the un-rebased arithmetic.
 - A simulated `uint32_t` wrap of `now_ms` produces no discontinuity.
-- A finite sequence left playing for a simulated 60 days still reports its landing color and lets its segment report `finished()`.
+- A finite sequence left playing for a simulated 60 days still reports its landing color, and its playhead stays at 2^30, which minus the largest stagger a segment accepts is still past any total the builder accepts.
+- `play()` after a `seek` within a few ms of `INT32_MAX` keeps a finite sequence on its landing color and an endless one in phase, with the first `playhead()` call well after the overflow would have happened.
 - An empty sequence left playing does not divide by zero.
 - `load()` resets the playhead to 0 and clears `playing_`.
 
@@ -316,6 +319,7 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 - The cancel sweep over `drives()` removes both of two segments sharing one sequencer and leaves the background segment painting.
 - `add()` returns false for a segment running past the end of the strip, and the same segment assigned through `segment(i)` paints only its visible pixels, leaves guard bytes placed after the buffer untouched, and yields a hold from those pixels alone, while a lone segment assigned wholly off the strip paints nothing and `render` returns `hold_forever`.
 - `spread` produces a delay whose accumulated error across a ring is under 1 ms, which is the reason `q8` exists at all.
+- A finite sequence left playing for a simulated 60 days lets a segment with the largest accepted stagger report `finished()`.
 
 ## Phase 5 — The cookbook as tests
 
