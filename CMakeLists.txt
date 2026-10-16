@@ -88,7 +88,8 @@ if(STRIPSEQ_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/tests/umbrella_only.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp)
 
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_compile_fail.cmake)
