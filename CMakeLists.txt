@@ -88,6 +88,7 @@ if(STRIPSEQ_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/tests/umbrella_only.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/convert.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp)
 

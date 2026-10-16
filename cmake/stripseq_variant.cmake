@@ -28,6 +28,11 @@ function(stripseq_add_variant name)
 
     add_executable(${exe} ${STRIPSEQ_TEST_SOURCES})
     target_link_libraries(${exe} PRIVATE ${lib} doctest::doctest)
+
+    # src/ for the internal headers -- color_internal.h's to_bytes -- which the
+    # tests exercise directly and a consumer never sees. PRIVATE, and on the
+    # test target only: the library finds them beside its own sources.
+    target_include_directories(${exe} PRIVATE ${PROJECT_SOURCE_DIR}/src)
     target_compile_options(${exe} PRIVATE ${STRIPSEQ_WARNINGS})
 
     # The same definitions again, renamed, straight onto the test target -- a

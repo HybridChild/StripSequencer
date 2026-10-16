@@ -49,9 +49,39 @@ struct Color {
                    static_cast<uint16_t>(b * 257));
     }
 
-    /* hue 0..65535; leaves w at 0. Integer sextant math. */
-    static constexpr Color hsv(uint16_t /*hue*/, uint8_t /*sat*/, uint8_t /*val*/) {
-        return Color{};   /* stub */
+    /* hue 0..65535; leaves w at 0. Integer sextant math.
+     *
+     * hue * 6 splits into a sextant index (the top bits) and a 16-bit position
+     * within it (the low sixteen). In every sextant one channel sits at the
+     * value, one at the floor saturation leaves, and the third rises or falls
+     * between them with the position. sat and val are scaled by x257 like
+     * rgb8, so 255 is full scale.
+     *
+     * All of it fits uint32_t: the largest product, span * pos, is under
+     * 65535^2. hue * 6 is always even, so pos stops at 65534 and a channel
+     * ends each sextant at most a step short of where the next begins. */
+    static constexpr Color hsv(uint16_t hue, uint8_t sat, uint8_t val) {
+        const uint32_t scaled  = uint32_t{hue} * 6u;
+        const uint32_t sextant = scaled >> 16;
+        const uint32_t pos     = scaled & 0xFFFFu;
+
+        const uint32_t top  = uint32_t{val} * 257u;
+        const uint32_t base = top * (255u - sat) / 255u;
+        const uint32_t step = (top - base) * pos / 65535u;
+
+        const auto v    = static_cast<uint16_t>(top);
+        const auto m    = static_cast<uint16_t>(base);
+        const auto rise = static_cast<uint16_t>(base + step);
+        const auto fall = static_cast<uint16_t>(top - step);
+
+        switch (sextant) {
+            case 0:  return rgb(v, rise, m);   /* red     -> yellow  */
+            case 1:  return rgb(fall, v, m);   /* yellow  -> green   */
+            case 2:  return rgb(m, v, rise);   /* green   -> cyan    */
+            case 3:  return rgb(m, fall, v);   /* cyan    -> blue    */
+            case 4:  return rgb(rise, m, v);   /* blue    -> magenta */
+            default: return rgb(v, m, fall);   /* magenta -> red     */
+        }
     }
 
 #if STRIPSEQ_WHITE_CHANNEL
