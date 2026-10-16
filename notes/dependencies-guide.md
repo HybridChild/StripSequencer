@@ -147,10 +147,12 @@ cmake --build /tmp/fc >/dev/null && ctest --test-dir /tmp/fc -j | tail -2
 
 ```
 doctest-build  doctest-src  doctest-subbuild
-100% tests passed out of 20
+100% tests passed out of …
 ```
 
-**Proves:** the two acquisition paths are interchangeable from the build's point of view — same target name, same twenty results — and `CMAKE_DISABLE_FIND_PACKAGE_<name>` lets you rehearse the CI path locally without uninstalling anything.
+The count is the same as in your normal build directory — every case, once per configuration.
+
+**Proves:** the two acquisition paths are interchangeable from the build's point of view — same target name, same results, case for case — and `CMAKE_DISABLE_FIND_PACKAGE_<name>` lets you rehearse the CI path locally without uninstalling anything.
 
 ### Exercise 3 — Ask for a version that does not exist
 

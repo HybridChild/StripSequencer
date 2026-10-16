@@ -18,7 +18,13 @@ This is a teaching document, not project documentation. It explains what a CMake
 
 The first thing to unlearn is the idea that a CMake file is a script that compiles files. It is a *description of targets* — libraries and executables — and of the edges between them. `add_library(stripseq STATIC ...)` does not compile anything; it declares a node. The compiler command line is generated much later, by walking the graph.
 
-That distinction matters because most of what a target carries is not for the target itself. When something links `stripseq`, that consumer needs to know where the headers are, what C++ standard they need, and which preprocessor definitions they were compiled under. None of that is discoverable from the archive file. So a target carries it, and CMake calls it a **usage requirement**: a property that travels along an edge to whoever links you.
+That distinction matters because most of what a target carries is not for the target itself. When something links `stripseq`, that consumer needs to know:
+
+- Where the headers are
+- what C++ standard they need
+- which preprocessor definitions they were compiled under.
+
+None of that is discoverable from the archive file. So a target carries it, and CMake calls it a **usage requirement**: a property that travels along an edge to whoever links you.
 
 Everything in this guide is one question asked repeatedly: *does this property stop at the target, or travel to its consumers?*
 
@@ -217,14 +223,14 @@ target_compile_definitions in cmake/stripseq_variant.cmake is PUBLIC.
 Leave `PRIVATE` in place from Exercise 3, and also comment out `target_compile_definitions(${exe} PRIVATE ${expect})` in the same file.
 
 ```sh
-cmake --build build --target tests_rgbw && ./build/tests_rgbw
+cmake --build build --target tests_rgbw && ./build/tests_rgbw -tc='color and step layout*'
 ```
 
 ```
-[doctest] test cases:  4 |  4 passed | 0 failed
+[doctest] Status: SUCCESS!
 ```
 
-Four green tests, including `color and step layout follow the white-channel setting` — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. **Revert both changes** and rebuild.
+`color and step layout follow the white-channel setting` passes — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. Now run the whole binary, without `-tc`. Cases that pass a `Sequence` across the boundary fail with values that are not colors at all, such as `rgb(1, 0, 9208) == rgb(0, 0, 0)` for an empty sequence that should be black: `Sequence::at()` was compiled reading one layout and the test wrote another. That is the bug from §6, showing up far from its cause and looking like an arithmetic error in the sequence code. Nothing in the failure points at the build system. **Revert both changes** and rebuild.
 
 **Proves:** a test that derives its expectation from the same macros it is checking cannot fail. Self-consistency is not verification.
 

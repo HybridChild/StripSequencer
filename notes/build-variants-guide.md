@@ -135,12 +135,14 @@ ctest --test-dir build -N | grep -oE '#[0-9]+: [a-z_]+:' | sed 's/.*: //' | sort
 ```
 
 ```
-   4 default:
-   4 nogamma:
-   4 rgbw:
-   4 rgbw_nogamma:
-   4 tight:
+  … default:
+  … nogamma:
+  … rgbw:
+  … rgbw_nogamma:
+  … tight:
 ```
+
+The five counts are equal, and each is the number of test cases in the suite: every case runs once in every configuration.
 
 **Proves:** one source tree, one `ctest` invocation, five independently compiled configurations — and each case is reported under the configuration it ran in, not pooled.
 
@@ -158,7 +160,7 @@ stripseq_add_variant(fat STRIPSEQ_MAX_STEPS=64 STRIPSEQ_MAX_SEGMENTS=16)
 ./scripts/build.sh && ./scripts/test.sh build -R '^fat:'
 ```
 
-Four more passing cases, and `sizeof(Sequence)` in that binary is 788 bytes rather than the default build's 116. **Revert it** — a sixth variant costs a compile on every build and this one buys nothing the other five do not cover.
+Every case passes once more, under `fat:`, and `sizeof(Sequence)` in that binary is 56 steps — 672 bytes in an RGB build — larger than the default build's, all of it capacity that no recipe uses. **Revert it** — a sixth variant costs a compile on every build and this one buys nothing the other five do not cover.
 
 **Proves:** the helper is the unit of configuration. Nothing inside it knows how many variants exist, and nothing outside it needs to know how a variant is built.
 
@@ -173,7 +175,7 @@ Change the first call to `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 
 ```
 
 ```
-100% tests passed out of 20
+100% tests passed out of …
 ```
 
 Every variant is green, and the library's declared default is now wrong for every consumer who does not override it. Restore both, rebuild, and watch `default:` fail as it should have all along.
