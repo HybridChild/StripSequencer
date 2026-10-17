@@ -19,16 +19,16 @@ This is not licence to stop at every fork. Do everything that does not depend on
 They are a spec, not notes, and they answer different questions. Read them in this order; each assumes the one before it.
 
 - **[`DESIGN.md`](docs/DESIGN.md) — why.** The mechanism: a sequence as a stateless lookup table indexed by a continuous playhead, `pixel_delay` as the whole spatial dimension, the two plug-in points, hold as a binding contract rather than advice, and the invariant that there is **no per-pixel state inside the library, ever**. Also the cookbook, the supporting decisions and the non-goals.
-- **[`API-SKETCH.md`](docs/API-SKETCH.md) — what.** The calling surface, signatures only. Decisions are recorded beside the declaration they govern, so the rationale for a name or a signature is next to it rather than in a changelog. The eleven cookbook recipes at the end are the acceptance criteria: if Blink is not three lines, something is wrong upstream.
+- **[`API-SKETCH.md`](docs/API-SKETCH.md) — what.** The calling surface, signatures only. Decisions are recorded beside the declaration they govern, so the rationale for a name or a signature is next to it rather than in a changelog. The eleven cookbook recipes at the end are the acceptance criteria: if Blink takes more than describing the sequence and loading, starting and placing it, something is wrong upstream.
 - **[`IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) — how, and in what order.** Eight phases with per-phase exit criteria, the ground rules that hold across all of them, and a risk register.
 
 When something is decided, record it beside the thing it decides — that is the convention all three already follow. Don't start a decision log.
 
 ## The learning goal, and the guides in `notes/`
 
-**This project is a vehicle for learning C++, CMake, and more Zephyr** — the way `../EthernetProtobufZephyr/` was a vehicle for Zephyr, MQTT and Protobuf. Where a choice trades a shortcut against understanding one of those three, prefer the one that teaches.
+**This project is a vehicle for learning C++, CMake, and more Zephyr** — the way `../ClimateNode/` was a vehicle for Zephyr, MQTT and Protobuf. Where a choice trades a shortcut against understanding one of those three, prefer the one that teaches.
 
-That learning is written down in `notes/`. The split mirrors the reference project: `docs/` records what *this* project decided, while **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example — see [`../EthernetProtobufZephyr/notes/README.md`](../EthernetProtobufZephyr/notes/README.md) for the model. A guide should be readable by someone who has never seen this project.
+That learning is written down in `notes/`. The split mirrors the reference project: `docs/` records what *this* project decided, while **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example — see [`../ClimateNode/notes/README.md`](../ClimateNode/notes/README.md) for the model. A guide should be readable by someone who has never seen this project.
 
 **Each phase of the implementation plan ends with a conversation about what it taught**, and produces at least one guide out of that.
 
@@ -36,7 +36,7 @@ Follow the shared skeleton so every guide navigates the same way: an opening roa
 
 ## One reference repository, for one thing only
 
-**[`../EthernetProtobufZephyr/`](../EthernetProtobufZephyr/) — a reference for the eventual Zephyr *test app*, and nothing else.** Useful for how a freestanding Zephyr app is laid out against the shared workspace at `~/zephyr-workspace` (v4.4.1): the `scripts/` wrappers, the heavily justified `prj.conf`, the `notes/` guides paired with `docs/` references. It is a Zephyr application; this is a standalone library, so do **not** carry over its testing approach — the core is pure arithmetic and is tested on the host, not with Ztest on qemu.
+**[`../ClimateNode/`](../ClimateNode/) — a reference for the eventual Zephyr *test app*, and nothing else.** Useful for how a freestanding Zephyr app is laid out against the shared workspace at `~/zephyr-workspace` (v4.4.1): the `scripts/` wrappers, the heavily justified `prj.conf`, the `notes/` guides paired with `docs/` references. It is a Zephyr application; this is a standalone library, so do **not** carry over its testing approach — the core is pure arithmetic and is tested on the host, not with Ztest on qemu.
 
 ## Bench hardware
 

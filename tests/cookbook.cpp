@@ -61,15 +61,6 @@ int64_t clock_ms = kOrigin;
 
 constexpr size_t kBytes = sizeof(buffer);
 
-/* The two sequences that recipes drive without loading: Blink's and Comet's,
- * as their own recipes write them. */
-constexpr Sequence kBlinkSequence =
-    SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500).build_const();
-constexpr Sequence kCometSequence = SequenceBuilder{}
-                                        .hold(colors::rgbwhite, 50)
-                                        .fade_to(colors::black, 450)
-                                        .build_const();
-
 }  // namespace
 
 static int64_t now() { return clock_ms; }
@@ -119,26 +110,33 @@ static bool all_pixels_alike() {
 /* The recipes, verbatim                                                    */
 /* ------------------------------------------------------------------------ */
 
+static constexpr Sequence kBlink =
+    SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500).build_const();
+
 static void recipe_blink() {
-    seq.load(SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500).build_const());
+    seq.load(kBlink);
     seq.play(now());
     strip.add(Segment(0, kPixels, seq));      // pixel_delay defaults to 0
 }
 
+static constexpr Sequence kBreathe = SequenceBuilder{}
+    .fade_to(colors::rgbwhite, 1000, Transition::EaseInOut)
+    .fade_to(colors::black,    1000, Transition::EaseInOut)
+    .build_const();
+
 static void recipe_breathe() {
-    seq.load(SequenceBuilder{}
-        .fade_to(colors::rgbwhite, 1000, Transition::EaseInOut)
-        .fade_to(colors::black,    1000, Transition::EaseInOut)
-        .build_const());
+    seq.load(kBreathe);
     seq.play(now());
     strip.add(Segment(0, kPixels, seq));
 }
 
+static constexpr Sequence kComet = SequenceBuilder{}
+    .hold(colors::rgbwhite, 50)
+    .fade_to(colors::black, 450)
+    .build_const();
+
 static void recipe_comet() {
-    seq.load(SequenceBuilder{}
-        .hold(colors::rgbwhite, 50)
-        .fade_to(colors::black, 450)
-        .build_const());
+    seq.load(kComet);
     seq.play(now());
 
     Segment s(0, kPixels, seq);
@@ -173,13 +171,15 @@ static void recipe_static_gradient() {
     strip.add(s);
 }
 
+static constexpr Sequence kWipe = SequenceBuilder{}
+    .start_color(colors::black)
+    .fade_to(colors::green, 200)
+    .landing_color(colors::green)
+    .repeat(1)
+    .build_const();
+
 static void recipe_wipe() {
-    seq.load(SequenceBuilder{}
-        .start_color(colors::black)
-        .fade_to(colors::green, 200)
-        .landing_color(colors::green)
-        .repeat(1)
-        .build_const());
+    seq.load(kWipe);
     seq.play(now());
 
     Segment s(0, kPixels, seq);
@@ -187,13 +187,15 @@ static void recipe_wipe() {
     strip.add(s);
 }
 
+static constexpr Sequence kProgress = SequenceBuilder{}
+    .start_color(colors::black)
+    .fade_to(colors::red, 10)
+    .landing_color(colors::red)
+    .repeat(1)
+    .build_const();
+
 static void recipe_progress_bar() {
-    seq.load(SequenceBuilder{}
-        .start_color(colors::black)
-        .fade_to(colors::red, 10)
-        .landing_color(colors::red)
-        .repeat(1)
-        .build_const());
+    seq.load(kProgress);
 
     Segment s(0, kPixels, seq);
     s.set_pixel_delay(10);
@@ -230,11 +232,13 @@ static int32_t scatter(uint16_t index, uint16_t /*count*/, int32_t span_q8) {
     return static_cast<int32_t>(h % static_cast<uint32_t>(span));
 }
 
+static constexpr Sequence kTwinkle = SequenceBuilder{}
+    .fade_to(colors::rgbwhite, 80)
+    .fade_to(colors::black, 1900)
+    .build_const();
+
 static void recipe_twinkle() {
-    seq.load(SequenceBuilder{}
-        .fade_to(colors::rgbwhite, 80)
-        .fade_to(colors::black, 1900)
-        .build_const());
+    seq.load(kTwinkle);
     seq.play(now());
 
     Segment s(0, kPixels, seq);
@@ -246,21 +250,25 @@ static void recipe_twinkle() {
 static Sequencer breathe_seq;
 static Sequencer alert_seq;
 
+static constexpr Sequence kBackground = SequenceBuilder{}
+    .fade_to(colors::blue,  1500, Transition::EaseInOut)
+    .fade_to(colors::black, 1500, Transition::EaseInOut)
+    .build_const();
+
 void start_background() {
-    breathe_seq.load(SequenceBuilder{}
-        .fade_to(colors::blue,  1500, Transition::EaseInOut)
-        .fade_to(colors::black, 1500, Transition::EaseInOut)
-        .build_const());
+    breathe_seq.load(kBackground);
     breathe_seq.play(now());
     strip.add(Segment(0, kPixels, breathe_seq));    // first in the list, painted first
 }
 
+static constexpr Sequence kAlert = SequenceBuilder{}
+    .hold(colors::red,   120)
+    .hold(colors::black, 120)
+    .repeat(3)
+    .build_const();
+
 void raise_alert() {
-    alert_seq.load(SequenceBuilder{}
-        .hold(colors::red,   120)
-        .hold(colors::black, 120)
-        .repeat(3)
-        .build_const());
+    alert_seq.load(kAlert);
     alert_seq.play(now());
     strip.add(Segment(0, kPixels, alert_seq));      // added last, so painted on top
 }
@@ -469,9 +477,9 @@ TEST_CASE("Progress bar: the playhead is the value") {
 
 /* Blink on seq_a and Comet on seq_b, which the recipe leaves to the caller. */
 static void start_halves() {
-    seq_a.load(kBlinkSequence);
+    seq_a.load(kBlink);
     seq_a.play(now());
-    seq_b.load(kCometSequence);
+    seq_b.load(kComet);
     seq_b.play(now());
 }
 
@@ -506,7 +514,7 @@ TEST_CASE("Two halves, different animations: each half paints what it paints alo
 
 /* Comet on seq: a stagger is what shows the direction. */
 static void start_converging() {
-    seq.load(kCometSequence);
+    seq.load(kComet);
     seq.play(now());
 }
 

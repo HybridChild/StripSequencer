@@ -208,8 +208,10 @@ TEST_CASE("the default stagger floors, so a negative delay has no seam at 0") {
     /* A delay of -0.5 ms a pixel: pixel i looks 0.5 i ms ahead, floored, so
      * pixels 0 and 1 look at 0 and 1 ms ahead -- not both at 0, which is what
      * truncation toward zero would give. */
+    constexpr Sequence red_then_blue =
+        SequenceBuilder{}.hold(colors::red, 1).hold(colors::blue, 999).build_const();
     Sequencer seq;
-    seq.load(SequenceBuilder{}.hold(colors::red, 1).hold(colors::blue, 999).build_const());
+    seq.load(red_then_blue);
     seq.seek(0);
     Segment s(0, kPixels, seq);
     REQUIRE(s.set_pixel_delay_q8(-128));

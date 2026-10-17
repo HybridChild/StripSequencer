@@ -12,7 +12,6 @@
 #define STRIPSEQ_SEQUENCER_H_
 
 #include <cstdint>
-#include <type_traits>
 
 #include "stripseq/sequence.h"
 
@@ -25,15 +24,25 @@ namespace stripseq {
  * keeps the wrap as a 2^32 ms jump backwards. Extend the tick to 64 bits
  * first: under Zephyr that is k_uptime_get() in place of k_uptime_get_32().
  * Spelled as a concept rather than as uint32_t, which is unsigned int on one
- * target and unsigned long on another, and built from traits: the standard's
- * own std::unsigned_integral is in <concepts>, outside the three headers the
- * library includes. */
+ * target and unsigned long on another, and asked of the type directly. An
+ * integer type is one with %=, which no enum, pointer or floating-point type
+ * has, and an unsigned one is one in which -1 converts to its largest value.
+ * Neither <type_traits> nor <concepts> is among the two headers the library
+ * includes, and Zephyr's minimal C++ library ships neither. The %= test comes
+ * first because it has to: for a pointer, T(-1) is not a constant expression,
+ * and that is a hard error rather than an unsatisfied constraint. */
 template <typename T>
-concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
+concept wrapping_tick = requires(T t) { t %= t; } && T(-1) > T(0) && sizeof(T) <= 4;
 
 class Sequencer {
 public:
-    void load(const Sequence& s);     /* copies; playhead 0, not playing */
+    /* Refers to s, not a copy of it: playhead 0, not playing. s must outlive
+     * its use, as a segment's sequencer and the strip's buffer must, and a
+     * rebuild into it shows on the next render. A temporary would dangle by
+     * the end of the statement, so passing one does not compile. Unload with
+     * load(no_sequence). */
+    void load(const Sequence& s);
+    void load(const Sequence&&) = delete;
 
     /* play:  the playhead follows the clock from wherever it stands.
      * pause: it stops following the clock and keeps its value.
@@ -69,10 +78,12 @@ private:
      * overflow in any span a device runs for, so nothing here protects it. */
     int64_t position(int64_t now_ms) const;
 
-    Sequence sequence_;
-    int64_t  origin_ms_ = 0;    /* playing: the instant position 0 sits at */
-    int64_t  frozen_ = 0;       /* not playing: the position itself */
-    bool     playing_ = false;
+    /* Widest first: on a 32-bit target the pointer before the two int64_t
+     * fields would pad the sequencer from 24 bytes to 32. */
+    int64_t         origin_ms_ = 0;   /* playing: the instant position 0 sits at */
+    int64_t         frozen_ = 0;      /* not playing: the position itself */
+    const Sequence* sequence_ = &no_sequence;   /* never null */
+    bool            playing_ = false;
 };
 
 }  // namespace stripseq

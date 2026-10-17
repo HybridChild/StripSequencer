@@ -84,7 +84,7 @@ C and C++ both define two flavours of implementation. A **hosted** one has an op
 bits/requires_hosted.h:34:4: error: #error "This header is not available in freestanding mode."
 ```
 
-That is the actual error from `#include <vector>` in this project's cross build. The header refuses, by name, at the top of the include chain — which turns "we do not use the standard library" from a claim into something the compiler enforces. This project's ground rule is narrower still (only `<cstdint>`, `<cstddef>` and `<type_traits>`), but the enforced floor is what makes the narrower rule easy to keep.
+That is the actual error from `#include <vector>` in this project's cross build. The header refuses, by name, at the top of the include chain — which turns "we do not use the standard library" from a claim into something the compiler enforces. This project's ground rule is narrower still (only `<cstdint>` and `<cstddef>`), but the enforced floor is what makes the narrower rule easy to keep.
 
 `-fno-exceptions` and `-fno-rtti` are separate switches, and they fail loudly and immediately: `throw` becomes *"exception handling disabled"*, `typeid` becomes *"cannot use 'typeid' with -fno-rtti"*. They are in the check because that is how Zephyr builds C++ by default, so code that quietly relies on either would compile here and fail there.
 

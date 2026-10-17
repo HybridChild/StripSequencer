@@ -1,10 +1,10 @@
 /* Sequence: pure description, and the one question the whole design is built
  * around -- given a playhead, what color is here, and how long does it stay?
  *
- * A sequence holds its steps inline, so a sequencer can own one by value and
- * get snapshot semantics: rebuilding a sequence cannot disturb one already
- * running. It holds no state, references no hardware, and can be built at
- * compile time (SequenceBuilder::build_const) or at run time (build).
+ * A sequence holds its steps inline, behind no pointer, so one built at compile
+ * time sits whole in flash and a sequencer only has to refer to it. It holds no
+ * state, references no hardware, and can be built at compile time
+ * (SequenceBuilder::build_const) or at run time (build).
  *
  * The mechanism is docs/DESIGN.md, "A sequence is a lookup table, not a tape";
  * the decisions beside each declaration are docs/API-SKETCH.md, "Sequence".
@@ -14,7 +14,6 @@
 #define STRIPSEQ_SEQUENCE_H_
 
 #include <cstdint>
-#include <type_traits>
 
 #include "stripseq/color.h"
 #include "stripseq/config.h"
@@ -113,12 +112,11 @@ private:
     Color    landing_ = {};                   /* finite only; build() resolves the default */
 };
 
-/* Sequencer::load() copies a sequence, which is cheap and safe only while a
- * sequence is a plain value: steps inline, nothing behind a pointer, no copy
- * constructor of its own. It is also why load() has no move overload -- with
- * nothing to steal, moving a sequence is the same copy. */
-static_assert(std::is_trivially_copyable_v<Sequence>,
-              "Sequence must stay a plain value -- Sequencer::load() copies it.");
+/* The sequence with no steps: black, held forever. A sequencer refers to it
+ * until something is loaded, and load(no_sequence) is how to unload, so a
+ * sequencer always has a sequence and nothing that reads one checks for null.
+ * inline, so every translation unit shares the one object at one address. */
+inline constexpr Sequence no_sequence{};
 
 /* The compile-time failure path of SequenceBuilder::build_const(), one function
  * per Error.

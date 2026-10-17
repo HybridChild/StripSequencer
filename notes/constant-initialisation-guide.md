@@ -144,7 +144,7 @@ For that to compile, `Strip`'s constructor has to be `constexpr`, which is why i
 
 A namespace-scope variable that is `const` — and `constexpr` implies `const` — has **internal linkage** unless it says otherwise. Each translation unit that includes the header gets its own private copy, with its own address.
 
-For a 6-byte `Color` that is usually invisible: the compiler folds the value into the instructions that use it and never emits the object at all. For a 112-byte `Sequence` whose address is taken — `seq.load(kRainbow)` takes a reference — every file that loads it carries its own 112 bytes of flash, and `&kRainbow` compares unequal across files (§9, Exercise 6).
+For a 6-byte `Color` that is usually invisible: the compiler folds the value into the instructions that use it and never emits the object at all. For a 112-byte `Sequence` whose address is taken — `seq.load(kRainbow)` keeps a pointer to it — every file that loads it carries its own 112 bytes of flash, and `&kRainbow` compares unequal across files (§9, Exercise 6).
 
 C++17's inline variables fix this. `inline` gives the variable external linkage and tells the linker that identical definitions in many object files are the same object: GCC emits it as a weak symbol (`V` in `nm`), and the linker keeps one. That is why the palette in `color.h` is
 
@@ -152,7 +152,7 @@ C++17's inline variables fix this. `inline` gives the variable external linkage 
 inline constexpr Color red = Color::rgb8(255, 0, 0);
 ```
 
-and why the cookbook's shared rainbow is `inline constexpr Sequence kRainbow = SequenceBuilder{}…build_const();`. Both are constant-initialised into flash, nothing runs before `main`, and there is one of each in the image however many files use them.
+and why the cookbook's shared rainbow is `inline constexpr Sequence kRainbow = SequenceBuilder{}…build_const();`, and the library's empty `no_sequence`, whose address a default sequencer holds and a test compares. All are constant-initialised into flash, nothing runs before `main`, and there is one of each in the image however many files use them.
 
 ## 7. The function-local static
 

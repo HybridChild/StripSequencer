@@ -157,10 +157,11 @@ TEST_CASE("a segment assigned past the end paints its visible part only") {
 /* ------------------------------------------------------------------------ */
 
 TEST_CASE("later segments overwrite earlier ones where they overlap") {
+    constexpr Sequence green = SequenceBuilder{}.hold(colors::green, 1000).build_const();
     Sequencer under;
     Sequencer over;
     under.load(red);
-    over.load(SequenceBuilder{}.hold(colors::green, 1000).build_const());
+    over.load(green);
     under.play(0);
     over.play(0);
 
@@ -363,14 +364,15 @@ TEST_CASE("drop_finished leaves an endless background in place") {
 
 TEST_CASE("the drives() sweep removes every segment on one sequencer") {
     /* The sketch's cancel_alert(), over two segments sharing the alert. */
+    constexpr Sequence alert = SequenceBuilder{}
+                                   .hold(colors::green, 120)
+                                   .hold(colors::black, 120)
+                                   .repeat(3)
+                                   .build_const();
     Sequencer breathe_seq;
     Sequencer alert_seq;
     breathe_seq.load(red);
-    alert_seq.load(SequenceBuilder{}
-                       .hold(colors::green, 120)
-                       .hold(colors::black, 120)
-                       .repeat(3)
-                       .build_const());
+    alert_seq.load(alert);
     breathe_seq.play(0);
     alert_seq.play(0);
 

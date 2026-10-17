@@ -37,7 +37,7 @@ classDiagram
     direction LR
     class PixelBuffer["uint8_t buffer[]"]
     SequenceBuilder ..> Sequence : builds
-    Sequencer *-- "1" Sequence : owns a copy
+    Sequencer o-- "1" Sequence : borrows
     Sequence *-- "1..MAX_STEPS" Step
     Strip *-- "0..MAX_SEGMENTS" Segment : owns copies
     Segment o-- "1" Sequencer : borrows
@@ -46,8 +46,9 @@ classDiagram
     Strip o-- "1" PixelBuffer : borrows
 ```
 
-- **Ownership is by copy.** A `Sequence` passed to `load()` may be a temporary, since the sequencer keeps its own copy. A `Segment` built locally is copied by `add()`, so changing the local one afterwards changes nothing on the strip; the strip's copy is reached through `strip.segment(i)`.
-- **What is borrowed belongs to your code.** The buffer and every sequencer a segment points at must outlive whatever points at them. Static storage, which the cookbook uses throughout, satisfies both.
+- **A segment is copied; everything else is borrowed.** A `Segment` built locally is copied by `add()`, so changing the local one afterwards changes nothing on the strip; the strip's copy is reached through `strip.segment(i)`. A segment is small and fixed in size, and copying it is what lets `add()` take one built on the spot.
+- **What is borrowed belongs to your code.** The buffer, every sequencer a segment points at, and every sequence a sequencer has loaded must outlive whatever points at them. Static storage, which the cookbook uses throughout, satisfies all three: a `static constexpr Sequence` is constant-initialised into flash and costs no RAM at all.
+- **A sequence is borrowed rather than copied because of what a copy costs.** A `Sequence` is allocated at full step capacity, about 112 bytes at the default, and most sequences are known at compile time and already sit whole in flash; a copy per sequencer would put a second one in RAM to gain nothing. Borrowing has two consequences. A temporary cannot be loaded, since it would dangle by the end of the statement, so `load()` has a deleted rvalue overload and the mistake is a compile error. And a sequence rebuilt with `build()` while it is loaded shows on the next render, with the playhead left where it was; `load()` again to start from the top.
 - **Many segments may point at one sequencer**, which is how two parts of a strip run in lockstep. Nothing points the other way: a sequencer does not know which segments read it.
 - **`OffsetFn` and `ColorFn` are plain function pointers**, held by the segment and null unless installed. Null means the default for that step.
 
@@ -64,7 +65,7 @@ Between one `render()` and the next, the library does not run at all. There is n
 
 ## Language requirements
 
-C++20, freestanding. Only `<cstdint>`, `<cstddef>` and `<type_traits>` are included; no exceptions, no RTTI, no heap, and no dynamic initialisation at file scope.
+C++20, freestanding. Only `<cstdint>` and `<cstddef>` are included, which is what Zephyr's minimal C++ library provides; no exceptions, no RTTI, no heap, and no dynamic initialisation at file scope.
 
 C++20 is a real requirement rather than a preference, and two things need it. `consteval` gives compile-time sequences the validation DESIGN.md promises them — an invalid sequence known at compile time becomes a compile error, with no runtime cost and no runtime trap. `constinit` lets a strip be declared at file scope without a constructor running before `main`. Under C++17 both degrade: validation falls back to the runtime path plus a `static_assert` the caller writes, and file-scope objects acquire dynamic initialisers.
 
@@ -100,9 +101,9 @@ A step count is not always known at compile time. Sequences are built at run tim
 
 Three further objections, none decisive alone. The fluent builder would go viral: each `.fade_to()` would have to return a `SequenceBuilder<N+1>` by value rather than a reference, since its type changes with every call — workable, and a known pattern, but it degrades error messages badly. `Segment` could no longer hold a plain `Sequencer*`, because `Sequencer<2>` and `Sequencer<6>` are unrelated types; the fixes are a virtual base, costing a vtable pointer per sequencer and an indirect call in the per-pixel path, or templating `Segment` and `Strip` too, which would stop one strip driving segments whose sequencers differ in size. And every distinct `N` instantiates its own copy of `at()`, the duration arithmetic and the builder, where a macro emits one — on an MCU flash is usually the tighter budget.
 
-What this costs is a global ceiling: one animation needing sixteen steps forces every sequencer in the project to sixteen. At the default capacity a `Sequence` is about 112 bytes and a `Sequencer` about 136, whether it holds a six-step rainbow or a two-step blink, so a right-sized `Sequencer<2>` would have come in near 64. Across four undersized sequencers the waste is roughly one pixel buffer's worth on a hundred-pixel strip, against Zephyr-class hardware with tens to hundreds of kilobytes.
+What this costs is a global ceiling: one animation needing sixteen steps forces every sequence in the project to sixteen. At the default capacity a `Sequence` is about 112 bytes whether it holds a six-step rainbow or a two-step blink, where a right-sized two-step one would have come in near 32. Where that lands depends on where the sequence lives. A sequencer only refers to its sequence and stays 24 bytes on a 32-bit target, and a sequence built with `build_const()` sits in flash, so the waste is flash per constant sequence and RAM only per sequence built at run time.
 
-If that ceiling ever becomes the real problem, the cheaper escape is caller-supplied storage — `Sequencer(Step* buf, uint8_t cap)` — which gives per-sequencer sizing with no templates and one copy of the code. It is not free: DESIGN.md cites sequencers owning their steps outright as the design's model for avoiding caller-owned lifetimes, so it trades away a stated property. It can be done later without disturbing the mechanism, which is the reason not to pre-empt it.
+If that ceiling ever becomes the real problem, the cheaper escape is caller-supplied storage — a `Sequence` over a `Step*` and a capacity — which gives per-sequence sizing with no templates and one copy of the code. It costs a constructor that `build_const()` would have to work around, and a sequence that is no longer whole in itself. It can be done later without disturbing the mechanism, which is the reason not to pre-empt it.
 
 ### Why segment capacity is a macro
 
@@ -167,7 +168,7 @@ This matches the field: Adafruit NeoPixel and NeoPixelBus expose the channel and
 
 ## Sequence
 
-Pure description. A sequence holds its steps inline, so a sequencer can own one by value and get snapshot semantics — rebuilding a sequence cannot disturb one already running.
+Pure description. A sequence holds its steps inline, behind no pointer, so one built at compile time sits whole in flash and a sequencer only has to refer to it.
 
 ```cpp
 // stripseq/sequence.h
@@ -316,9 +317,11 @@ if (builder.build(s) != Error::None)
 seq.load(s);
 ```
 
+`s` is borrowed by the sequencer from then on, so it lives as long as the sequencer reads it: a static, or a member of something that does. The same `s` can be rebuilt in place, and a failed `build()` leaves it untouched, so the animation carries on with the last good sequence.
+
 ## Sequencer
 
-The playhead and the state around it. It owns a copy of its sequence.
+The playhead and the state around it. It refers to its sequence, and does not copy it.
 
 ```cpp
 // stripseq/sequencer.h
@@ -328,11 +331,12 @@ namespace stripseq {
 // A clock reading narrow enough to wrap while a device runs. Every function that
 // takes now_ms has a deleted overload for these; see "The clock" below.
 template <typename T>
-concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
+concept wrapping_tick = requires(T t) { t %= t; } && T(-1) > T(0) && sizeof(T) <= 4;
 
 class Sequencer {
 public:
-    void load(const Sequence& s);     // copies; playhead 0, not playing
+    void load(const Sequence& s);     // refers to s; playhead 0, not playing
+    void load(const Sequence&&) = delete;   // a temporary would dangle
 
     // play:  the playhead follows the clock from wherever it stands.
     // pause: it stops following the clock and keeps its value.
@@ -424,7 +428,7 @@ now = 2746   position 1746   returns 246
 now = 3010   position 2010   returns  10
 ```
 
-A negative position, from playing after a `seek` to before the start, is wrapped up into the loop as well, which `at()` would have done to it. A sequence with no steps, which is what `load({})` leaves, has a loop of zero and answers 0, since there is nothing to wrap by and `at()` answers black whatever it is asked. So `seek(5000)` on a 1000 ms loop reads back 0: an endless sequence has no "5000 ms in" distinct from "0 ms in", and neither does anything that reads from it.
+A negative position, from playing after a `seek` to before the start, is wrapped up into the loop as well, which `at()` would have done to it. A sequence with no steps, which is what `load(no_sequence)` leaves, has a loop of zero and answers 0, since there is nothing to wrap by and `at()` answers black whatever it is asked. So `seek(5000)` on a 1000 ms loop reads back 0: an endless sequence has no "5000 ms in" distinct from "0 ms in", and neither does anything that reads from it.
 
 *A finite sequence's answer is its position clamped to 2^30 ms, about 12.4 days, either side of zero.* A finite sequence's position is absolute, since 1730 ms into a sequence that plays three 500 ms loops and then lands is not the same moment as 230 ms. But once it is far enough past the end, every pixel shows the landing color and every segment reports `finished()`, and once it is far enough before the start, every pixel shows the start color, so a value far out in either direction stands for all the ones beyond it. Clamping the answer is enough on its own, because the `int64_t` difference underneath cannot overflow on its way to the clamp. The Wipe recipe is the case that runs into it: its sequencer is never paused, because the landing color is what keeps the strip green, and after 12.4 days its playhead reads 2^30 for good. A sought position reads back exactly anywhere inside ±2^30, so a paused progress bar reads back what it set.
 
@@ -441,7 +445,7 @@ With no states to move between, there are no transition verbs either. The operat
 - **Start from the top** is `seek(0)` then `play(now)`.
 - **Stop** is `seek(0)`.
 - **Resume** is `play(now)`.
-- **Unload** is `load({})`.
+- **Unload** is `load(no_sequence)`, the empty sequence the library defines, which is also what a sequencer refers to before anything is loaded. It is a constant rather than a null pointer, so nothing that reads a sequencer checks for one.
 - **Re-trigger** an alert that has already run is `load()` again, since loading resets the playhead — which is what the overlay recipe does.
 
 **`seek` stops the playhead following the clock**, and that is the only coherent reading. Placing a playhead by hand on a moving target would mean re-deriving the origin, which needs a `now_ms` the call does not take. The recipes that seek — static gradient, progress bar — never play at all, so it costs them nothing, and scrubbing a running animation is `seek` then `play`.
@@ -727,20 +731,25 @@ constinit static Strip strip(buffer);   // pixel count deduced from the buffer;
 **Blink** — the whole strip flashing together.
 
 ```cpp
-seq.load(SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500).build_const());
+static constexpr Sequence kBlink =
+    SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500).build_const();
+
+seq.load(kBlink);
 seq.play(now());
 strip.add(Segment(0, kPixels, seq));      // pixel_delay defaults to 0
 ```
 
-Three lines, and the third is only there because a segment has to exist. That is the test the design had to pass.
+Say what the animation is, then load it, start it and give it some pixels — and the last of those is only there because a segment has to exist. Nothing in the common case asks for more than that, and that is the test the design had to pass.
 
 **Breathe** — same shape, eased fades instead of holds.
 
 ```cpp
-seq.load(SequenceBuilder{}
+static constexpr Sequence kBreathe = SequenceBuilder{}
     .fade_to(colors::rgbwhite, 1000, Transition::EaseInOut)
     .fade_to(colors::black,    1000, Transition::EaseInOut)
-    .build_const());
+    .build_const();
+
+seq.load(kBreathe);
 seq.play(now());
 strip.add(Segment(0, kPixels, seq));
 ```
@@ -748,10 +757,12 @@ strip.add(Segment(0, kPixels, seq));
 **Comet** — a bright head with a fading tail, running down the strip.
 
 ```cpp
-seq.load(SequenceBuilder{}
+static constexpr Sequence kComet = SequenceBuilder{}
     .hold(colors::rgbwhite, 50)
     .fade_to(colors::black, 450)
-    .build_const());
+    .build_const();
+
+seq.load(kComet);
 seq.play(now());
 
 Segment s(0, kPixels, seq);
@@ -792,17 +803,19 @@ strip.add(s);
 
 The only difference between a rotating rainbow and a frozen one is whether `play()` or `seek()` was called.
 
-The rainbow is a named constant because two recipes share it. `build_const()` makes the definition a constant expression, so `kRainbow` is constant-initialised into flash like the `colors::` palette, nothing runs before `main`, and a malformed sequence fails to compile at the definition rather than at either use. Each `load()` still copies it into the sequencer, since a sequencer owns its sequence; the constant adds a full-capacity `Sequence` in flash rather than saving the copy in RAM, which is the price of writing the steps once.
+Every recipe names its sequence at namespace scope, because a sequencer refers to what it loads and the sequence has to outlive the call. `build_const()` makes each definition a constant expression, so the sequence is constant-initialised into flash like the `colors::` palette, nothing runs before `main`, no RAM is spent on it, and a malformed one fails to compile at the definition rather than at its use. The rainbow is `inline constexpr` rather than `static constexpr` because two recipes share it, and a shared constant belongs in a header, where `inline` makes it one object at one address in every file that includes it. Not a `static constexpr` local inside the function that loads it: that would be constant-initialised too, but it looks exactly like a function-local static with a dynamic initialiser, which costs a guard and a lock.
 
 **Wipe** — green sweeping down a dark strip and staying.
 
 ```cpp
-seq.load(SequenceBuilder{}
+static constexpr Sequence kWipe = SequenceBuilder{}
     .start_color(colors::black)
     .fade_to(colors::green, 200)
     .landing_color(colors::green)
     .repeat(1)
-    .build_const());
+    .build_const();
+
+seq.load(kWipe);
 seq.play(now());
 
 Segment s(0, kPixels, seq);
@@ -815,12 +828,14 @@ The segment is deliberately left in place after it finishes: `landing_color` is 
 **Progress bar** — a sequencer that never runs, whose playhead is the value.
 
 ```cpp
-seq.load(SequenceBuilder{}
+static constexpr Sequence kProgress = SequenceBuilder{}
     .start_color(colors::black)
     .fade_to(colors::red, 10)
     .landing_color(colors::red)
     .repeat(1)
-    .build_const());
+    .build_const();
+
+seq.load(kProgress);
 
 Segment s(0, kPixels, seq);
 s.set_pixel_delay(10);
@@ -868,10 +883,12 @@ static int32_t scatter(uint16_t index, uint16_t /*count*/, int32_t span_q8) {
     return static_cast<int32_t>(h % static_cast<uint32_t>(span));
 }
 
-seq.load(SequenceBuilder{}
+static constexpr Sequence kTwinkle = SequenceBuilder{}
     .fade_to(colors::rgbwhite, 80)
     .fade_to(colors::black, 1900)
-    .build_const());
+    .build_const();
+
+seq.load(kTwinkle);
 seq.play(now());
 
 Segment s(0, kPixels, seq);
@@ -886,21 +903,25 @@ strip.add(s);
 static Sequencer breathe_seq;
 static Sequencer alert_seq;
 
+static constexpr Sequence kBackground = SequenceBuilder{}
+    .fade_to(colors::blue,  1500, Transition::EaseInOut)
+    .fade_to(colors::black, 1500, Transition::EaseInOut)
+    .build_const();
+
 void start_background() {
-    breathe_seq.load(SequenceBuilder{}
-        .fade_to(colors::blue,  1500, Transition::EaseInOut)
-        .fade_to(colors::black, 1500, Transition::EaseInOut)
-        .build_const());
+    breathe_seq.load(kBackground);
     breathe_seq.play(now());
     strip.add(Segment(0, kPixels, breathe_seq));    // first in the list, painted first
 }
 
+static constexpr Sequence kAlert = SequenceBuilder{}
+    .hold(colors::red,   120)
+    .hold(colors::black, 120)
+    .repeat(3)
+    .build_const();
+
 void raise_alert() {
-    alert_seq.load(SequenceBuilder{}
-        .hold(colors::red,   120)
-        .hold(colors::black, 120)
-        .repeat(3)
-        .build_const());
+    alert_seq.load(kAlert);
     alert_seq.play(now());
     strip.add(Segment(0, kPixels, alert_seq));      // added last, so painted on top
 }

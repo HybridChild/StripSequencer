@@ -33,12 +33,13 @@ position = now - origin;
 
 Nothing accumulates, because nothing is added up: the answer depends only on the clock reading in hand. A late frame shows the right position late; a dropped frame is simply never asked about. Two calls in the same millisecond agree. And there is no update for any path to forget, because there is nothing to update.
 
-`Sequencer` derives. Its whole state is a copy of the sequence and three fields:
+`Sequencer` derives. Its whole state is a pointer to the sequence it plays and three fields:
 
 ```cpp
-int64_t  origin_ms_ = 0;    /* playing: the instant position 0 sits at */
-int64_t  frozen_ = 0;       /* not playing: the position itself */
-bool     playing_ = false;
+int64_t         origin_ms_ = 0;   /* playing: the instant position 0 sits at */
+int64_t         frozen_ = 0;      /* not playing: the position itself */
+const Sequence* sequence_ = &no_sequence;   /* never null */
+bool            playing_ = false;
 ```
 
 While playing, `position(now)` derives the answer from `origin_ms_`. While paused, there is nothing to derive from — the clock moves and the position must not — so it stores the position itself in `frozen_`. §7 is about moving between the two. Everything before it is about the playing case, which is where the arithmetic lives.
@@ -162,7 +163,7 @@ So every function that takes `now_ms` declares a second overload, and deletes it
 
 ```cpp
 template <typename T>
-concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
+concept wrapping_tick = requires(T t) { t %= t; } && T(-1) > T(0) && sizeof(T) <= 4;
 
 void play(int64_t now_ms);
 template <wrapping_tick T> void play(T) = delete;
@@ -172,7 +173,9 @@ A deleted function still takes part in overload resolution; choosing it is what 
 
 Two simpler spellings look right and are not. A plain `void play(uint32_t) = delete;` makes `play(1000)` ambiguous, since `int` converts to `uint32_t` and to `int64_t` with equal rank. And naming `uint32_t` at all misses the point on some target: it is `unsigned int` on the host and `unsigned long` on arm-none-eabi, so the concept asks about the property — unsigned, at most 32 bits — rather than the typedef.
 
-The property is asked with type traits, not with the standard's `std::unsigned_integral`. A concept is a language feature, and `concept` needs no header; what `<concepts>` provides is a set of ready-made ones, and `std::unsigned_integral` is defined from the same two traits, `is_integral` and `is_unsigned`, so the two spellings accept exactly the same types — `char` included, which is unsigned on arm-none-eabi and signed on the host under either. The one thing the standard concepts add is a shared vocabulary for *subsumption*: when two overloads are both constrained, the one whose constraint implies the other's wins, and the compiler decides that by matching the pieces each constraint is built from. Two trait expressions only match when they come from the same written-out definition, so concepts built on `std::integral` can order against each other while ones that spell out `std::is_integral_v` separately cannot. Here the deleted template only ever competes with a plain `int64_t` function, so there is nothing to order, and the library keeps to its three headers.
+The property is asked of the type directly, with no header at all. A concept is a language feature, and `concept` needs no include; what `<concepts>` and `<type_traits>` provide are ready-made answers, and the library includes neither, because Zephyr's minimal C++ library ships neither. Both halves of "unsigned integer" have definitions the language can check by itself. An integer type is one with `%=`: a floating-point type, a pointer and a class without the operator have none, and an enum has none either, since `t % t` promotes to `int` and an `int` does not assign back to an enum. Inside a `requires`-expression an operation that does not compile is simply false. An unsigned type is one in which −1 converts to the largest value, so `T(-1) > T(0)`; in a signed one it stays −1. Together they answer what `std::is_integral_v<T> && std::is_unsigned_v<T>` answers for every fundamental type — `bool` and `char` included, the latter unsigned on arm-none-eabi and signed on the host.
+
+The order of the two is not cosmetic. A constraint is a conjunction checked left to right, and the right side is never looked at once the left is false. That matters because the two failures are different kinds of thing. `t %= t` not compiling is a *substitution failure*: the constraint is unsatisfied and the deleted overload drops out quietly. `T(-1)` for a pointer does compile — it is a `reinterpret_cast` — but it is not a *constant expression*, and an atomic constraint that is not a constant expression makes the program ill-formed outright. Put `T(-1) > T(0)` first and `play(some_pointer)` stops saying "no conversion to `int64_t`" and starts reporting an error inside the library's concept instead. The one thing the standard concepts would add is a shared vocabulary for *subsumption*: when two overloads are both constrained, the one whose constraint implies the other's wins, and the compiler decides that by matching the pieces each constraint is built from. Here the deleted template only ever competes with a plain `int64_t` function, so there is nothing to order.
 
 The guard is tested the way any "this must not compile" is tested when the failure is a substitution failure: a `requires`-expression asks whether the call is well-formed, and a `static_assert` insists on the answer.
 
@@ -481,8 +484,8 @@ c++ -std=c++20 -I"$REPO/include" -DPASS_THE_TICK -fsyntax-only tick.cpp
 tick.cpp:43:9: error: call to deleted member function 'play'
    43 |     seq.play(start);
       |     ~~~~^~~~
-.../include/stripseq/sequencer.h:48:37: note: candidate function [with T = unsigned int] has been explicitly deleted
-   48 |     template <wrapping_tick T> void play(T) = delete;
+.../include/stripseq/sequencer.h:57:37: note: candidate function [with T = unsigned int] has been explicitly deleted
+   57 |     template <wrapping_tick T> void play(T) = delete;
       |                                     ^
 ```
 

@@ -16,7 +16,7 @@ constexpr int64_t finite_limit_ms = int64_t{1} << 30;
 }  // namespace
 
 void Sequencer::load(const Sequence& s) {
-    sequence_ = s;
+    sequence_ = &s;
     frozen_ = 0;
     playing_ = false;
 }
@@ -42,7 +42,7 @@ void Sequencer::seek(int32_t playhead_ms) {
 
 bool Sequencer::playing() const { return playing_; }
 
-const Sequence& Sequencer::sequence() const { return sequence_; }
+const Sequence& Sequencer::sequence() const { return *sequence_; }
 
 int64_t Sequencer::position(int64_t now_ms) const {
     return playing_ ? now_ms - origin_ms_ : frozen_;
@@ -51,12 +51,12 @@ int64_t Sequencer::position(int64_t now_ms) const {
 int32_t Sequencer::playhead(int64_t now_ms) const {
     const int64_t p = position(now_ms);
 
-    if (sequence_.total_duration_ms() == hold_forever) {
+    if (sequence_->total_duration_ms() == hold_forever) {
         /* Endless: at() reads modulo the loop anyway, so this is exact. In C++
          * `p % loop` is negative for a negative p, hence the fold back up. An
          * empty sequence has a loop of zero and nothing to wrap by, and at()
          * answers black whatever it is asked. */
-        const int64_t loop = sequence_.loop_duration_ms();
+        const int64_t loop = sequence_->loop_duration_ms();
         if (loop == 0)
             return 0;
         const int64_t into_loop = p % loop;

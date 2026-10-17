@@ -84,6 +84,10 @@ concept renders_with = requires(Strip& s, T t) { s.render(t); };
 template <typename T>
 concept drops_with = requires(Strip& s, T t) { s.drop_finished(t); };
 
+/* Whether load() compiles for an argument of type T. */
+template <typename T>
+concept loads = requires(Sequencer s, T t) { s.load(static_cast<T>(t)); };
+
 template <typename T>
 constexpr bool every_call_takes = plays_with<T> && pauses_with<T> && reads_with<T> &&
                                   finishes_with<T> && renders_with<T> && drops_with<T>;
@@ -109,6 +113,13 @@ static_assert(no_call_takes<uint8_t>);
 /* load, and a sequencer that has never been told anything                   */
 /* ------------------------------------------------------------------------ */
 
+/* A sequencer refers to what it loads, so a temporary would dangle at the end
+ * of the statement that loaded it. */
+static_assert(loads<const Sequence&>);
+static_assert(loads<Sequence&>);
+static_assert(!loads<Sequence>, "a temporary must not compile");
+static_assert(!loads<const Sequence&&>);
+
 TEST_CASE("a default sequencer stands at 0, not playing, with no steps") {
     Sequencer seq;
     CHECK_FALSE(seq.playing());
@@ -119,7 +130,7 @@ TEST_CASE("a default sequencer stands at 0, not playing, with no steps") {
     }
 }
 
-TEST_CASE("load copies the sequence, resets the playhead to 0 and stops it") {
+TEST_CASE("load resets the playhead to 0 and stops it") {
     Sequencer seq;
     seq.load(finite_long);
     seq.play(1000);
@@ -138,6 +149,39 @@ TEST_CASE("load copies the sequence, resets the playhead to 0 and stops it") {
     seq.seek(-4000);
     seq.load(wipe);
     CHECK(seq.playhead(0) == 0);
+}
+
+TEST_CASE("load refers to the sequence, so a rebuild into it shows at once") {
+    Sequence s = built(SequenceBuilder{}.hold(colors::red, 1000));
+    Sequencer seq;
+    seq.load(s);
+    seq.play(0);
+    REQUIRE(seq.playhead(250) == 250);
+    CHECK(&seq.sequence() == &s);
+
+    /* Still playing, from where it was: rebuilding is not reloading. */
+    REQUIRE(SequenceBuilder{}.hold(colors::blue, 500).hold(colors::green, 500).build(s) == Error::None);
+    CHECK(seq.playing());
+    CHECK(seq.playhead(750) == 750);
+    CHECK(seq.sequence().at(seq.playhead(250)).color == colors::blue);
+    CHECK(seq.sequence().at(seq.playhead(750)).color == colors::green);
+}
+
+TEST_CASE("no_sequence unloads: black, held forever, wherever the clock is") {
+    Sequencer seq;
+    seq.load(endless_777);
+    seq.play(0);
+    seq.load(no_sequence);
+    for (const Sequencer& s : {seq, Sequencer{}}) {
+        CHECK(&s.sequence() == &no_sequence);
+        CHECK_FALSE(s.playing());
+        for (int64_t now : {int64_t{0}, int64_t{1234}, two_40}) {
+            CAPTURE(now);
+            const Sample sample = s.sequence().at(s.playhead(now));
+            CHECK(sample.color == colors::black);
+            CHECK(sample.hold_ms == hold_forever);
+        }
+    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -298,8 +342,9 @@ TEST_CASE("a negative playhead plays toward 0") {
 /* ------------------------------------------------------------------------ */
 
 TEST_CASE("the sketch's endless example") {
+    const Sequence red_black = built(SequenceBuilder{}.hold(colors::red, 250).hold(colors::black, 250));
     Sequencer seq;
-    seq.load(built(SequenceBuilder{}.hold(colors::red, 250).hold(colors::black, 250)));
+    seq.load(red_black);
     seq.play(1000);
     CHECK(seq.playhead(2730) == 230);
     CHECK(seq.playhead(2746) == 246);
@@ -430,7 +475,7 @@ TEST_CASE("the playhead is continuous where a 32-bit clock would break") {
 
 TEST_CASE("an empty sequence left playing does not divide by zero") {
     Sequencer seq;
-    seq.load(Sequence{});
+    seq.load(no_sequence);
     seq.play(5000);
     for (int64_t elapsed : {int64_t{0}, int64_t{1}, int64_t{999}, 20 * ms_per_day, two_40}) {
         CAPTURE(elapsed);
