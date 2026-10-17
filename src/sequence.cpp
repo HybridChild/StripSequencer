@@ -40,17 +40,14 @@ uint16_t ease(Transition kind, uint16_t t) {
         return static_cast<uint16_t>(full - detail::div65535(u * u));          /* 1 - (1-t)^2 */
     }
     case Transition::EaseInOut: {
-        /* Smoothstep, t^2 (3 - 2t). The product needs 64 bits, and dividing it
-         * by 65535^2 would be a 64-bit division per pixel -- a library call on
-         * a Cortex-M, in the breathe every status light runs. So t is first
-         * stretched onto 0..65536, where the divisor becomes 2^32 and the
-         * division a shift. It stays one exact floor of a monotonic function,
-         * so monotonic; it is within 2 LSB of the 65535-based curve, and the
-         * top lands on 65536, which is clamped. Never round t^2 on its own to
-         * stay in 32 bits: two separately floored terms can step backwards. */
-        const uint64_t x = t + (t >> 15);
-        const uint64_t y = (x * x * (3 * 65536 - 2 * x)) >> 32;
-        return static_cast<uint16_t>(y < full ? y : full);
+        /* EaseIn on the first half and EaseOut on the second, each at double
+         * speed: 2t^2, then 1 - 2(1-t)^2. Both products stay inside
+         * div65535's range, and the halves meet at 32766 and 32769 either
+         * side of the middle, so the whole is monotonic and point-symmetric. */
+        if (t < 32768)
+            return static_cast<uint16_t>(detail::div65535(2 * uint32_t{t} * t));
+        const uint32_t u = full - t;
+        return static_cast<uint16_t>(full - detail::div65535(2 * u * u));
     }
     case Transition::Step:
     case Transition::Linear:

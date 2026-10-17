@@ -324,17 +324,19 @@ TEST_CASE("the curves have the shapes their names promise") {
     CHECK(mid(Transition::Linear) == 32768);
     CHECK(mid(Transition::EaseIn) == 16384);       /* t^2: a quarter at half way */
     CHECK(mid(Transition::EaseOut) == 49152);      /* 1-(1-t)^2: three quarters */
-    CHECK(mid(Transition::EaseInOut) == 32769);    /* smoothstep crosses the middle, +1 LSB */
+    CHECK(mid(Transition::EaseInOut) == 32769);    /* 1 - 2(1-t)^2, just past half */
+    CHECK(built(SequenceBuilder{}.fade_to(red_only, 65535, Transition::EaseInOut).repeat(1))
+              .at(16384).color.r == 8192);         /* 2t^2: an eighth at a quarter */
 
-    /* Smoothstep is symmetric about the middle, to within rounding. */
+    /* EaseInOut is EaseIn and EaseOut joined at the middle, so it is exactly
+     * symmetric about it: each half is the other turned through 180 degrees. */
     const Sequence s =
         built(SequenceBuilder{}.fade_to(red_only, 65535, Transition::EaseInOut).repeat(1));
-    for (int32_t p = 1; p < 65535; p += 97) {
-        CAPTURE(p);
-        const int32_t sum = s.at(p).color.r + s.at(65535 - p).color.r;
-        CHECK(sum >= 65534);
-        CHECK(sum <= 65536);
+    bool symmetric = true;
+    for (int32_t p = 0; p <= 65535; ++p) {
+        symmetric = symmetric && s.at(p).color.r + s.at(65535 - p).color.r == 65535;
     }
+    CHECK(symmetric);
 }
 
 TEST_CASE("a fade longer than a minute stays monotonic and reaches its target") {

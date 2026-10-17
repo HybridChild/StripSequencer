@@ -65,7 +65,7 @@ So the conversion spends the extra bits by design. The gamma table is indexed by
 
 A strip has a brightness level, 0 to 255, applied to everything on it. There are two places to apply it, and they are not equivalent.
 
-**Before the curve:** scale the written value, `v · level / 255`, then look it up. Because the written space is even to the eye, a level of 128 looks half as bright, and the knob feels even all the way down.
+**Before the curve:** scale the written value, `v · level / 255`, then look it up. The library computes the scaling as `(v · (level + 1)) >> 16`, which is the top byte of the division or one above it, at the cost of no division at all ([`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §6). Because the written space is even to the eye, a level of 128 looks half as bright, and the knob feels even all the way down.
 
 **After the curve:** look the value up, then scale the emitted byte. Emitted bytes are light, so a level of 128 halves the light — which looks about 76 % as bright, because the eye compresses the change (§2). The knob does almost nothing across its top half and all its work near the bottom.
 
@@ -190,7 +190,7 @@ gamma 2.8: 163 distinct outputs, 27 lit inputs go dark, first lit at  28, half (
 unsigned encode(unsigned top) { return (unsigned)std::lround(255.0 * std::pow(top / 255.0, 2.5)); }
 
 // The library: scale the 16-bit channel, then gamma.
-unsigned before(unsigned v, unsigned level) { return encode((v * level / 255) >> 8); }
+unsigned before(unsigned v, unsigned level) { return encode((v * (level + 1)) >> 16); }
 
 // The shortcut: gamma, then scale the emitted byte.
 unsigned after(unsigned v, unsigned level) { return encode(v >> 8) * level / 255; }
@@ -246,7 +246,7 @@ arm-none-eabi-nm -C -S --size-sort build-cross/CMakeFiles/stripseq.dir/src/color
 ```
 
 ```
-00000000 00000048 T stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
+00000000 0000003c T stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
 00000000 00000100 r stripseq::(anonymous namespace)::gamma
 ```
 
@@ -259,13 +259,15 @@ for v in default nogamma; do echo "== $v"; nm -C build/libstripseq_$v.a | grep -
 
 ```
 == default
-00000000000000d8 s stripseq::(anonymous namespace)::gamma
+00000000000000cc s stripseq::(anonymous namespace)::gamma
 0000000000000000 T stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
+                 U stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
 == nogamma
 0000000000000000 T stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
+                 U stripseq::to_bytes(stripseq::Color, unsigned char, unsigned char*)
 ```
 
-**Proves:** on the target the table is exactly 0x100 = 256 bytes of read-only data (`r`), and `make_gamma_table()`, with its 64-bit products, is not in the object at all — `consteval` ran it inside the compiler. With `STRIPSEQ_GAMMA=0` the table does not exist, and `to_bytes()` is the only symbol left.
+**Proves:** on the target the table is exactly 0x100 = 256 bytes of read-only data (`r`), and `make_gamma_table()`, with its 64-bit products, is not in the object at all — `consteval` ran it inside the compiler. With `STRIPSEQ_GAMMA=0` the table does not exist, and `to_bytes()` is the only symbol left: defined (`T`) by `color.cpp` and called (`U`) from `segment.cpp`.
 
 ### Exercise 4 — A sextant width that does not divide
 

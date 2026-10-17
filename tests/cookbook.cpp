@@ -315,7 +315,8 @@ TEST_CASE("Breathe: black, rising to white at 1000 ms, falling to black at 2000"
     copy_frame(previous);
 
     /* Monotonic per channel, in each direction. Deliberately not symmetric
-     * about 1000 ms: the integer EaseInOut is not exactly antisymmetric. */
+     * about 1000 ms: progress is floored, so the rise at 1000 - t and the
+     * fall at 1000 + t sample the curve at points that do not mirror. */
     for (int64_t t = 1; t <= 2000; ++t) {
         render_at(t);
         REQUIRE(all_pixels_alike());
@@ -719,7 +720,7 @@ uint32_t golden_hash(const Recipe& recipe) {
 #if !STRIPSEQ_WHITE_CHANNEL && STRIPSEQ_GAMMA
 constexpr uint32_t kGolden[] = {
     0x2E7AF85Du,  /* Blink */
-    0xECE7E1E7u,  /* Breathe */
+    0x6D65D87Fu,  /* Breathe */
     0x47EB87BCu,  /* Comet */
     0x1B564ABFu,  /* Rainbow cycle */
     0x16368FF5u,  /* Static gradient */
@@ -728,12 +729,12 @@ constexpr uint32_t kGolden[] = {
     0x2BE780C7u,  /* Two halves, different */
     0x7953B45Au,  /* Two halves, converging */
     0x00CA2899u,  /* Twinkle */
-    0x270A832Fu,  /* Alert over a background */
+    0xF6536567u,  /* Alert over a background */
 };
 #elif STRIPSEQ_WHITE_CHANNEL && STRIPSEQ_GAMMA
 constexpr uint32_t kGolden[] = {
     0x6B34857Fu,  /* Blink */
-    0xDF7F11D5u,  /* Breathe */
+    0x708BDB15u,  /* Breathe */
     0xAE9C2180u,  /* Comet */
     0x453F37AFu,  /* Rainbow cycle */
     0xDC6FC5A5u,  /* Static gradient */
@@ -742,12 +743,12 @@ constexpr uint32_t kGolden[] = {
     0xEFD09AE5u,  /* Two halves, different */
     0x7ACADF9Cu,  /* Two halves, converging */
     0x15CCDEC5u,  /* Twinkle */
-    0x56BBB035u,  /* Alert over a background */
+    0xF2C98435u,  /* Alert over a background */
 };
 #elif !STRIPSEQ_WHITE_CHANNEL && !STRIPSEQ_GAMMA
 constexpr uint32_t kGolden[] = {
     0x2E7AF85Du,  /* Blink */
-    0xF17BC9A1u,  /* Breathe */
+    0xC9BC2DD7u,  /* Breathe */
     0x50A3E4FCu,  /* Comet */
     0x94122595u,  /* Rainbow cycle */
     0x421EF835u,  /* Static gradient */
@@ -756,12 +757,12 @@ constexpr uint32_t kGolden[] = {
     0xC995E008u,  /* Two halves, different */
     0xB5B317B9u,  /* Two halves, converging */
     0x8F60A24Du,  /* Twinkle */
-    0x8A334909u,  /* Alert over a background */
+    0x5C3AADB3u,  /* Alert over a background */
 };
 #else
 constexpr uint32_t kGolden[] = {
     0x6B34857Fu,  /* Blink */
-    0xDD194F65u,  /* Breathe */
+    0x4C609275u,  /* Breathe */
     0x3D996052u,  /* Comet */
     0xE2C35D41u,  /* Rainbow cycle */
     0x2F011545u,  /* Static gradient */
@@ -770,7 +771,7 @@ constexpr uint32_t kGolden[] = {
     0x914DF1D2u,  /* Two halves, different */
     0x1FCC2F21u,  /* Two halves, converging */
     0x5F2B7C0Fu,  /* Twinkle */
-    0x7D512765u,  /* Alert over a background */
+    0x2CD651F5u,  /* Alert over a background */
 };
 #endif
 

@@ -123,7 +123,7 @@ Integer division floors, so every curve in the library is a real-valued function
 
 The tool for both is one fact: **the floor of a monotonic function is monotonic.** If `f(a) ≤ f(b)`, then `⌊f(a)⌋ ≤ ⌊f(b)⌋`, because the floor itself never decreases. So an expression computed as a single division of an exact integer numerator inherits the monotonicity of the real curve, for free and for every input. `lerp` is one such floor of a function linear in `t`; ease-in is `⌊t² / 65535⌋`; ease-out is 65535 minus a floor of a function that falls as `t` rises.
 
-The fact does not survive arithmetic *between* floors. Smoothstep is `t²(3 − 2t)`, and the tempting way to keep it inside 32 bits is to floor the square and the cube separately:
+The fact does not survive arithmetic *between* floors. Smoothstep, `t²(3 − 2t)`, is the textbook ease-in-out curve, and the tempting way to keep it inside 32 bits is to floor the square and the cube separately:
 
 ```cpp
 const uint32_t sq   = uint32_t{t} * t / 65535;
@@ -133,19 +133,19 @@ return 3 * sq - 2 * cube;
 
 Each floor is a little low, by a different amount, and the second is subtracted. When `sq` happens to stay put across a step of `t` while `cube` ticks up, the result drops. Checked over every input, this version steps backwards **3,655 times**, the first at `t = 1639`, where it goes from 120 to 118 (§10, Exercise 4). Both ends are exact, the curve looks right on a plot, and it flickers.
 
+The library's `EaseInOut` stays clear of this by choosing a curve made of pieces that are each one floor: ease-in at double speed up to the middle, `⌊2t² / 65535⌋`, and ease-out at double speed after it, `65535 − ⌊2(65535 − t)² / 65535⌋`. Each half is monotonic on its own, and where they join the first half's last value, 32766 at `t = 32767`, is below the second half's first, 32769 at `t = 32768`, so the whole never steps backwards. **A piecewise curve needs one floor per piece, and pieces that meet in order.** The halves are each other turned through 180°, so the curve is exactly symmetric about its middle, and the largest product, 2 · 32767², fits in 32 bits. The price is the shape: two parabolas are a little steeper through the middle than smoothstep's cubic.
+
 ## 6. Turning a division into a shift
 
-A single floor of smoothstep, done directly, is `t²(3·65535 − 2t) / 65535²`. The numerator needs 64 bits, so the division is 64-bit: `__aeabi_uldivmod`, per pixel, in the breathe every status light runs.
+A single floor of smoothstep, done directly, is `t²(3·65535 − 2t) / 65535²`. The numerator needs 64 bits, so the division is 64-bit: `__aeabi_uldivmod`, per pixel, in the breathe every status light runs (§10, Exercise 3). §5's two parabolas avoid that by changing the formula. When the formula is fixed, the way out is to change the scale instead.
 
-The way out is to change the scale rather than the formula. On a 0…65536 scale the divisor would be 65536² = 2³², and dividing by 2³² is a shift. So the library stretches `t` from 0…65535 onto 0…65536 first, with a remap that is itself monotonic and hits both ends exactly:
+The brightness knob is the library's example. Scaling a 16-bit channel by `level / 255` and keeping its top byte is `⌊v · level / 255⌋ >> 8`, which is `⌊v · level / 65280⌋` — a division by a number that is not a power of two. Move the knob from 0…255 onto 1…256 and the divisor becomes 65536, a shift:
 
 ```cpp
-const uint64_t x = t + (t >> 15);                            // 0 → 0, 65535 → 65536
-const uint64_t y = (x * x * (3 * 65536 - 2 * x)) >> 32;      // one floor, by a shift
-return static_cast<uint16_t>(y < full ? y : full);
+return (uint32_t{v} * (level + 1)) >> 16;      // v < 2¹⁶, level + 1 ≤ 2⁸: under 2²⁴
 ```
 
-`t >> 15` is 0 across the lower half and 1 across the upper, so the remap skips exactly one value in the middle — 32767 maps to 32767, 32768 to 32769 — and never maps two inputs to one output or reverses two. The 64-bit *multiplies* stay, and they are inline on an M4 (§1). The result is one floor of a monotonic function, so it is monotonic; at the top it lands on 65536, which the clamp turns into 65535; and against the exact 65535-based curve it is never more than 2 off, which no eye can see.
+The two scales agree at the ends: level 255 gives `v >> 8` exactly, and level 0 gives 0. In between the shift is never below the division and never more than one above it, which `tests/convert.cpp` checks over all 16.7 million pairs of `v` and `level`. It is one floor of a function rising in both `v` and `level`, so it is monotonic in both: turning the knob up never darkens a pixel, and neither does a channel rising through a fade. What it gives up is exactness between the ends, by at most one of the 256 levels the wire carries.
 
 Some divisors cannot be rescaled away, because the scale is the data's own. `lerp` divides by 65535 because its two weights, `65535 − t` and `t`, sum to 65535, and the easing curves divide `t²` by 65535 to bring it back to 16 bits. On an M4 that is one `UDIV`. On an M0 it is a call to `__aeabi_uidiv` for every channel of every pixel mid-fade, and the compiler at `-Os` emits exactly that rather than the multiply-by-reciprocal it uses at `-O2`. But 65535 is 2¹⁶ − 1, and dividing by one less than a power of two has a form made of shifts. Since 1/(2¹⁶ − 1) = 2⁻¹⁶ · (1 + 2⁻¹⁶ + 2⁻³² + …), the first correction term and a carry of one are enough:
 
@@ -308,7 +308,7 @@ arm-none-eabi-nm -u div.o
          U __aeabi_uldivmod
 ```
 
-Now the library's own `Sequence::at()`, which contains the shift-based smoothstep, the progress loop, and two 32-bit remainders:
+Now the library's own `Sequence::at()`, which contains the easing curves, the progress loop and two 32-bit remainders:
 
 ```sh
 "$REPO/scripts/cross-check.sh" > /dev/null
@@ -338,15 +338,21 @@ echo 'unsigned f(unsigned a, unsigned b) { return a / b; }' |
 #include <cstdio>
 
 uint16_t one_floor(uint16_t t) {
-    const uint64_t x = t + (t >> 15);
-    const uint64_t y = (x * x * (3 * 65536 - 2 * x)) >> 32;
-    return static_cast<uint16_t>(y < 65535 ? y : 65535);
+    const uint64_t x = t;
+    return static_cast<uint16_t>(x * x * (3 * 65535 - 2 * x) / (uint64_t{65535} * 65535));
 }
 
 uint16_t two_floors(uint16_t t) {
     const uint32_t sq = uint32_t{t} * t / 65535;
     const uint32_t cube = sq * t / 65535;
     return static_cast<uint16_t>(3 * sq - 2 * cube);
+}
+
+uint16_t two_halves(uint16_t t) {
+    if (t < 32768)
+        return static_cast<uint16_t>(2 * uint32_t{t} * t / 65535);
+    const uint32_t u = 65535 - t;
+    return static_cast<uint16_t>(65535 - 2 * u * u / 65535);
 }
 
 void check(const char* name, uint16_t (*f)(uint16_t)) {
@@ -366,6 +372,7 @@ void check(const char* name, uint16_t (*f)(uint16_t)) {
 int main() {
     check("one_floor", one_floor);
     check("two_floors", two_floors);
+    check("two_halves", two_halves);
 }
 ```
 
@@ -376,11 +383,12 @@ c++ -std=c++20 -O2 smooth.cpp -o smooth && ./smooth
 ```
 one_floor  ends 0..65535, steps backwards 0 times
 two_floors ends 0..65535, steps backwards 3655 times, first at t=1639 (120 -> 118)
+two_halves ends 0..65535, steps backwards 0 times
 ```
 
 Then pick five values of `t` you might have tested by hand and evaluate `two_floors` at them. It is very hard to choose five that expose it.
 
-**Proves:** two curves that agree at both ends and look the same plotted differ in whether they flicker, and only a sweep over every input tells them apart. The whole sweep takes less time than compiling the program.
+**Proves:** the same curve floored once and floored twice agree at both ends and look the same plotted, but only one of them flickers, and only a sweep over every input tells them apart. `two_halves`, the library's `EaseInOut`, needs no 64-bit division to stay monotonic. The whole sweep takes less time than compiling the program.
 
 ### Exercise 5 — Let the length check wrap
 
@@ -468,14 +476,14 @@ Then change `rounded` to compute gamma 2.2 the same way — fifth powers of `2n 
 
 ## 11. The model in one paragraph
 
-Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back — most cheaply by taking the remainder of its magnitude, unsigned, and mirroring a non-zero one — and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. A value that is irrational, like a fractional power, is rounded by asking a comparison rather than computing it: `n + ½ ≤ y` squares into a test on integers, exact as long as the products fit, which is what limits the exponents within reach. Every curve has only 65,536 inputs, so the properties are tested over all of them.
+Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back — most cheaply by taking the remainder of its magnitude, unsigned, and mirroring a non-zero one — and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, or a piecewise curve whose pieces each are and meet in order, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. A value that is irrational, like a fractional power, is rounded by asking a comparison rather than computing it: `n + ½ ≤ y` squares into a test on integers, exact as long as the products fit, which is what limits the exponents within reach. Every curve has only 65,536 inputs, so the properties are tested over all of them.
 
 ## 12. Where to go next
 
 - **`src/sequence.cpp`** — `progress()`, `ease()` and `Sequence::at()`, about a hundred lines in which every section of this guide appears once, with the bound or the argument written beside it.
 - **`include/stripseq/color.h`** — `Color::lerp()`, and `Color::rgb8()`'s ×257, the same "exact at both ends" argument applied to widening 8 bits to 16.
 - **`tests/color.cpp` and `tests/sequence.cpp`** — §8's sweeps and boundary sets, as written.
-- **`src/color.cpp`** — `make_gamma_table()`, §7 in twenty lines, and **[`gamma-and-color-guide.md`](gamma-and-color-guide.md)** for why the table exists and why its exponent is a choice about the eye.
+- **`src/color.cpp`** — `convert()`, §6's rescaled knob in one line, and `make_gamma_table()`, §7 in twenty lines, and **[`gamma-and-color-guide.md`](gamma-and-color-guide.md)** for why the table exists and why its exponent is a choice about the eye.
 - **[`cross-compiling-guide.md`](cross-compiling-guide.md) §5–§6** — `nm -u` as the general instrument for costs the compiler does not report, of which the 64-bit division is one more.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md)** — the other half of what Phase 2 taught: the same builder, evaluated by the compiler instead of the chip.
 - **The ARM run-time ABI (`IHI0043`, "Run-time ABI for the Arm Architecture")** — the specification that names `__aeabi_uldivmod`, `__aeabi_uidiv` and the rest, and so the list of what to grep for.

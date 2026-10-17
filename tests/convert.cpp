@@ -84,8 +84,8 @@ TEST_CASE("to_bytes at brightness 0 is black whatever the color") {
 }
 
 TEST_CASE("to_bytes applies brightness before gamma") {
-    /* Full scale at brightness 128 is 65535 * 128 / 255 = 32896, top byte 128,
-     * and then gamma. The shortcut that scales the encoded byte would give
+    /* Full scale at brightness 128 is 65535 * 129 >> 16, top byte 128, and
+     * then gamma. The shortcut that scales the encoded byte would give
      * 255 * 128 / 255 = 128 instead, which differs whenever gamma is on. */
     uint8_t out[bytes];
     to_bytes(gray(65535), 128, out);
@@ -96,12 +96,42 @@ TEST_CASE("to_bytes applies brightness before gamma") {
     CHECK(expected(128) != 128);
 #endif
 
-    /* Every brightness scales a full-scale channel before it is encoded. */
+    /* Every brightness scales a full-scale channel to its own level before it
+     * is encoded. */
     for (uint32_t level = 0; level <= 255; ++level) {
         CAPTURE(level);
         to_bytes(gray(65535), static_cast<uint8_t>(level), out);
-        CHECK(out[0] == expected((65535u * level / 255u) >> 8));
+        CHECK(out[0] == expected(level));
     }
+}
+
+TEST_CASE("brightness is the division by 255 or one level above it, and never runs backwards") {
+    /* Every channel at every brightness. The level is the top byte of
+     * channel * brightness / 255, or one more: the shift divides by 65536
+     * rather than 65280, a little too much, but scales by brightness + 1,
+     * which more than makes up for it. Monotonic in the channel and in the brightness, so
+     * neither a fade nor turning the knob can step backwards. */
+    bool near = true;
+    bool rising_with_channel = true;
+    bool rising_with_brightness = true;
+    uint8_t previous_level[65536] = {};
+    for (uint32_t level = 0; level <= 255; ++level) {
+        uint8_t prev = 0;
+        for (uint32_t v = 0; v <= 65535; ++v) {
+            uint8_t out[bytes];
+            to_bytes(gray(static_cast<uint16_t>(v)), static_cast<uint8_t>(level), out);
+            const uint32_t divided = (v * level / 255u) >> 8;
+            near = near && (out[0] == expected(divided) ||
+                            (divided < 255 && out[0] == expected(divided + 1)));
+            rising_with_channel = rising_with_channel && out[0] >= prev;
+            rising_with_brightness = rising_with_brightness && out[0] >= previous_level[v];
+            prev = out[0];
+            previous_level[v] = out[0];
+        }
+    }
+    CHECK(near);
+    CHECK(rising_with_channel);
+    CHECK(rising_with_brightness);
 }
 
 TEST_CASE("to_bytes converts each channel on its own, in r, g, b, w order") {

@@ -48,11 +48,9 @@ static_assert(gamma.entry[0] == 0 && gamma.entry[255] == 255,
 
 #endif
 
-/* The top byte of a channel, gamma-encoded when the build asks for it. The
- * eight bits dropped here are the ones that kept blending accurate; the wire
- * carries eight, so they are spent by design. */
-uint8_t encode(uint16_t channel) {
-    const auto top = static_cast<uint8_t>(channel >> 8);
+/* The emitted level for a top byte, gamma-encoded when the build asks for
+ * it. */
+uint8_t encode(uint8_t top) {
 #if STRIPSEQ_GAMMA
     return gamma.entry[top];
 #else
@@ -60,10 +58,14 @@ uint8_t encode(uint16_t channel) {
 #endif
 }
 
-/* v * brightness / 255 in uint32_t: the product stays under 2^24, and 255 maps
- * every channel to itself exactly. */
+/* The top byte of channel * brightness / 255, as a multiply and a shift:
+ * scaling by brightness + 1 makes the divisor 2^16, which drops the eight bits
+ * that kept blending accurate along with the division. The wire carries eight,
+ * so they are spent by design. 255 maps every channel to its own top byte, 0
+ * to black, and in between it is never more than one level from the division.
+ * The product stays under 2^24. */
 uint8_t convert(uint16_t channel, uint8_t brightness) {
-    return encode(static_cast<uint16_t>(uint32_t{channel} * brightness / 255u));
+    return encode(static_cast<uint8_t>((uint32_t{channel} * (brightness + 1u)) >> 16));
 }
 
 }  // namespace
