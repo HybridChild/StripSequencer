@@ -20,10 +20,10 @@ The button advances, and the last wraps round to the first. Split animations put
 | --- | --- |
 | Blink | The whole strip on one sequence: red and black, 500 ms each. |
 | Breathe | Eased fades in place of holds, white in and out. |
-| Comet | A stagger: the same sequence on every pixel, each 16 ms later than the one before, so a white head runs down the strip trailing a fade. |
+| Comet | A stagger: the same sequence on every pixel, each 24 ms later than the one before, so a white head runs down the strip trailing a fade. |
 | Rainbow | Six fades around the hue wheel, spread so the whole wheel fits the strip, rotating. |
 | Static gradient | The rainbow seeked and never played: a frozen picture that costs one frame. |
-| Wipe | A sequence that runs once and stays on its landing color. Every three seconds it turns around, green sweeping in and then black sweeping it out. |
+| Wipe | A sequence that runs once and stays on its landing color. Green sweeps in and runs straight into black sweeping it out, because each pixel holds green for exactly the stagger across the strip. Then the same sequence runs again from the far end, with the stagger counted backwards by a replaced step 1, and the strip rests dark for two seconds before starting over. |
 | Progress bar | A sequencer that never plays, whose playhead is the value. It fills over three seconds, rests full for two, and starts again, with the edge pixel fading in rather than stepping. |
 | Two halves | Two sequencers on two segments: breathing on the left, the rainbow on the right. |
 | Converging | One comet on both halves with opposite delays, so both flow toward the centre. Pixels the same distance from the centre are a whole half's stagger apart, so it is not a reflection. |

@@ -8,7 +8,7 @@
  *
  * The frame loop and ../common/strip_adapter.h are strip_demo's, plus one
  * thing it never needs: a tick, for the animations that change on their own
- * schedule rather than the sequencer's -- the wipe turning around, the
+ * schedule rather than the sequencer's -- the wipe changing direction, the
  * progress value moving, the alert firing. Everything runs on the system workqueue, which serialises the work
  * items, so a tick or a press can never land halfway through a render and
  * nothing here locks.
@@ -79,21 +79,31 @@ static constexpr Sequence kRainbow = SequenceBuilder{}
     .fade_to(Color::hsv(0x0000, 255, 255), 500)   //       -> red
     .build_const();
 
-/* A pair, so the wipe can turn around: each lands on the color the other
- * starts from, and the strip stays where the last one left it. */
-static constexpr Sequence kWipeOn = SequenceBuilder{}
+/* Green holds on each pixel for exactly the stagger across the strip, so the
+ * first pixel starts out the moment the last has landed: the wipe on runs
+ * straight into the wipe off, with the strip full for an instant between. */
+static constexpr uint32_t kWipeFadeMs = 150;
+static constexpr int32_t kWipeDelayMs = 20;
+static constexpr uint32_t kWipeAcrossMs =
+    static_cast<uint32_t>((kPixels - 1) * kWipeDelayMs);
+
+static constexpr Sequence kWipe = SequenceBuilder{}
     .start_color(colors::black)
-    .fade_to(colors::green, 200)
-    .landing_color(colors::green)
+    .fade_to(colors::green, kWipeFadeMs)
+    .hold(colors::green, kWipeAcrossMs)
+    .fade_to(colors::black, kWipeFadeMs)
     .repeat(1)
     .build_const();
 
-static constexpr Sequence kWipeOff = SequenceBuilder{}
-    .start_color(colors::green)
-    .fade_to(colors::black, 200)
-    .landing_color(colors::black)
-    .repeat(1)
-    .build_const();
+/* A pass is the wipe on and off once, ending a full stagger after the sequence
+ * does, when the last pixel goes dark. A cycle is a pass from pixel 0, a pass
+ * from the far end, and two seconds dark. The tick counts the cycle out in
+ * kWipeTickMs steps, so a pass must be a whole number of them. */
+static constexpr uint32_t kWipePassMs = 2 * kWipeFadeMs + 2 * kWipeAcrossMs;
+static constexpr uint32_t kWipeTickMs = 100;
+static constexpr uint32_t kWipePassTicks = kWipePassMs / kWipeTickMs;
+static constexpr uint32_t kWipeCycleTicks = (2 * kWipePassMs + 2000) / kWipeTickMs;
+static_assert(kWipePassMs % kWipeTickMs == 0, "a pass must end on a tick");
 
 /* One fade per pixel, each kProgressStepMs long and staggered by the same, so
  * a playhead of n steps lights n pixels and the one beyond partway. */
@@ -419,7 +429,7 @@ static void show_comet(int64_t now) {
     seq.load(kComet);
     seq.play(now);
     Segment s(0, kPixels, seq);
-    s.set_pixel_delay(16);
+    s.set_pixel_delay(24);
     strip.add(s);
 }
 
@@ -439,20 +449,31 @@ static void show_gradient(int64_t) {
     strip.add(s);
 }
 
-static bool wipe_lit;
+/* Ticks into the current cycle. The reversed pass is the same sequence with
+ * the stagger counted from the far end, so the direction is the segment's
+ * step 1 and the sequence never knows. */
+static uint32_t wipe_ticks;
+
+static void start_pass(int64_t now, OffsetFn where) {
+    seq.load(kWipe);   /* re-trigger: back to playhead 0 */
+    seq.play(now);
+    strip.segment(0).set_offset_fn(where);
+}
 
 static void wipe(int64_t now) {
-    seq.load(wipe_lit ? kWipeOff : kWipeOn);
-    seq.play(now);
-    wipe_lit = !wipe_lit;
+    wipe_ticks = wipe_ticks + 1 < kWipeCycleTicks ? wipe_ticks + 1 : 0;
+    if (wipe_ticks == 0)
+        start_pass(now, nullptr);
+    else if (wipe_ticks == kWipePassTicks)
+        start_pass(now, mirror);
 }
 
 static void show_wipe(int64_t now) {
-    wipe_lit = false;
-    wipe(now);
     Segment s(0, kPixels, seq);
-    s.set_pixel_delay(30);
+    s.set_pixel_delay(kWipeDelayMs);
     strip.add(s);
+    wipe_ticks = 0;
+    start_pass(now, nullptr);
 }
 
 /* The bar fills over three seconds, rests full for two, and starts again.
@@ -558,18 +579,18 @@ struct Animation {
     uint8_t brightness = kBrightness;
     /* Whether the frame loop drops segments that have finished. Only the
      * alert wants it: a finished segment keeps painting its landing color,
-     * and the wipe is nothing else, so dropping its segment would black the
-     * strip and leave the next turn painting nothing. */
+     * and the wipe rests on nothing else, so dropping its segment would leave
+     * the next wipe painting nothing. */
     bool drops_finished = false;
 };
 
 static constexpr Animation kAnimations[] = {
     {"blink", show_blink, nullptr, 0},
     {"breathe: eased fades", show_breathe, nullptr, 0},
-    {"comet: a stagger of 16 ms a pixel", show_comet, nullptr, 0},
+    {"comet: a stagger of 24 ms a pixel", show_comet, nullptr, 0},
     {"rainbow: the hue wheel spread across the strip", show_rainbow, nullptr, 0},
     {"static gradient: the rainbow, seeked and never played", show_gradient, nullptr, 0},
-    {"wipe: a finite sequence that stays where it lands", show_wipe, wipe, 3000},
+    {"wipe: a finite sequence that stays where it lands", show_wipe, wipe, kWipeTickMs},
     {"progress bar: a playhead set from outside", show_progress, advance_progress,
      kProgressTickMs},
     {"two halves: two sequencers side by side", show_halves, nullptr, 0},
