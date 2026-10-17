@@ -43,6 +43,58 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -j
 
+  # The host suite again, instrumented. UBSan is the one that matters: the
+  # stagger's signed arithmetic, a shift standing in for a divide, and the
+  # remainder of a negative playhead are all code that is correct only while it
+  # stays defined, and a test that passes on undefined behaviour proves nothing
+  # about the next compiler. ASan rides along for the cost of a flag.
+  sanitizers:
+    name: sanitizers (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      # Given on the command line, never written into CMakeLists.txt: the
+      # library sets no toolchain flag, and a sanitizer is a property of this
+      # build, not of the project. CMAKE_CXX_FLAGS reaches the link line too,
+      # which is what pulls in the runtimes.
+      #
+      # -fno-sanitize-recover=all is what makes a report a failure. Without it
+      # UBSan prints, carries on, and the test passes; with it the process
+      # aborts and the case fails. ASan aborts on its own.
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }}
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+        run: >
+          cmake -S . -B build -G Ninja
+          "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+          -fno-sanitize-recover=all -fno-omit-frame-pointer"
+
+      - name: Build
+        run: cmake --build build
+
+      # A run with no reports is also what an uninstrumented build looks like,
+      # so check the instrumentation is there before trusting the silence. The
+      # _abort spelling is the one -fno-sanitize-recover selects, so it proves
+      # both flags arrived.
+      - name: Check every variant is instrumented
+        run: |
+          for lib in build/libstripseq_*.a; do
+            grep -q __asan_init <(nm "$lib") || { echo "$lib: no ASan"; exit 1; }
+            grep -q '__ubsan_handle_.*_abort' <(nm "$lib") || { echo "$lib: no UBSan"; exit 1; }
+          done
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j
+
   cross:
     name: freestanding cross-compile
     runs-on: ubuntu-latest
