@@ -120,3 +120,8 @@ jobs:
       # setting takes no path of its own here that strip_demo does not cover.
       - name: Build frame_cost
         run: SAMPLE=frame_cost ./scripts/sample-build.sh -p
+
+      # One configuration is enough: the adapter's two paths are strip_demo's
+      # builds above, and nothing else here depends on the channel setting.
+      - name: Build showcase
+        run: SAMPLE=showcase ./scripts/sample-build.sh -p

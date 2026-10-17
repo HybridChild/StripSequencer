@@ -400,7 +400,7 @@ It is the same backwards loop for the same reason, and it removes every segment 
 
 ## On Zephyr
 
-The platform side is not part of the library. This is its shape, and it is where the neutral buffer layout pays off; [`samples/strip_demo/src/main.cpp`](../samples/strip_demo/src/main.cpp) is a complete one, with the permute built from the devicetree's `color-mapping`.
+The platform side is not part of the library. This is its shape, and it is where the neutral buffer layout pays off; [`samples/strip_demo/src/main.cpp`](../samples/strip_demo/src/main.cpp) is a complete one, and [`samples/common/strip_adapter.h`](../samples/common/strip_adapter.h) holds its permute, built from the devicetree's `color-mapping`.
 
 ```cpp
 const struct device* dev = DEVICE_DT_GET(DT_ALIAS(led_strip));

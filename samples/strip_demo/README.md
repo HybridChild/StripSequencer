@@ -1,6 +1,6 @@
 # strip_demo
 
-The library on real hardware under Zephyr, and a check of that hardware in six stages. The library leaves out everything platform-shaped, and [`src/main.cpp`](src/main.cpp) is that missing half: the frame loop on a `k_work_delayable`, `k_uptime_get()` sampled once per frame, the hold turned into a reschedule, the channel permute, and the strip update.
+The library on real hardware under Zephyr, and a check of that hardware in six stages. The library leaves out everything platform-shaped, and [`src/main.cpp`](src/main.cpp) is that missing half: the frame loop on a `k_work_delayable`, `k_uptime_get()` sampled once per frame, and the hold turned into a reschedule. The channel permute and the strip update are in [`../common/strip_adapter.h`](../common/strip_adapter.h), which the [showcase](../showcase/README.md) shares.
 
 ## The bench
 

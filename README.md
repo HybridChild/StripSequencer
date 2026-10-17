@@ -158,6 +158,7 @@ That is 130 to 290 cycles a pixel for each segment covering it. At 60 frames a s
 - **[COOKBOOK.md](docs/COOKBOOK.md)** — how the pieces fit, what one frame does, how a sequencer is driven, and eleven recipes compiled verbatim by the test suite.
 - **[DESIGN.md](docs/DESIGN.md)** — why the library is shaped the way it is: the lookup-table mechanism, the supporting decisions, the non-goals.
 - **[`samples/strip_demo/`](samples/strip_demo/README.md)** — the library on real hardware under Zephyr, and a staged check of that hardware for when it disagrees with the host.
+- **[`samples/showcase/`](samples/showcase/README.md)** — a dozen animations on the same hardware, one per button press, each showing one thing the library does.
 - **[`include/stripseq/`](include/stripseq/)** — the API, with the reason for each declaration beside it.
 - **[`notes/`](notes/README.md)** — guides to the C++, CMake and Zephyr concepts the project leans on, using it as the running example.
 

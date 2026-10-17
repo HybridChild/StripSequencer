@@ -2,9 +2,10 @@
  * through the stages described in this sample's README.md.
  *
  * The library never touches hardware or reads a clock, so everything platform-
- * shaped is here: the frame loop on a k_work_delayable, k_uptime_get() sampled
- * once per frame, the hold turned into a reschedule, the channel permute, and
- * the strip update. The user button advances to the next stage.
+ * shaped is here or in ../common/strip_adapter.h: the frame loop on a
+ * k_work_delayable, k_uptime_get() sampled once per frame, the hold turned
+ * into a reschedule, and, in the adapter, the channel permute and the strip
+ * update. The user button advances to the next stage.
  *
  * Both work items run on the system workqueue, which serialises them: a stage
  * change can never land halfway through a render, so nothing here locks.
@@ -12,12 +13,12 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/led_strip.h>
-#include <zephyr/dt-bindings/led/led.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
 #include <stripseq/stripseq.h>
+
+#include "strip_adapter.h"
 
 using namespace stripseq;
 
@@ -40,61 +41,6 @@ static constexpr uint32_t kFramePeriodMs = 16;
  * keeps eleven pixels at full white well inside what a USB-powered bench
  * supplies, and is applied in the library's linear space, before gamma. */
 static constexpr uint8_t kBrightness = 64;
-
-/* ---- The channel permute ------------------------------------------------ */
-
-#if STRIPSEQ_WHITE_CHANNEL
-
-/* led_strip_update_channels() takes bytes already in the chip's own order and
- * consults color-mapping nowhere, so the order is read from the devicetree
- * here instead of being written down a second time. */
-static constexpr uint8_t kWireOrder[] = DT_PROP(STRIP_NODE, color_mapping);
-
-/* Where each LED_COLOR_ID sits in the library's neutral R,G,B,W pixel. */
-static constexpr uint8_t neutral_index(uint8_t id) {
-    return id == LED_COLOR_ID_WHITE ? 3 : static_cast<uint8_t>(id - LED_COLOR_ID_RED);
-}
-
-static constexpr bool is_permutation_of_rgbw(const uint8_t (&order)[4]) {
-    bool seen[4] = {};
-    for (uint8_t id : order) {
-        if (id != LED_COLOR_ID_WHITE && (id < LED_COLOR_ID_RED || id > LED_COLOR_ID_BLUE))
-            return false;
-        if (seen[neutral_index(id)])
-            return false;
-        seen[neutral_index(id)] = true;
-    }
-    return true;
-}
-
-static_assert(sizeof(kWireOrder) == Strip::bytes_per_pixel,
-              "color-mapping must name exactly as many channels as an RGBW pixel has");
-static_assert(is_permutation_of_rgbw(kWireOrder),
-              "color-mapping must name red, green, blue and white once each");
-
-/* Within each pixel, so the one buffer serves both orders and the library's
- * next render overwrites the permuted bytes in full. */
-static void permute_in_place(uint8_t* pixels, uint16_t count) {
-    for (uint16_t p = 0; p < count; ++p) {
-        uint8_t* px = pixels + p * Strip::bytes_per_pixel;
-        const uint8_t neutral[4] = {px[0], px[1], px[2], px[3]};
-        for (uint8_t j = 0; j < 4; ++j)
-            px[j] = neutral[neutral_index(kWireOrder[j])];
-    }
-}
-
-#else
-
-/* The RGB path hands the buffer to led_strip_update_rgb() as it stands, since
- * the neutral layout is exactly struct led_rgb and the driver applies
- * color-mapping itself. The scratch byte some drivers ask for breaks that. */
-#ifdef CONFIG_LED_STRIP_RGB_SCRATCH
-#error "CONFIG_LED_STRIP_RGB_SCRATCH prefixes struct led_rgb with a byte; the buffer cannot be passed through"
-#endif
-static_assert(sizeof(struct led_rgb) == Strip::bytes_per_pixel,
-              "struct led_rgb must match the library's neutral RGB pixel");
-
-#endif
 
 /* ---- The stages --------------------------------------------------------- */
 
@@ -205,13 +151,7 @@ static void frame(struct k_work*) {
     strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
 
-#if STRIPSEQ_WHITE_CHANNEL
-    permute_in_place(buffer, kPixels);
-    const int err = led_strip_update_channels(strip_dev, buffer, sizeof(buffer));
-#else
-    const int err = led_strip_update_rgb(strip_dev, reinterpret_cast<struct led_rgb*>(buffer),
-                                         kPixels);
-#endif
+    const int err = send_frame(strip_dev, buffer, kPixels);
     if (err)
         printk("strip update failed: %d\n", err);
     ++frames;
