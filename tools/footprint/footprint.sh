@@ -51,7 +51,7 @@ build() {
 #
 # --size-sort, because it is what makes nm work out a size for a symbol the
 # object does not record one for: libgcc's hand-written assembly, such as
-# __aeabi_uldivmod, has none, and would otherwise count as nothing. The
+# __aeabi_uidivmod, has none, and would otherwise count as nothing. The
 # section comes from the address, against the ranges `size -A` reports.
 # Functions sharing an address are aliases -- a constructor's complete and
 # base-object entries, __aeabi_lmul and __muldi3 -- and are counted once.

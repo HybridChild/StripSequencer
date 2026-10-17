@@ -128,14 +128,14 @@ The library's code and constants, linked into an application that calls every pa
 
 | Configuration | Cortex-M0 | Cortex-M4 |
 | --- | --: | --: |
-| RGB, gamma (the default) | 1936 B | 1888 B |
-| RGB, no gamma | 1666 B | 1618 B |
-| RGBW, gamma | 1968 B | 1900 B |
-| RGBW, no gamma | 1698 B | 1630 B |
+| RGB, gamma (the default) | 1976 B | 1904 B |
+| RGB, no gamma | 1706 B | 1634 B |
+| RGBW, gamma | 2008 B | 1916 B |
+| RGBW, no gamma | 1738 B | 1646 B |
 
 Gamma is the 256-byte table, and the white channel costs almost nothing in code. The constants include one empty `Sequence`, which every sequencer refers to until something is loaded. The library has no RAM of its own: all of it is in the objects above.
 
-On top of that come the compiler's run-time helpers: 916 B on a Cortex-M0 and 834 B on a Cortex-M4. 544 B of it on the M0 and 832 B on the M4 is 64-bit division, `__aeabi_uldivmod` and the routines behind it, there for the one 64-bit remainder in `Sequencer::playhead`. The bench's Zephyr image links it anyway, for the kernel's sleeps and the UART driver's baud rate, so there it costs nothing extra. Building a sequence at run time adds about 300 B where `SequenceBuilder` is used; `build_const()` adds nothing. [`tools/footprint/`](tools/footprint/README.md) produces these figures, symbol by symbol.
+On top of that come the compiler's run-time helpers: 372 B on a Cortex-M0, for the 32-bit division it has no instruction for and the builder's 64-bit duration check, and none at all on a Cortex-M4. Nothing in the library divides in 64 bits. Building a sequence at run time adds about 300 B where `SequenceBuilder` is used; `build_const()` adds nothing. [`tools/footprint/`](tools/footprint/README.md) produces these figures, symbol by symbol.
 
 ### Time per frame
 

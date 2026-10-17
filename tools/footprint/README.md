@@ -24,7 +24,7 @@ By symbol, from the linked image's symbol table, rather than by the object file 
 | Library code | Functions in namespace `stripseq`. |
 | Library constants | Read-only objects in namespace `stripseq`: the 256-byte gamma table when `STRIPSEQ_GAMMA=1`, and `no_sequence`, the empty sequence every `Sequencer` refers to until something is loaded, which is one full `Sequence`. |
 | Library RAM | Static data of the library's own. Zero: every byte of RAM the library uses is inside a `Sequence`, `Sequencer` or `Strip` the application declares. |
-| libgcc helpers | The compiler's run-time routines, for operations the core has no instruction for. On both cores most of it is `__udivmoddi4`, behind the single 64-bit remainder in `Sequencer::playhead`. On a Cortex-M0, `__udivsi3` for 32-bit division and `__aeabi_lmul` for the builder's 64-bit duration check come on top. |
+| libgcc helpers | The compiler's run-time routines, for operations the core has no instruction for. None on a Cortex-M4. On a Cortex-M0, `__udivsi3` for 32-bit division and `__aeabi_lmul` for the builder's 64-bit duration check. |
 | memcpy, memset | From newlib-nano, emitted by the compiler for copying and clearing structures: in `Sequence::at`, the emptied slot in `Strip::remove`, the sequence the builder copies out. |
 | build() at run time | `SequenceBuilder` is header-only, so building a sequence at run time is compiled where the application does it. `app.cpp` does it in a function of its own so it can be counted. `build_const()` costs nothing here: it runs in the compiler. |
 

@@ -23,14 +23,11 @@ REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 BUILD_DIR="${1:-build-cross}"
 
-# The helpers the design accepts, by object. 32-bit division is a call on a
-# Cortex-M0 and fine anywhere; memcpy and memset are the compiler's own, for
-# copies and clearing loops. The one 64-bit remainder is Sequencer::playhead's,
-# taken once per segment per frame, so __aeabi_uldivmod is allowed there and
-# nowhere else. A signed division, a 64-bit division anywhere else, a float
-# routine, operator new or a libc call fails the check, by name.
+# The helpers the design accepts. 32-bit division is a call on a Cortex-M0 and
+# fine anywhere; memcpy and memset are the compiler's own, for copies and
+# clearing loops. A signed division, any 64-bit division, a float routine,
+# operator new or a libc call fails the check, by name.
 ALLOWED="__aeabi_uidiv __aeabi_uidivmod memcpy memset"
-ALLOWED_SEQUENCER="__aeabi_uldivmod"
 
 status=0
 
@@ -41,11 +38,9 @@ check_helpers() {
     local defined
     defined="$(arm-none-eabi-nm --defined-only "${objs[@]}" | awk 'NF == 3 { print $3 }')"
     for obj in "${objs[@]}"; do
-        local allowed="$ALLOWED"
-        [[ "$(basename "$obj")" == sequencer.cpp.obj ]] && allowed+=" $ALLOWED_SEQUENCER"
         for sym in $(arm-none-eabi-nm -u "$obj" | awk '{ print $NF }'); do
             grep -qxF "$sym" <<< "$defined" && continue
-            [[ " $allowed " == *" $sym "* ]] && continue
+            [[ " $ALLOWED " == *" $sym "* ]] && continue
             echo "error: $2: $(basename "$obj") calls $(arm-none-eabi-c++filt "$sym"), which is not on the allowlist" >&2
             status=1
         done

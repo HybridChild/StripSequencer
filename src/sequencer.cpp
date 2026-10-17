@@ -17,6 +17,31 @@ namespace {
  * does not know which segments read from it. */
 constexpr int64_t finite_limit_ms = int64_t{1} << 30;
 
+/* n % d, for a d of at most 2^31, in 32-bit arithmetic only. A 64-bit `%` is
+ * a call into libgcc on every Cortex-M, and this is the one place the library
+ * would make it.
+ *
+ * Long division in base 2: n is hi * 2^32 + lo, so the high word is reduced by
+ * the core's own 32-bit remainder and the low word's bits are brought down one
+ * at a time, most significant first, each doubling what is left over. The
+ * remainder stays below d, so doubling it and adding a bit stays below 2^32.
+ * One division and 32 shift-and-subtract steps, whatever n is: the cost of a
+ * frame never depends on how long the sequencer has been playing.
+ *
+ * Bit by bit rather than three bits at a time through `%`, which the headroom
+ * under a 2^29 loop would also allow: that is eleven divisions, and on a
+ * Cortex-M0, which has no divide instruction, eleven library calls. */
+uint32_t remainder(uint64_t n, uint32_t d) {
+    uint32_t r = static_cast<uint32_t>(n >> 32) % d;
+    const auto lo = static_cast<uint32_t>(n);
+    for (int bit = 31; bit >= 0; --bit) {
+        r = (r << 1) | ((lo >> bit) & 1u);
+        if (r >= d)
+            r -= d;
+    }
+    return r;
+}
+
 }  // namespace
 
 void Sequencer::load(const Sequence& s) {
@@ -61,15 +86,14 @@ int32_t Sequencer::playhead(int64_t now_ms) const {
          * answers black whatever it is asked.
          *
          * The remainder is taken of p's magnitude, unsigned, and a negative p
-         * folded back up by hand. In C++ `p % loop` takes the sign of p, and a
-         * signed 64-bit remainder is a library call on a Cortex-M that nothing
-         * else links, where the unsigned one is already there for the clock.
-         * Negated in uint64_t, so INT64_MIN is no special case. */
+         * folded back up by hand, because in C++ `p % loop` takes the sign of
+         * p. Negated in uint64_t, so INT64_MIN is no special case. The builder
+         * holds the loop to 2^29 ms, inside what remainder() can divide by. */
         const uint32_t loop = sequence_->loop_duration_ms();
         if (loop == 0)
             return 0;
         const uint64_t magnitude = p < 0 ? 0 - static_cast<uint64_t>(p) : static_cast<uint64_t>(p);
-        const auto into_loop = static_cast<uint32_t>(magnitude % loop);
+        const uint32_t into_loop = remainder(magnitude, loop);
         return static_cast<int32_t>(p < 0 && into_loop != 0 ? loop - into_loop : into_loop);
     }
 

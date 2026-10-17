@@ -123,7 +123,7 @@ Take the clock as `int64_t` milliseconds. A difference of two such readings over
 
 What it costs:
 
-- **Arithmetic.** A 64-bit subtraction is two instructions on a 32-bit core. A 64-bit division is not an instruction at all on a Cortex-M but a call into the compiler's runtime library, about a hundred cycles, and §5 needs one per query on an endless sequence. Once per segment per frame, that is tens of thousands of cycles a second against hundreds of millions.
+- **Arithmetic.** A 64-bit subtraction is two instructions on a 32-bit core. A 64-bit division is not an instruction at all on a Cortex-M but a call into the compiler's runtime library, and §5 needs a 64-bit remainder per query on an endless sequence. The library takes it in 32-bit pieces instead, one division and a shift-and-subtract per bit of the low word, which is about a hundred cycles once per segment per frame and links nothing.
 - **Space.** Two 8-byte fields where there were two 4-byte ones.
 - **The wrap moves to the edge.** A counter that wraps still wraps; widening it is someone's job. Under Zephyr that job is already done, because `k_uptime_get()` is 64-bit. A caller with only a 32-bit tick runs it through §2's `Clock64`, and the "at least once every 24.8 days" condition becomes "at least once every 49.7 days", on the extender rather than inside the library.
 
@@ -135,11 +135,12 @@ A wide position is exact, but the code that consumes it works in `int32_t`. Each
 
 ```cpp
 if (sequence_.total_duration_ms() == hold_forever) {
-    const int64_t loop = sequence_.loop_duration_ms();
+    const uint32_t loop = sequence_.loop_duration_ms();
     if (loop == 0)
         return 0;
-    const int64_t into_loop = p % loop;
-    return static_cast<int32_t>(into_loop < 0 ? into_loop + loop : into_loop);
+    const uint64_t magnitude = p < 0 ? 0 - static_cast<uint64_t>(p) : static_cast<uint64_t>(p);
+    const uint32_t into_loop = remainder(magnitude, loop);
+    return static_cast<int32_t>(p < 0 && into_loop != 0 ? loop - into_loop : into_loop);
 }
 const int64_t clamped = p < -finite_limit_ms ? -finite_limit_ms
                       : p > finite_limit_ms  ? finite_limit_ms
@@ -147,7 +148,7 @@ const int64_t clamped = p < -finite_limit_ms ? -finite_limit_ms
 return static_cast<int32_t>(clamped);
 ```
 
-Both are exact through `at()`, which is what lets them apply on every path. An endless sequence's playhead is the position modulo the loop, which is what `at()` would read it as anyway; the fold back up is because C++'s `%` takes the sign of the dividend ([`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §2). A finite sequence's is the position clamped to 2³⁰ ms, about 12.4 days, either side of zero: everything past the end shows the landing color and everything before the start shows the start color, so a value far out stands for every value beyond it. A sequence with no steps has a loop of zero and answers 0, since the remainder would divide by zero and `at()` answers black whatever it is asked.
+Both are exact through `at()`, which is what lets them apply on every path. An endless sequence's playhead is the position modulo the loop, which is what `at()` would read it as anyway; the remainder is of the magnitude and folded back up because C++'s `%` takes the sign of the dividend ([`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §2–§3); `remainder()` is the 64-bit remainder in 32-bit pieces that §4 counted the cost of. A finite sequence's is the position clamped to 2³⁰ ms, about 12.4 days, either side of zero: everything past the end shows the landing color and everything before the start shows the start color, so a value far out stands for every value beyond it. A sequence with no steps has a loop of zero and answers 0, since the remainder would divide by zero and `at()` answers black whatever it is asked.
 
 Note that the clamp is the very thing §4 called a trap. It is safe here for one reason: the difference underneath is `int64_t`, so it cannot have gone wrong before the clamp sees it. **Clamping an answer is sound exactly when the value it clamps was computed in a type that could not overflow on the way** (§11, Exercise 3 breaks that and watches the trap return).
 
@@ -526,5 +527,5 @@ A position that follows a clock should be derived from it, not counted: store th
 - **`include/stripseq/sequencer.h`** — `wrapping_tick` and the deleted overloads of §6.
 - **`tests/sequencer.cpp`** — §8 as written: the table of positions, the continuity runs across 2³¹ and 2³², the `static_assert`s of §6, and a case for each section of this guide.
 - **[`integer-arithmetic-guide.md`](integer-arithmetic-guide.md)** — the modular and signed arithmetic underneath §2, and how `Sequence::at()` folds a negative playhead onto the ring.
-- **[`testing-guide.md`](testing-guide.md) §8** — what the test suite for this code could and could not see: a bug that fails on one machine for the wrong reason, crashes on another, and on the target gets the right answer by accident.
+- **[`testing-guide.md`](testing-guide.md) §8** — what the test suite for this code could and could not see: a bug that fails on one machine for the wrong reason, crashes on another, and faults the target.
 - **RFC 1982, "Serial Number Arithmetic"** — the half-range rule of §3, stated for sequence numbers, in eight pages.

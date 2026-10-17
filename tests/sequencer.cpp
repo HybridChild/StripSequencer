@@ -383,6 +383,32 @@ TEST_CASE("an endless playhead is its position modulo the loop, wherever it is")
     }
 }
 
+TEST_CASE("an endless playhead is exact on the longest loop and at either end of int64_t") {
+    /* The remainder's own edges, which a 777 ms loop leaves out: a loop with
+     * the most bits the builder allows, so that doubling the remainder comes
+     * closest to the top of a uint32_t, and odd, so that no power of two
+     * divides it; and positions whose high word is full. */
+    constexpr Sequence longest_loop =
+        SequenceBuilder{}.hold(colors::red, 1).fade_to(colors::green, longest_total_ms - 2).build_const();
+    static_assert(longest_loop.loop_duration_ms() == longest_total_ms - 1);
+    const uint32_t loop = longest_loop.loop_duration_ms();
+
+    for (const Sequence* s : {&endless_777, &longest_loop}) {
+        Sequencer seq;
+        seq.load(*s);
+        seq.play(0);
+        for (int64_t position : {INT64_MIN, INT64_MIN + 1, -two_32 * loop, -two_32 * loop - 1,
+                                 two_32 * loop - 1, two_32 * loop, INT64_MAX - 1, INT64_MAX}) {
+            CAPTURE(position);
+            CHECK(seq.playhead(position) == mod_loop(position, s->loop_duration_ms()));
+        }
+        for (int64_t position : positions) {
+            CAPTURE(position);
+            CHECK(seq.playhead(position) == mod_loop(position, s->loop_duration_ms()));
+        }
+    }
+}
+
 TEST_CASE("a finite playhead is its position clamped to 2^30 either side of 0") {
     const int64_t start = two_40;
     Sequencer seq;

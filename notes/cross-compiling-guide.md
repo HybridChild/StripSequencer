@@ -124,13 +124,13 @@ arm-none-eabi-nm -u some.o
 
 A `U __aeabi_dmul` is a double multiply the target cannot do in hardware. A `U __cxa_guard_acquire` is a function-local static. A `U _Znwj` is `operator new`. None of these required running anything.
 
-The check reads them itself. `scripts/cross-check.sh` takes every symbol an object leaves undefined, drops those another of the library's objects defines, and compares the rest against an **allowlist** of the run-time helpers the design accepts: `__aeabi_uidiv` and `__aeabi_uidivmod`, the M0's 32-bit division; `memcpy` and `memset`, which the compiler emits on its own for copies and clearing loops; and `__aeabi_uldivmod` in `sequencer.cpp` and nowhere else, for `Sequencer::playhead`'s one 64-bit remainder. Anything else fails, by name and core:
+The check reads them itself. `scripts/cross-check.sh` takes every symbol an object leaves undefined, drops those another of the library's objects defines, and compares the rest against an **allowlist** of the run-time helpers the design accepts: `__aeabi_uidiv` and `__aeabi_uidivmod`, the M0's 32-bit division; and `memcpy` and `memset`, which the compiler emits on its own for copies and clearing loops. Anything else fails, by name and core:
 
 ```
 error: cortex-m0: segment.cpp.obj calls __aeabi_idivmod, which is not on the allowlist
 ```
 
-It is an allowlist rather than a list of forbidden symbols because the ways to go wrong are open-ended — a float routine, `operator new`, a static's guard, any libc call — while what the design accepts is short and known. And it is per object, which is what lets it accept the one 64-bit remainder where it was designed in and refuse a second one anywhere else.
+It is an allowlist rather than a list of forbidden symbols because the ways to go wrong are open-ended — a float routine, `operator new`, a static's guard, any libc call — while what the design accepts is short and known.
 
 Section headers say what will execute before your code does:
 
