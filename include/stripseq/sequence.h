@@ -86,7 +86,8 @@ public:
 
     /* These two are here for the library's own use rather than the caller's:
      * Sequencer needs the loop length to narrow an endless playhead, and
-     * Segment::finished() needs the total. Endless reads as hold_forever.
+     * Segment::finished() asks whether there is a total at all. Endless reads
+     * as hold_forever.
      *
      * Neither can overflow: the builder rejects anything over 2^29 ms. */
     constexpr uint32_t loop_duration_ms() const {

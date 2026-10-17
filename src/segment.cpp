@@ -21,6 +21,10 @@ bool Segment::drives(const Sequencer& seq) const {
     return sequencer_ == &seq;
 }
 
+Sample Segment::sample(int32_t /*playhead_ms*/, uint16_t /*index*/) const {
+    return {};   /* stub */
+}
+
 uint32_t Segment::paint(uint8_t* /*buffer*/, uint16_t /*pixel_count*/,
                         uint8_t /*brightness*/, int64_t /*now_ms*/) const {
     return hold_forever;   /* stub */

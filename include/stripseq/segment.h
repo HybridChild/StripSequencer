@@ -88,11 +88,20 @@ public:
     void set_offset_fn(OffsetFn fn);
     void set_color_fn(ColorFn fn);                /* nullptr restores the default */
 
-    /* True once every pixel here has passed the end of a finite sequence --
-     * a full stagger later than the sequencer's own playhead reaching the end.
-     * Narrower than "nothing here will change again", too: a sequencer that is
-     * not playing holds forever and is never finished. Nor is one with an
-     * OffsetFn installed, since its offsets are not the library's to know. */
+    /* True when the sequencer is playing a finite sequence and no pixel here
+     * will change again: every pixel's lookup, or its ColorFn, reports
+     * hold_forever. The hold is a binding contract, so this holds for any
+     * OffsetFn and any ColorFn; on the default steps it comes a full stagger
+     * after the sequencer's own playhead reaches the end.
+     *
+     * Narrower than "nothing here will change again" by the two conditions. A
+     * sequencer that is not playing holds forever and is never finished, and
+     * nor is one playing an endless sequence, so a static gradient drawn by a
+     * ColorFn is never removed: a finite sequence is how a ColorFn says it is
+     * meant to end. Pixels clipped off the strip still count.
+     *
+     * The scan stops at the first pixel still changing, so it runs in full only
+     * on a segment that has finished. */
     bool finished(int64_t now_ms) const;
     template <wrapping_tick T> bool finished(T) const = delete;
 
@@ -122,6 +131,13 @@ private:
     friend class Strip;
     uint32_t paint(uint8_t* buffer, uint16_t pixel_count, uint8_t brightness,
                    int64_t now_ms) const;
+
+    /* Steps 1 and 2 for one pixel, with the hold the lookup or ColorFn
+     * reported. paint and finished() both go through it, so what a segment
+     * paints and whether it has finished cannot disagree. paint then holds a
+     * sequencer that is not playing forever, which is why finished() asks
+     * here rather than paint. */
+    Sample sample(int32_t playhead_ms, uint16_t index) const;
 
     uint16_t   first_ = 0;
     uint16_t   count_ = 0;

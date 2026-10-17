@@ -237,7 +237,8 @@ public:
 
     // These two are here for the library's own use rather than the caller's:
     // Sequencer needs the loop length to narrow an endless playhead, and
-    // Segment::finished() needs the total. Endless reads as hold_forever.
+    // Segment::finished() asks whether there is a total at all. Endless reads
+    // as hold_forever.
     constexpr uint32_t loop_duration_ms() const;   // one pass through the steps
     constexpr uint32_t total_duration_ms() const;  // loop x repeats
 
@@ -427,7 +428,7 @@ A negative position, from playing after a `seek` to before the start, is wrapped
 
 *A finite sequence's answer is its position clamped to 2^30 ms, about 12.4 days, either side of zero.* A finite sequence's position is absolute, since 1730 ms into a sequence that plays three 500 ms loops and then lands is not the same moment as 230 ms. But once it is far enough past the end, every pixel shows the landing color and every segment reports `finished()`, and once it is far enough before the start, every pixel shows the start color, so a value far out in either direction stands for all the ones beyond it. Clamping the answer is enough on its own, because the `int64_t` difference underneath cannot overflow on its way to the clamp. The Wipe recipe is the case that runs into it: its sequencer is never paused, because the landing color is what keeps the strip green, and after 12.4 days its playhead reads 2^30 for good. A sought position reads back exactly anywhere inside ±2^30, so a paused progress bar reads back what it set.
 
-What makes 2^30 exact is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment keeps any stagger under 2^23 ms, by its overflow guard on the default and a clamp on a replacement's offset. So 2^30 minus a stagger is always past every total and 2^30 plus one still fits in `int32_t`, and the same holds in mirror image below zero. That is also why the limit is a constant rather than `total_duration_ms()`: `Segment::finished()` asks whether the playhead *minus the segment's largest stagger* is past the total, so a playhead clamped at the total would leave every staggered segment short of finishing forever, and the sequencer cannot clamp at the total plus a stagger, since it does not know which segments read from it. The same 2^29 applies to one loop of an endless sequence, where it keeps the remainder plus any stagger inside `int32_t` too. The one thing the clamp can change is a start-color hold longer than 12 days, which it understates, and understating a hold costs a frame.
+What makes 2^30 exact is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment keeps any stagger under 2^23 ms, by its overflow guard on the default and a clamp on a replacement's offset. So 2^30 minus a stagger is always past every total and 2^30 plus one still fits in `int32_t`, and the same holds in mirror image below zero. That is also why the limit is a constant rather than `total_duration_ms()`: a pixel's playhead is the sequencer's *minus its stagger*, so a playhead clamped at the total would leave every staggered pixel short of its landing color forever, and its segment short of `finished()`, and the sequencer cannot clamp at the total plus a stagger, since it does not know which segments read from it. The same 2^29 applies to one loop of an endless sequence, where it keeps the remainder plus any stagger inside `int32_t` too. The one thing the clamp can change is a start-color hold longer than 12 days, which it understates, and understating a hold costs a frame.
 
 **There is one bit of state here, not a state machine.** A sequencer's playhead either follows the clock or it does not. The obvious extra states are all derivable and none of them earns storage:
 
@@ -527,11 +528,20 @@ public:
     void set_offset_fn(OffsetFn fn);
     void set_color_fn(ColorFn fn);                // nullptr restores the default
 
-    // True once every pixel here has passed the end of a finite sequence --
-    // a full stagger later than the sequencer's own playhead reaching the end.
-    // Narrower than "nothing here will change again", too: a sequencer that is
-    // not playing holds forever and is never finished. Nor is one with an
-    // OffsetFn installed, since its offsets are not the library's to know.
+    // True when the sequencer is playing a finite sequence and no pixel here
+    // will change again: every pixel's lookup, or its ColorFn, reports
+    // hold_forever. The hold is a binding contract, so this holds for any
+    // OffsetFn and any ColorFn; on the default steps it comes a full stagger
+    // after the sequencer's own playhead reaches the end.
+    //
+    // Narrower than "nothing here will change again" by the two conditions. A
+    // sequencer that is not playing holds forever and is never finished, and
+    // nor is one playing an endless sequence, so a static gradient drawn by a
+    // ColorFn is never removed: a finite sequence is how a ColorFn says it is
+    // meant to end. Pixels clipped off the strip still count.
+    //
+    // The scan stops at the first pixel still changing, so it runs in full only
+    // on a segment that has finished.
     bool finished(int64_t now_ms) const;
     template <wrapping_tick T> bool finished(T) const = delete;
 
@@ -561,6 +571,13 @@ private:
     friend class Strip;
     uint32_t paint(uint8_t* buffer, uint16_t pixel_count, uint8_t brightness,
                    int64_t now_ms) const;
+
+    // Steps 1 and 2 for one pixel, with the hold the lookup or ColorFn
+    // reported. paint and finished() both go through it, so what a segment
+    // paints and whether it has finished cannot disagree. paint then holds a
+    // sequencer that is not playing forever, which is why finished() asks
+    // here rather than paint.
+    Sample sample(int32_t playhead_ms, uint16_t index) const;
 
     uint16_t   first_ = 0;
     uint16_t   count_ = 0;
