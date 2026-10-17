@@ -139,9 +139,10 @@ struct Color {
 
     // The blend every transition already performs, exposed because a custom
     // ColorFn is the one place outside the library that needs it. Covers all
-    // channels, w included. t: 0 = a, 65535 = b. Works in the same linear
-    // 16-bit space the sequence does -- gamma is applied later, at the 8-bit
-    // conversion, so blending here is unaffected by it.
+    // channels, w included. t: 0 = a, 65535 = b. Works in the same 16-bit
+    // space the sequence does, the one colors are written in; gamma maps it to
+    // emitted light later, at the 8-bit conversion. So with gamma on, a blend's
+    // midpoint is halfway to the eye rather than halfway in light.
     static constexpr Color lerp(Color a, Color b, uint16_t t);
 };
 

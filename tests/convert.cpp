@@ -82,11 +82,10 @@ TEST_CASE("to_bytes at brightness 0 is black whatever the color") {
     }
 }
 
-TEST_CASE("to_bytes applies brightness before gamma, in linear space") {
-    /* Full scale at brightness 128 is 65535 * 128 / 255 = 32896 linear, top
-     * byte 128 -- and then gamma. The shortcut that scales the encoded byte
-     * would give 255 * 128 / 255 = 128 instead, which differs whenever gamma
-     * is on. */
+TEST_CASE("to_bytes applies brightness before gamma") {
+    /* Full scale at brightness 128 is 65535 * 128 / 255 = 32896, top byte 128,
+     * and then gamma. The shortcut that scales the encoded byte would give
+     * 255 * 128 / 255 = 128 instead, which differs whenever gamma is on. */
     uint8_t out[bytes];
     to_bytes(gray(65535), 128, out);
     for (uint8_t byte : out) {
@@ -96,7 +95,7 @@ TEST_CASE("to_bytes applies brightness before gamma, in linear space") {
     CHECK(expected(128) != 128);
 #endif
 
-    /* Every brightness scales a full-scale channel to the same linear value. */
+    /* Every brightness scales a full-scale channel before it is encoded. */
     for (uint32_t level = 0; level <= 255; ++level) {
         CAPTURE(level);
         to_bytes(gray(65535), static_cast<uint8_t>(level), out);

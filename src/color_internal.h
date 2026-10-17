@@ -17,10 +17,13 @@ namespace stripseq {
 
 /* Writes c as 3 bytes, or 4 in an RGBW build, in r, g, b, w order -- the
  * driver owns the wire order. Brightness scales each channel while it is still
- * 16-bit and linear, and only then is it gamma-encoded down to 8 bits: scaling
- * after the encoding would make brightness non-linear and shift hue as the
- * channels crush toward zero at different rates. 255 leaves the color as it is,
- * 0 gives black. */
+ * 16-bit, in the space colors are written in, and only then does gamma map it
+ * to the 8-bit emitted level. That makes the knob even to the eye: 128 looks
+ * half as bright. The price is at the dim end, which needs levels below one
+ * byte: channels round to 0 at different knob settings, so hue drifts, and
+ * below 22 even full white is black. The reasoning is in
+ * docs/IMPLEMENTATION-PLAN.md, Phase 1. 255 leaves the color as it is, 0 gives
+ * black. */
 void to_bytes(Color c, uint8_t brightness, uint8_t* out);
 
 }  // namespace stripseq

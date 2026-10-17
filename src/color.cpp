@@ -51,8 +51,8 @@ static_assert(gamma.entry[0] == 0 && gamma.entry[255] == 255,
 /* The top byte of a channel, gamma-encoded when the build asks for it. The
  * eight bits dropped here are the ones that kept blending accurate; the wire
  * carries eight, so they are spent by design. */
-uint8_t encode(uint16_t linear) {
-    const auto top = static_cast<uint8_t>(linear >> 8);
+uint8_t encode(uint16_t channel) {
+    const auto top = static_cast<uint8_t>(channel >> 8);
 #if STRIPSEQ_GAMMA
     return gamma.entry[top];
 #else

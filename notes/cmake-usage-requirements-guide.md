@@ -47,6 +47,8 @@ The useful way to read a line is as a sentence about reach. `target_include_dire
 Four properties carry the keywords, and they are the four that matter:
 
 - **Include directories** — `target_include_directories`. Almost always `PUBLIC` for a library with headers: consumers compile those headers, so they need the path. This repo's `include/` is the prefixed directory that makes consumers write `#include <stripseq/strip.h>`.
+
+Include directories are also the nearest thing CMake has to real access control, because a header nobody's include path reaches cannot be included. This repo uses that for its one internal header. `to_bytes()`, the conversion `Strip` calls, is declared in `src/color_internal.h` rather than under `include/`: the library's sources include it with quotes and find it beside them with no include directory at all, so it never becomes part of the library's interface. The tests need it too, and get it by the narrowest edge there is — `target_include_directories(${exe} PRIVATE ${PROJECT_SOURCE_DIR}/src)` on each test executable, in `cmake/stripseq_variant.cmake`. Putting `src/` on the library as `PUBLIC` would have worked as well, and handed every consumer the internal header along with it.
 - **Compile definitions** — `target_compile_definitions`. This is the interesting one, because a definition can change what the headers *mean*. §6 is entirely about that.
 - **Compile features** — `target_compile_features`. A language-level requirement rather than a flag; §4.
 - **Linked libraries** — `target_link_libraries`. `PUBLIC` here means "and my consumers link it too", which is how a dependency of a dependency reaches the final executable without anyone naming it twice.

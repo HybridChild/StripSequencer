@@ -100,7 +100,7 @@ uint32_t distance(uint16_t a, uint16_t b) {
 
 }  // namespace
 
-TEST_CASE("hsv moves smoothly through every hue, the wrap included") {
+TEST_CASE("hsv is continuous at the sextant boundaries") {
     /* One hue step moves the position by 6 of 65535, so a channel moves by at
      * most 6, plus one for the truncation on either side. */
     constexpr uint32_t bound = 7;

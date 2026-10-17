@@ -2,7 +2,7 @@
 
 *A from-first-principles guide to exact integer arithmetic on a small target: signed remainders, overflow in intermediates, rounding that stays monotonic, and the division the chip cannot do.*
 
-This is a teaching document, not project documentation. It explains the handful of ways integer arithmetic goes wrong when there is no floating point to hide behind, and the few habits that make it go right: fold a remainder, negate in unsigned, size the intermediate, floor once, and divide by a power of two. The running example is the arithmetic at the heart of this repository — `Sequence::at()`, which maps a signed playhead onto a looping timeline; `Color::lerp()`, which blends two 16-bit colors; the easing curves behind every fade; and the length check in `SequenceBuilder::build()`. It assumes [`cross-compiling-guide.md`](cross-compiling-guide.md) §6 for reading undefined symbols with `nm`, and nothing else beyond C++ itself.
+This is a teaching document, not project documentation. It explains the handful of ways integer arithmetic goes wrong when there is no floating point to hide behind, and the few habits that make it go right: fold a remainder, negate in unsigned, size the intermediate, floor once, and divide by a power of two — and, when the function is irrational, compare instead of computing. The running example is the arithmetic at the heart of this repository — `Sequence::at()`, which maps a signed playhead onto a looping timeline; `Color::lerp()`, which blends two 16-bit colors; the easing curves behind every fade; the length check in `SequenceBuilder::build()`; and the generator of the gamma table in `src/color.cpp`. It assumes [`cross-compiling-guide.md`](cross-compiling-guide.md) §6 for reading undefined symbols with `nm`, and nothing else beyond C++ itself.
 
 **The shape of this document:**
 
@@ -10,10 +10,11 @@ This is a teaching document, not project documentation. It explains the handful 
 - **§2–§3** — signed numbers: the remainder that comes out negative, and the one value with no positive twin.
 - **§4** — overflow in intermediates, including the overflow nothing will warn you about.
 - **§5–§6** — rounding: why one floor stays monotonic and two can step backwards, and how a division becomes a shift.
-- **§7** — testing arithmetic exhaustively, because 65,536 inputs is nothing.
-- **§8** — the synthesis, as a checklist.
-- **§9** — five exercises.
-- **§10–§11** — the model in a paragraph, and where to go next.
+- **§7** — rounding a function you cannot compute, by comparing instead.
+- **§8** — testing arithmetic exhaustively, because 65,536 inputs is nothing.
+- **§9** — the synthesis, as a checklist.
+- **§10** — six exercises.
+- **§11–§12** — the model in a paragraph, and where to go next.
 
 ---
 
@@ -29,7 +30,7 @@ The library has no floating point anywhere, by rule — on a Cortex-M4 built sof
 | 32-bit divide | one instruction (`UDIV`), a few cycles | `__aeabi_uidiv` |
 | 64-bit divide | `__aeabi_uldivmod` | `__aeabi_uldivmod` |
 
-The row that shapes this library is the last one. A 64-bit multiply on an M4 is inline code, but a 64-bit divide is a call into libgcc that loops over the bits, and the per-pixel path runs once per pixel per frame. The rule that falls out is: **use 64 bits for products when you must, and never divide one.** Nothing in the compiler enforces it — a 64-bit division compiles exactly like a 32-bit one — so the evidence is the same as for floating point, an undefined symbol in the object file (§9, Exercise 3).
+The row that shapes this library is the last one. A 64-bit multiply on an M4 is inline code, but a 64-bit divide is a call into libgcc that loops over the bits, and the per-pixel path runs once per pixel per frame. The rule that falls out is: **use 64 bits for products when you must, and never divide one.** Nothing in the compiler enforces it — a 64-bit division compiles exactly like a 32-bit one — so the evidence is the same as for floating point, an undefined symbol in the object file (§10, Exercise 3).
 
 Two facts about C++ itself complete the budget. **Integer promotion:** any arithmetic on types narrower than `int` happens in `int`, so two `uint16_t` values are multiplied as *signed* 32-bit integers, and `65535 * 65535` overflows — undefined behaviour from two unsigned operands. **Unsigned wrap:** arithmetic on `uint32_t` is defined to be modulo 2³², so it never traps and never warns. The first is why every product in this library starts with an explicit `uint32_t{x}`; the second is §4's subject.
 
@@ -45,7 +46,7 @@ local = ((p % L) + L) % L;
 
 `p % L` lies in `(-L, L)`; adding `L` moves it to `(0, 2L)`, and the second `%` brings it to `[0, L)`. No term can overflow as long as `2L` fits in an `int32_t`, which the builder's 2²⁹ ms limit guarantees.
 
-The fold is easy to get almost right, and the interesting thing is which playheads catch which almost-right version. For `L = 1000` (§9, Exercise 1):
+The fold is easy to get almost right, and the interesting thing is which playheads catch which almost-right version. For `L = 1000` (§10, Exercise 1):
 
 | Version | `p = -1` | `p = -1000` | `p = INT32_MIN` |
 | --- | --- | --- | --- |
@@ -78,7 +79,7 @@ Most overflow bugs are not in the result, which fits, but in a value computed on
 x + (y - x) * t / 65535
 ```
 
-and it is wrong twice. Promotion makes `y - x` and the product signed `int`, so `(65535 - 0) * 65535` overflows: undefined behaviour at full scale, in the most common blend there is. And even where it wraps "harmlessly", the end it lands on is 65534 rather than 65535 (§9, Exercise 2). The library writes it as a weighted sum instead:
+and it is wrong twice. Promotion makes `y - x` and the product signed `int`, so `(65535 - 0) * 65535` overflows: undefined behaviour at full scale, in the most common blend there is. And even where it wraps "harmlessly", the end it lands on is 65534 rather than 65535 (§10, Exercise 2). The library writes it as a weighted sum instead:
 
 ```cpp
 (uint32_t{x} * (65535u - t) + uint32_t{y} * t) / 65535u
@@ -100,7 +101,7 @@ The ratio barely moves. What is lost is resolution in `elapsed`, and the loop st
 
 **Validation: when the check itself wraps.** `SequenceBuilder::build()` rejects anything over 2²⁹ ms in total. The total is a sum of up to eight `uint32_t` durations times a `uint16_t` repeat count, and in `uint32_t` both operations wrap silently: 2¹⁷ ms repeated 2¹⁵ times is 2³², which wraps to exactly **0**, and a zero-length total passes a "too long?" check with room to spare. So the check is done in `uint64_t`, with a written bound — at most 8 × (2³² − 1) × (2¹⁶ − 1), under 2⁵¹ — showing that *it* cannot wrap. A multiply in 64 bits is cheap (§1), and this one runs once per build, not per pixel.
 
-The last example is the important one, because unsigned wrap is *defined*. UBSan reports the signed overflow in the naive lerp; it says nothing about the wrapped total, because there is nothing undefined to report. The only defence is a test at the boundary that wrapping would cross — which is what the "totals that overflow `uint32_t`" case in `tests/sequence.cpp` is, and §9 Exercise 5 shows it catching exactly this mistake.
+The last example is the important one, because unsigned wrap is *defined*. UBSan reports the signed overflow in the naive lerp; it says nothing about the wrapped total, because there is nothing undefined to report. The only defence is a test at the boundary that wrapping would cross — which is what the "totals that overflow `uint32_t`" case in `tests/sequence.cpp` is, and §10 Exercise 5 shows it catching exactly this mistake.
 
 ## 5. One floor stays monotonic; two can step backwards
 
@@ -119,7 +120,7 @@ const uint32_t cube = sq * t / 65535;
 return 3 * sq - 2 * cube;
 ```
 
-Each floor is a little low, by a different amount, and the second is subtracted. When `sq` happens to stay put across a step of `t` while `cube` ticks up, the result drops. Checked over every input, this version steps backwards **3,655 times**, the first at `t = 1639`, where it goes from 120 to 118 (§9, Exercise 4). Both ends are exact, the curve looks right on a plot, and it flickers.
+Each floor is a little low, by a different amount, and the second is subtracted. When `sq` happens to stay put across a step of `t` while `cube` ticks up, the result drops. Checked over every input, this version steps backwards **3,655 times**, the first at `t = 1639`, where it goes from 120 to 118 (§10, Exercise 4). Both ends are exact, the curve looks right on a plot, and it flickers.
 
 ## 6. Turning a division into a shift
 
@@ -137,7 +138,25 @@ return static_cast<uint16_t>(y < full ? y : full);
 
 The progress loop in §4 is the same idea in another form: instead of dividing by a number the hardware cannot handle, scale the problem until it is one it can.
 
-## 7. Testing arithmetic exhaustively
+## 7. Rounding a function you cannot compute
+
+Some curves are not a ratio of integers at all. The gamma table in `src/color.cpp` needs, for each of 256 inputs, `round(255 · (in / 255)^2.5)` — a fractional power, which is irrational for almost every input. There is no floating point to compute it with, not even at compile time, and an integer square root followed by a division would floor twice, the trap in §5.
+
+The way out is to stop computing the value and ask a yes-or-no question about it instead. Rounding to nearest is a pair of comparisons: `n = round(y)` exactly when `n − ½ ≤ y < n + ½`. So the answer is the largest `n` whose lower edge is still at or below `y`, which a loop can find by asking, for each candidate, whether `n + ½ ≤ y`. That question has a root in it, and the root can be squared away, because both sides are non-negative and squaring preserves their order:
+
+```
+n + ½ ≤ 255 · (in/255)^2.5
+⇔  (2n + 1)² / 4 ≤ in⁵ / 255³        square both sides, collect 255s
+⇔  (2n + 1)² · 255³ ≤ 4 · in⁵         multiply out the denominators
+```
+
+Every term is now an integer, and the question has an exact answer. That is the whole of `make_gamma_table()`: for each input, count up while `(2n + 1)² · 255³ ≤ 4 · in⁵`. Checked against `double` over all 256 inputs it disagrees nowhere, and the same search without the halves — `(n + 1)² · 255³ ≤ in⁵`, which finds the floor — is wrong at 111 of them (§10, Exercise 6).
+
+Two costs remain, and both are §1 and §4 again. **The comparison has to fit.** `4 · 255⁵` is about 4.3 × 10¹², which needs `uint64_t`, and the bound is worth writing beside the code as for any intermediate. **The exponent decides whether it can fit at all.** An exponent `p/q` becomes a comparison of `q`-th powers: 2.5 = 5/2 needs squares and `in⁵`, but 2.2 = 11/5 needs fifth powers and `in¹¹`, and 255¹¹ is about 3 × 10²⁶ — far past 2⁶⁴. 2.8 = 14/5 is worse. That is part of why the library's curve is 2.5: of the exponents people actually use for LEDs, it is the one this method reaches in 64 bits.
+
+Nothing here runs on the chip. The generator is `consteval` (see [`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4), so the 64-bit products and the loop exist only inside the compiler, and the target holds 256 finished bytes.
+
+## 8. Testing arithmetic exhaustively
 
 Every curve here has 65,536 inputs. Checking all of them takes milliseconds, so there is no reason to pick samples, and a strong reason not to: the two-floor smoothstep in §5 passes at `t = 0`, `32768` and `65535`, and at nearly any handful of points anyone would think to choose.
 
@@ -148,7 +167,7 @@ So the tests state *properties* and check them over the whole domain:
 
 Where the domain is too large to sweep — a signed 32-bit playhead — the tests take the boundary set instead: zero, ±1, each side of every step edge, `-L`, and `INT32_MIN`/`INT32_MAX`. §2 shows why the boundary set has to include the values that look silly.
 
-## 8. The checklist
+## 9. The checklist
 
 - **Every product of narrow types starts with a cast** to the width it needs: `uint32_t{x} * t`, never `x * t`.
 - **Every remainder of a signed value is folded**: `((p % L) + L) % L`.
@@ -156,14 +175,15 @@ Where the domain is too large to sweep — a signed 32-bit playhead — the test
 - **Every intermediate is bounded in writing**: a comment that names the largest value it can take and the type that holds it.
 - **Every check that guards a limit is done in a type that cannot wrap** below the limit's inputs.
 - **Every rounded curve is one floor** of a function that is monotonic over its domain.
+- **Every irrational value is rounded by comparison**, with the root squared away, never by an integer root and a second division.
 - **No 64-bit division on a per-pixel path**: rescale until the divisor is a power of two, and confirm with `nm -u`.
 - **Every curve is tested over its whole domain**, and every signed input over its boundary set.
 
 ---
 
-## 9. Exercises
+## 10. Exercises
 
-Five. The first four are small standalone programs; the fifth breaks the library on purpose.
+Six. Exercise 5 breaks the library on purpose; the others are small standalone programs.
 
 ```sh
 mkdir -p /tmp/stripseq-lab && cd /tmp/stripseq-lab
@@ -284,7 +304,7 @@ echo 'unsigned f(unsigned a, unsigned b) { return a / b; }' |
 
 ### Exercise 4 — Two floors step backwards
 
-*Demonstrates §5 and §7.*
+*Demonstrates §5 and §8.*
 
 ```cpp
 // smooth.cpp
@@ -361,17 +381,75 @@ tests/sequence.cpp:485: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::re
 
 **Proves:** the compiler, the sanitizers and the ordinary tests all accept a check that wraps. Only a test whose inputs are chosen to cross 2³² notices — so the bound has to be written down to know which inputs those are.
 
+### Exercise 6 — Round a root without taking it
+
+*Demonstrates §7.*
+
+```cpp
+// root.cpp
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+
+constexpr uint64_t cube = uint64_t{255} * 255 * 255;
+
+// round(255 * (in / 255)^2.5): the largest n with n - 1/2 <= sqrt(in^5 / 255^3).
+uint64_t rounded(uint64_t in) {
+    const uint64_t limit = 4 * in * in * in * in * in;
+    uint64_t n = 0;
+    while (n < 255 && (2 * n + 1) * (2 * n + 1) * cube <= limit) ++n;
+    return n;
+}
+
+// The same search with the halves left out: the largest n with n <= sqrt(...).
+uint64_t floored(uint64_t in) {
+    const uint64_t limit = in * in * in * in * in;
+    uint64_t n = 0;
+    while (n < 255 && (n + 1) * (n + 1) * cube <= limit) ++n;
+    return n;
+}
+
+int main() {
+    int round_off = 0, floor_off = 0;
+    for (uint64_t in = 0; in < 256; ++in) {
+        const long ref = std::lround(255.0 * std::pow(in / 255.0, 2.5));
+        round_off += rounded(in) != static_cast<uint64_t>(ref);
+        floor_off += floored(in) != static_cast<uint64_t>(ref);
+    }
+    std::printf("rounded disagrees with double at %d of 256 entries\n", round_off);
+    std::printf("floored disagrees with double at %d of 256 entries\n", floor_off);
+    std::printf("in=128: rounded %llu, floored %llu, double %.3f\n",
+                (unsigned long long)rounded(128), (unsigned long long)floored(128),
+                255.0 * std::pow(128 / 255.0, 2.5));
+}
+```
+
+```sh
+c++ -std=c++20 -O2 root.cpp -o root && ./root
+```
+
+```
+rounded disagrees with double at 0 of 256 entries
+floored disagrees with double at 111 of 256 entries
+in=128: rounded 46, floored 45, double 45.521
+```
+
+Then change `rounded` to compute gamma 2.2 the same way — fifth powers of `2n + 1`, `in` to the eleventh — and look at what `limit` holds for `in = 255`.
+
+**Proves:** an irrational value can be rounded exactly with nothing but integer multiplies, because rounding is a comparison and a comparison survives squaring. The halves are what make it round rather than floor, and the exponent decides whether the comparison fits in 64 bits at all.
+
 ---
 
-## 10. The model in one paragraph
+## 11. The model in one paragraph
 
-Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back with `((p % L) + L) % L`, and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. Every curve has only 65,536 inputs, so the properties are tested over all of them.
+Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back with `((p % L) + L) % L`, and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. A value that is irrational, like a fractional power, is rounded by asking a comparison rather than computing it: `n + ½ ≤ y` squares into a test on integers, exact as long as the products fit, which is what limits the exponents within reach. Every curve has only 65,536 inputs, so the properties are tested over all of them.
 
-## 11. Where to go next
+## 12. Where to go next
 
 - **`src/sequence.cpp`** — `progress()`, `ease()` and `Sequence::at()`, about a hundred lines in which every section of this guide appears once, with the bound or the argument written beside it.
 - **`include/stripseq/color.h`** — `Color::lerp()`, and `Color::rgb8()`'s ×257, the same "exact at both ends" argument applied to widening 8 bits to 16.
-- **`tests/color.cpp` and `tests/sequence.cpp`** — §7's sweeps and boundary sets, as written.
+- **`tests/color.cpp` and `tests/sequence.cpp`** — §8's sweeps and boundary sets, as written.
+- **`src/color.cpp`** — `make_gamma_table()`, §7 in twenty lines, and **[`gamma-and-color-guide.md`](gamma-and-color-guide.md)** for why the table exists and why its exponent is a choice about the eye.
 - **[`cross-compiling-guide.md`](cross-compiling-guide.md) §5–§6** — `nm -u` as the general instrument for costs the compiler does not report, of which the 64-bit division is one more.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md)** — the other half of what Phase 2 taught: the same builder, evaluated by the compiler instead of the chip.
 - **The ARM run-time ABI (`IHI0043`, "Run-time ABI for the Arm Architecture")** — the specification that names `__aeabi_uldivmod`, `__aeabi_uidiv` and the rest, and so the list of what to grep for.
