@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
  * The bench strip: 11 SK6812-class RGBW pixels (ILPL-K501) on I2S3, data out
  * on PD6. Only the data pin is routed; the bit and word clocks run inside the
  * peripheral and never need to leave the chip.

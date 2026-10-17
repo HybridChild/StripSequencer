@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Color: sixteen bits per channel, with white present only when the build asks
  * for it.
  *

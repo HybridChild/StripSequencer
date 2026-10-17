@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Sequence::at() -- the function every other part of the library exists to
  * call -- and the easing curves behind it.
  */

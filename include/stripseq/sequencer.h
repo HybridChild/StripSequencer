@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Sequencer: the playhead, and the one bit of state around it -- whether the
  * playhead follows the clock or stands still.
  *

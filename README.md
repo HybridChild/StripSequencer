@@ -5,6 +5,7 @@ A C++20 library for animating WS2812-style addressable LED strips on microcontro
 [![CI](https://github.com/HybridChild/StripSequencer/actions/workflows/ci.yml/badge.svg)](https://github.com/HybridChild/StripSequencer/actions/workflows/ci.yml)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://github.com/HybridChild/StripSequencer)
 [![Zephyr module](https://img.shields.io/badge/Zephyr-module-blueviolet)](zephyr/module.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue)](LICENSE)
 
 ---
 
@@ -174,3 +175,7 @@ tools/footprint/footprint.sh       # flash and object sizes, Cortex-M0 and M4
 ```
 
 The host suite builds the whole library five times, once per configuration that changes compiled behaviour plus one at tight capacities, and runs every test in each. The cross-check compiles the library for bare-metal Cortex-M with only the two headers Zephyr's minimal C++ library provides, and fails if an object calls a run-time helper outside a short allowlist: a soft-float routine, `operator new`, anything from libc, or a division the design does not account for. CI runs the host suite on gcc and clang, the cross-check, and the Zephyr sample in both channel configurations.
+
+## Licence
+
+Copyright 2026 Esben Dueholm Nørgaard. Licensed under the [Apache License, Version 2.0](LICENSE), the licence Zephyr itself uses, so a Zephyr application that includes this library takes on no obligations it did not already have.

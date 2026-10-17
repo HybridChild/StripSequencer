@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* The showcase: what the library can make a strip do, one animation per press
  * of the user button.
  *

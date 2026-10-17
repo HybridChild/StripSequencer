@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Segment: the only part of the design that knows pixels exist.
  *
  * A run of pixels, the sequencer driving them, and the pixel_delay that

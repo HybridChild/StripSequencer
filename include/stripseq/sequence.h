@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Sequence: pure description, and the one question the whole design is built
  * around -- given a playhead, what color is here, and how long does it stay?
  *

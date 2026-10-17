@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* The adapter between the library's neutral buffer and a Zephyr led_strip
  * driver, shared by every sample that drives the strip.
  *

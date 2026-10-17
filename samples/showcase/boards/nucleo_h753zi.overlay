@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
  * The bench strip, described once in strip_demo's overlay: both samples drive
  * the same hardware, and the reasons for each value live beside it there.
  */

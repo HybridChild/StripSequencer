@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* The parts of Color that are not constexpr: the gamma table and the
  * conversion into the 8-bit buffer the hardware wants.
  */

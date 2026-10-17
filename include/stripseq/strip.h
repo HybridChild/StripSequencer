@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Strip: the segment list and the frame loop.
  *
  * The strip owns its segments; the pixel buffer is yours. Rendering is a pure

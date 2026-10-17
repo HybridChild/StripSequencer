@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* What one frame costs: Strip::render() over a 60-pixel strip, in CPU cycles,
  * for the scenarios described in this sample's README.md, printed once at
  * boot.

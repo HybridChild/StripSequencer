@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Sequencer: deriving the playhead from a clock reading. */
 
 #include "stripseq/sequencer.h"

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* The bring-up app: the Zephyr side of the library, driving the bench strip
  * through the stages described in this sample's README.md.
  *

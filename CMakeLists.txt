@@ -98,6 +98,7 @@ if(STRIPSEQ_BUILD_TESTS)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_compile_fail.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_cookbook_check.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_spdx_check.cmake)
 
     # The tests that must fail to compile, run here at configure time; see the
     # file for why they cannot be test cases.
@@ -106,6 +107,10 @@ if(STRIPSEQ_BUILD_TESTS)
     # That the cookbook in docs/COOKBOOK.md and the one the tests compile are
     # the same text; see the file for how it compares them.
     stripseq_add_cookbook_check()
+
+    # That every library and sample source carries its copyright and licence
+    # header; see the file for why those and no others.
+    stripseq_add_spdx_check()
 
     # Five, not four. The cross product of the two behavioural macros is four,
     # and `default` is one of them -- called with no definitions at all, so that

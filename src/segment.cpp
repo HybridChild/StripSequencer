@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Segment: the per-pixel loop, the stagger, and the finished() question. */
 
 #include "stripseq/segment.h"

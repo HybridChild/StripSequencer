@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Build-time configuration: four knobs, all overridable from the build system.
  *
  * Every macro is #ifndef-guarded, which is what lets the Zephyr module in
