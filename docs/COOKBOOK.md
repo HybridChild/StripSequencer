@@ -243,8 +243,6 @@ s.set_pixel_delay_q8(spread(3000, kPixels));
 strip.add(s);
 ```
 
-The only difference between a rotating rainbow and a frozen one is whether `play()` or `seek()` was called.
-
 Every recipe names its sequence at namespace scope, because a sequencer refers to what it loads and the sequence has to outlive the call. `build_const()` makes each definition a constant expression, so the sequence is constant-initialised into flash like the `colors::` palette, nothing runs before `main`, no RAM is spent on it, and a malformed one fails to compile at the definition rather than at its use. The rainbow is `inline constexpr` rather than `static constexpr` because two recipes share it, and a shared constant belongs in a header, where `inline` makes it one object at one address in every file that includes it. Not a `static constexpr` local inside the function that loads it: that would be constant-initialised too, but it looks exactly like a function-local static with a dynamic initialiser, which costs a guard and a lock.
 
 **Wipe** — green sweeping down a dark strip and staying.
@@ -289,7 +287,7 @@ void set_progress(uint8_t percent) {
 }
 ```
 
-No meter code exists anywhere in the library, and the pixel straddling the boundary lands inside the 10 ms fade and comes out part-lit.
+Why the edge comes out smooth is in [DESIGN.md's cookbook](DESIGN.md#cookbook).
 
 **Two halves, different animations** — two segments, two sequencers.
 
@@ -311,9 +309,9 @@ strip.add(left);
 strip.add(right);
 ```
 
-The picture is not a reflection. Each segment counts its index from its own first pixel, so the two pixels k from the centre are 14 × 20 = 280 ms apart, and no pair of delays changes that. A mirror flips the index instead, with an `OffsetFn` on the right half returning `((count - 1 - index) * delay_q8) >> 8`, and both halves set to a delay of 20.
+Here the two pixels k from the centre are 14 × 20 = 280 ms apart, which is why [the picture is not a reflection](DESIGN.md#cookbook). A mirror is an `OffsetFn` on the right half returning `((count - 1 - index) * delay_q8) >> 8`, with both halves set to a delay of 20.
 
-**Twinkle** — the only recipe that replaces a default.
+**Twinkle** — every pixel flashing at its own moment, through a replaced step 1.
 
 ```cpp
 // pixel_delay is the span the offsets scatter across, here 1980 ms.
@@ -368,8 +366,6 @@ void raise_alert() {
     strip.add(Segment(0, kPixels, alert_seq));      // added last, so painted on top
 }
 ```
-
-The breathe is never touched. It keeps running underneath for as long as the alert covers it, and reappears exactly where it would have been.
 
 Removal is the interesting half, and all the caller writes is one line in the frame loop:
 

@@ -266,7 +266,7 @@ Every one of these uses the same mechanism, and all but the last differ only in 
 
 **Static gradient** — the same sequence and the same `pixel_delay` as the rainbow, but the sequencer seeked to 0 and never played. The spread is there; nothing moves.
 
-**Wipe** — finite, `start_color` black, a 200 ms fade to green, `landing_color` green. With `pixel_delay = 30 ms`, green sweeps down a dark strip and stays. The segment reports finished once the last pixel has passed the end — which is a full stagger later than the sequencer reaching the end of its timeline.
+**Wipe** — finite, `start_color` black, a 200 ms fade to green, `landing_color` green. With `pixel_delay = 30 ms`, green sweeps down a dark strip and stays, and the segment [finishes a full stagger after its sequencer does](#the-four-building-blocks).
 
 **Progress bar** — this one is the least obvious and the best demonstration that the mechanism is doing real work. Take a finite sequence with `start_color` black, a single 10 ms linear fade to the bar color, and `landing_color` the bar color. Never play the sequencer, and set `pixel_delay = 10 ms`. Now `seek(value × pixel_count × 10 ms)`.
 
