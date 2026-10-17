@@ -131,7 +131,7 @@ note: 'blink' was not declared 'constexpr'
 
 Adding `const` does not rescue it. The language's old exception — a `const` variable of *integral or enumeration* type with a constant initialiser is usable in constant expressions — still applies to `constinit const int`, which is why the misconception survives. It does not extend to class types.
 
-So the two keywords split the territory cleanly. A `Sequence` table never changes after the compiler builds it, so it wants `constexpr`: in flash, and readable by `static_assert`. A `Strip` is the opposite — its segment list and brightness change constantly at run time, so it cannot be `const`, but it must still not run a constructor before `main`. That is exactly `constinit`, and it is how the API sketch declares one:
+So the two keywords split the territory cleanly. A `Sequence` table never changes after the compiler builds it, so it wants `constexpr`: in flash, and readable by `static_assert`. A `Strip` is the opposite — its segment list and brightness change constantly at run time, so it cannot be `const`, but it must still not run a constructor before `main`. That is exactly `constinit`, and it is how the cookbook declares one:
 
 ```cpp
 static uint8_t buffer[11 * Strip::bytes_per_pixel];
@@ -447,5 +447,4 @@ An object with static storage gets its value either from the image — written t
 - **`include/stripseq/sequence.h`** — `SequenceBuilder::build_const()` and the `invalid_sequence` namespace above it, about forty lines that use §3–§4 in full.
 - **`tests/sequence.cpp`, "Compile time"** — a `constexpr Sequence` read back by `static_assert`, and `build()`'s verdict read inside a `static_assert` lambda.
 - **[`testing-guide.md`](testing-guide.md) §7** — how the failure half of `build_const()` is tested, when the test is a file that must not compile.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — where "`.init_array` is empty and no `__cxa_guard` symbol appears" becomes a CI check instead of an exercise.
 - **Zephyr's `kernel/init.c:256–315`** — `z_static_init_gnu()` and the place in `bg_thread_main()` where it runs, relative to every init level around it.

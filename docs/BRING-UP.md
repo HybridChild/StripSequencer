@@ -1,6 +1,6 @@
 # StripSequencer — bench bring-up
 
-How the library meets the bench hardware, and in what order to look. The sample in [`samples/strip_demo/`](../samples/strip_demo/) is the adapter from [API-SKETCH.md](API-SKETCH.md#the-zephyr-adapter) made real; this note is what to do with it.
+How the library meets the bench hardware, and in what order to look. The sample in [`samples/strip_demo/`](../samples/strip_demo/) is the platform side the library leaves out — the frame loop, the clock, the channel permute and the strip update; this note is what to do with it.
 
 ## The bench
 

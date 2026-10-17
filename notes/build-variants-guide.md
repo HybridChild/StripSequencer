@@ -35,7 +35,7 @@ The line between the two is not "does it affect behaviour" — all four do. It i
 
 The reflex when reading `#if STRIPSEQ_WHITE_CHANNEL` in a modern C++ codebase is that it should have been a template parameter. For this particular knob, it could not have been.
 
-A template parameter can change a value, an algorithm, even a base class — but it cannot add a member to a type that other, non-template types embed by value. Making `Color<W>` a template means `Step<W>`, `Sequence<W>`, `Sample<W>`, `Segment<W>` and `Strip<W>` all follow, because each holds a `Color` directly, and then no two of them can be mixed and the parameter has infected the entire public surface. The macro puts the same decision in one place at the cost of one build per setting — which is what the rest of this guide is about. The longer argument, including why the two *capacity* macros are macros as well when they did not have to be, is in `docs/API-SKETCH.md`, "Build-time configuration".
+A template parameter can change a value, an algorithm, even a base class — but it cannot add a member to a type that other, non-template types embed by value. Making `Color<W>` a template means `Step<W>`, `Sequence<W>`, `Sample<W>`, `Segment<W>` and `Strip<W>` all follow, because each holds a `Color` directly, and then no two of them can be mixed and the parameter has infected the entire public surface. The macro puts the same decision in one place at the cost of one build per setting — which is what the rest of this guide is about. The longer argument, including why the two *capacity* macros are macros as well when they did not have to be, is beside the macros themselves, in `include/stripseq/config.h`.
 
 ## 3. One compiled artifact per combination
 
@@ -206,5 +206,5 @@ Build-time configuration comes in two kinds, and conflating them is what makes b
 
 - **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §6–§7** — the failure mode this whole arrangement is defending against, and why it needs a check whose expectation comes from outside the mechanism.
 - **[`testing-guide.md`](testing-guide.md) §5** — the direct cost of §3: the suite compiles once per variant, and what that means for choosing a framework.
-- **`docs/API-SKETCH.md`, "Build-time configuration"** — the reference half of §2: why each of the four knobs is a macro, including the two that had a genuine choice.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 0** — where the five calls were decided, and the Zephyr module in Phase 6 that turns `CONFIG_STRIPSEQ_*` into the same `-D` flags.
+- **`include/stripseq/config.h`** — the reference half of §2: why each of the four knobs is a macro, including the two that had a genuine choice.
+- **The root `CMakeLists.txt` and `zephyr/CMakeLists.txt`** — the five `stripseq_add_variant` calls with the reason there are five, and the Zephyr module that turns `CONFIG_STRIPSEQ_*` into the same `-D` flags.

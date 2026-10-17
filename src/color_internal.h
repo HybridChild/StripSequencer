@@ -21,9 +21,8 @@ namespace stripseq {
  * to the 8-bit emitted level. That makes the knob even to the eye: 128 looks
  * half as bright. The price is at the dim end, which needs levels below one
  * byte: channels round to 0 at different knob settings, so hue drifts, and
- * below 22 even full white is black. The reasoning is in
- * docs/IMPLEMENTATION-PLAN.md, Phase 1. 255 leaves the color as it is, 0 gives
- * black. */
+ * below 22 even full white is black. notes/gamma-and-color-guide.md works
+ * through the trade. 255 leaves the color as it is, 0 gives black. */
 void to_bytes(Color c, uint8_t brightness, uint8_t* out);
 
 }  // namespace stripseq

@@ -1,9 +1,9 @@
 /* The cookbook, compiled and run: the acceptance suite.
  *
- * Every recipe from API-SKETCH.md's "The cookbook as code" appears here
- * verbatim, and cmake/stripseq_cookbook_check.cmake fails the build's tests if
- * one drifts from the sketch. A recipe that needs an edit to compile is a
- * finding about the sketch, never a reason to edit the copy.
+ * Every recipe under "The recipes" in docs/COOKBOOK.md appears here verbatim,
+ * and cmake/stripseq_cookbook_check.cmake fails the build's tests if one
+ * drifts from the document. A recipe that needs an edit to compile is a
+ * finding about the document, never a reason to edit the copy.
  *
  * The recipes are fragments, so the harness supplies only what they leave out:
  * a now() reading a fake clock, each recipe's declarations at file scope, and

@@ -79,7 +79,7 @@ add_test( [==[rgbw:color and step layout follow the white-channel setting]==]
 
 That is the whole magic: an ordinary `add_test`, with an ordinary command line, generated rather than typed. The `TEST_PREFIX "${name}:"` this repo passes is prepended to the CTest name only — the `--test-case=` filter still carries the case's real name, because that is what the binary understands.
 
-Two consequences follow from *when* it runs. Because listing happens at build time, a newly added test case appears in `ctest` only after a build — not after a mere reconfigure. And because it runs the binary, discovery needs a binary that can run on the build machine: a cross-compiled test suite cannot be discovered this way, which is one more reason this project's tests are host tests (`docs/IMPLEMENTATION-PLAN.md` makes that argument for the library as a whole).
+Two consequences follow from *when* it runs. Because listing happens at build time, a newly added test case appears in `ctest` only after a build — not after a mere reconfigure. And because it runs the binary, discovery needs a binary that can run on the build machine: a cross-compiled test suite cannot be discovered this way, which is one more reason this project's tests are host tests.
 
 ## 5. Why the suite is compiled five times
 
@@ -471,7 +471,6 @@ A test framework and a test runner solve different problems, and the seam betwee
 - **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, and that a `constinit` strip links against the library.
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 5** — where the suite becomes an acceptance test: the eleven cookbook recipes compiled unmodified, with property assertions and golden-frame hashes.
+- **`tests/cookbook.cpp`** — where the suite becomes an acceptance test: the eleven cookbook recipes, each with property assertions and a golden-frame hash.
 - **[`wrapping-clocks-guide.md`](wrapping-clocks-guide.md)** — the code §8's mutants were planted in: what the narrowing and each guard in `Sequencer` are for, and the exercises that break them one at a time.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — the sanitizer builds §8 argues for, run over the whole suite.
 - **doctest's own `doctest.cmake`** — the ~200 lines behind §4, and short enough to read once to see that discovery really is just generated `add_test` calls.

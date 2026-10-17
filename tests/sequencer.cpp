@@ -188,7 +188,7 @@ TEST_CASE("no_sequence unloads: black, held forever, wherever the clock is") {
 /* play, pause and seek                                                      */
 /* ------------------------------------------------------------------------ */
 
-TEST_CASE("the sketch's worked example, call by call") {
+TEST_CASE("the cookbook's worked example, call by call") {
     Sequencer seq;
     seq.load(finite_long);                CHECK(seq.playhead(1000) == 0);
     seq.play(1000);                         CHECK(seq.playhead(1300) == 300);
@@ -341,7 +341,7 @@ TEST_CASE("a negative playhead plays toward 0") {
 /* The narrowing                                                             */
 /* ------------------------------------------------------------------------ */
 
-TEST_CASE("the sketch's endless example") {
+TEST_CASE("the cookbook's endless example") {
     const Sequence red_black = built(SequenceBuilder{}.hold(colors::red, 250).hold(colors::black, 250));
     Sequencer seq;
     seq.load(red_black);

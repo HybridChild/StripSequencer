@@ -138,7 +138,7 @@ Section headers say what will execute before your code does:
 arm-none-eabi-objdump -h some.o | grep init_array
 ```
 
-An `.init_array` section of non-zero size means something runs before `main`. Across this library's five object files there is no such section at all, which is the mechanical form of the "no dynamic initialisation at file scope" rule. The allowlist does not see it — an initialiser that calls one of the library's own functions leaves nothing undefined — so turning that observation into a CI check is one of Phase 7's jobs.
+An `.init_array` section of non-zero size means something runs before `main`. Across this library's five object files there is no such section at all, which is the mechanical form of the "no dynamic initialisation at file scope" rule. The allowlist does not see it — an initialiser that calls one of the library's own functions leaves nothing undefined — so only the section headers show it.
 
 The general lesson is worth carrying to other projects: **compiling for the target proves the code is legal there; reading the object files proves it is affordable there.** They are different questions and they need different tools.
 
@@ -286,7 +286,7 @@ arm-none-eabi-objdump -h build-cross/CMakeFiles/stripseq.dir/src/*.obj | grep -c
 0
 ```
 
-**Proves:** "nothing runs before `main`" is a property you can measure in one command, and the four-byte section is exactly what Phase 7 will assert stays absent.
+**Proves:** "nothing runs before `main`" is a property you can measure in one command, and the four-byte section is exactly what the library's own objects never contain.
 
 ### Exercise 5 — Break the toolchain file's compiler check
 
@@ -403,6 +403,5 @@ Cross-compiling means the machine running the compiler is not the machine runnin
 
 - **`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`** — two short files; after this guide, every line in them should be one of §1–§3.
 - **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §4–§5** — the other half of §3: what a library may say about the toolchain, and why `cxx_std_20` is the only thing this one says.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — where §6's `objdump` observation becomes a CI check too, alongside UBSan, ASan and the footprint numbers.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 6** — the real thing this check is a cheap proxy for: the library built inside Zephyr for an actual Cortex-M7, where the linker finally gets a say.
+- **`zephyr/` and `samples/strip_demo/`** — the real thing this check is a cheap proxy for: the library built inside Zephyr for an actual Cortex-M7, where the linker finally gets a say.
 - **GCC's `-ffreestanding` documentation and `bits/requires_hosted.h` in your ARM toolchain** — the twenty-line header behind §4's error message, worth reading once to see how little machinery the enforcement needs.

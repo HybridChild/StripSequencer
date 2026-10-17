@@ -80,7 +80,7 @@ That would settle it, except for what happens at the dim end. A knob even to the
 
 And below level 22, even full white is black, because 22 is the first written value the curve lights (§3). Scaling after the curve keeps the hue to much lower settings, because it divides the light directly and keeps it in the upper bytes for longer — and gives up the even knob to do it.
 
-Neither order escapes this. **A knob that is even to the eye needs light levels finer than one byte at the dim end, and the wire does not have them.** The order decides which property gives way. This library applies brightness before the curve, so the knob is even and the dim end is coarse; `docs/IMPLEMENTATION-PLAN.md`, Phase 1, records that choice beside its cost. Without the table the two orders differ only in rounding.
+Neither order escapes this. **A knob that is even to the eye needs light levels finer than one byte at the dim end, and the wire does not have them.** The order decides which property gives way. This library applies brightness before the curve, so the knob is even and the dim end is coarse; the comment on `to_bytes()` in `src/color_internal.h` records that choice beside its cost. Without the table the two orders differ only in rounding.
 
 ## 6. Which space a blend happens in
 
@@ -392,5 +392,5 @@ An addressable LED emits light in proportion to its byte, because the byte is a 
 - **`tests/color.cpp` and `tests/convert.cpp`** — the sweep behind §7's bound, and the double-precision oracle behind Exercise 5.
 - **[`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §7** — how the table is rounded exactly with no floating point, and why the exponent is limited to what fits in 64 bits.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what `consteval` promises, which is why Exercise 3 finds a table and no generator.
-- **`docs/IMPLEMENTATION-PLAN.md`, Phase 1** — the decisions this guide explains, each with its cost: the curve, the table's width, and the order of brightness and gamma.
+- **`src/color_internal.h`** — `to_bytes()`, with the order of brightness and gamma recorded beside it, cost included.
 - **`docs/DESIGN.md`, "Supporting decisions"** — why gamma is optional and on by default, why brightness belongs to the strip, and why white is never derived.

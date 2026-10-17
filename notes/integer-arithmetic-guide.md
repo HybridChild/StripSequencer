@@ -485,5 +485,5 @@ Without floating point, every value is an integer and every rounding is a floor,
 - **`tests/color.cpp` and `tests/sequence.cpp`** — §8's sweeps and boundary sets, as written.
 - **`src/color.cpp`** — `convert()`, §6's rescaled knob in one line, and `make_gamma_table()`, §7 in twenty lines, and **[`gamma-and-color-guide.md`](gamma-and-color-guide.md)** for why the table exists and why its exponent is a choice about the eye.
 - **[`cross-compiling-guide.md`](cross-compiling-guide.md) §5–§6** — `nm -u` as the general instrument for costs the compiler does not report, of which the 64-bit division is one more.
-- **[`constant-initialisation-guide.md`](constant-initialisation-guide.md)** — the other half of what Phase 2 taught: the same builder, evaluated by the compiler instead of the chip.
+- **[`constant-initialisation-guide.md`](constant-initialisation-guide.md)** — the other half of the builder's story: the same builder, evaluated by the compiler instead of the chip.
 - **The ARM run-time ABI (`IHI0043`, "Run-time ABI for the Arm Architecture")** — the specification that names `__aeabi_uldivmod`, `__aeabi_uidiv` and the rest, and so the list of what to grep for.

@@ -363,7 +363,7 @@ TEST_CASE("drop_finished leaves an endless background in place") {
 }
 
 TEST_CASE("the drives() sweep removes every segment on one sequencer") {
-    /* The sketch's cancel_alert(), over two segments sharing the alert. */
+    /* The cookbook's cancel_alert(), over two segments sharing the alert. */
     constexpr Sequence alert = SequenceBuilder{}
                                    .hold(colors::green, 120)
                                    .hold(colors::black, 120)

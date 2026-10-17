@@ -6,8 +6,7 @@
  * state, references no hardware, and can be built at compile time
  * (SequenceBuilder::build_const) or at run time (build).
  *
- * The mechanism is docs/DESIGN.md, "A sequence is a lookup table, not a tape";
- * the decisions beside each declaration are docs/API-SKETCH.md, "Sequence".
+ * The mechanism is docs/DESIGN.md, "A sequence is a lookup table, not a tape".
  */
 
 #ifndef STRIPSEQ_SEQUENCE_H_
@@ -244,7 +243,12 @@ public:
     /* Compile-time path: the same rules, enforced by constant evaluation.
      * consteval, so an invalid sequence is a compile error rather than a
      * runtime check that cannot fail. The error path calls one of the
-     * functions in invalid_sequence above, which is what makes it an error. */
+     * functions in invalid_sequence above, which is what makes it an error.
+     *
+     * Which of the two to call is decided by where the values come from, not
+     * where the call sits: build_const() compiles anywhere the whole
+     * expression is constant, inside an ordinary function included, and stops
+     * compiling the moment a color or duration comes from a variable. */
     consteval Sequence build_const() const {
         Sequence out{};
         using namespace invalid_sequence;

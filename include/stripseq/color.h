@@ -6,8 +6,7 @@
  * multi-step lookups accurate; it is spent at the conversion in color.cpp.
  *
  * Everything here is constexpr and header-only, so a palette costs flash and no
- * startup code. The naming decision -- why nothing is called `white` -- is
- * recorded in docs/API-SKETCH.md, "Color".
+ * startup code.
  */
 
 #ifndef STRIPSEQ_COLOR_H_
@@ -150,7 +149,16 @@ inline constexpr Color blue     = Color::rgb8(0, 0, 255);
 inline constexpr Color rgbwhite = Color::rgb8(255, 255, 255);  /* all three channels; any build */
 
 /* No constant for the W emitter: write Color::rgbw(0, 0, 0, 65535) at the point
- * of use, where the channels are visible. */
+ * of use, where the channels are visible.
+ *
+ * Nothing is named after it, neither a constant nor a Color::white() factory.
+ * "White" is unambiguous in a channel context -- Zephyr's LED_COLOR_ID_WHITE
+ * sits beside LED_COLOR_ID_RED -- but beside red and blue in a namespace of
+ * colors it reads as "the strip looks white", and the phosphor emitter is
+ * usually warmer and dimmer than the RGB mix by an amount the library cannot
+ * know. rgbwhite keeps its awkward name because it is the portable one, and
+ * the awkwardness stops it being read as authoritative. Adafruit NeoPixel and
+ * NeoPixelBus likewise expose the channel and name no constant. */
 
 }  // namespace colors
 

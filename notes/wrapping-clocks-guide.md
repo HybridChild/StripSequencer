@@ -235,7 +235,7 @@ Three habits make such tests trustworthy.
 
 Nothing here is specific to LED strips; every system with a free-running counter meets it.
 
-- **Zephyr**, against v4.4.1. `k_uptime_get()` (`include/zephyr/kernel.h:2147`) is the 64-bit uptime in milliseconds, exactly the clock this library takes, and the one the sketch's Zephyr adapter samples once per frame. `k_uptime_get_32()` (`include/zephyr/kernel.h:2171`) is its low 32 bits, and its own documentation advises against it: it computes the full 64-bit uptime anyway and truncates it, so there is "no benefit to using this over k_uptime_get() unless you know the application will never run long enough for the system clock to approach 2^32 ticks". This library refuses it at compile time (§6). `k_uptime_delta()` (`include/zephyr/kernel.h:2200`) works in `int64_t` throughout, the same choice §4 makes. The PTP sample measures its run time with the §2 idiom on the 32-bit clock, `(k_uptime_get_32() - uptime) / 1000` (`samples/net/ptp/src/main.c:83`), which is sound for a span of seconds. And `k_cycle_get_32()` (`include/zephyr/kernel.h:2219`) is the same problem on a much shorter fuse: a 32-bit counter of hardware cycles at a few hundred MHz wraps in seconds, so §2's subtraction is mandatory and §3's bound on elapsed time is measured in seconds too.
+- **Zephyr**, against v4.4.1. `k_uptime_get()` (`include/zephyr/kernel.h:2147`) is the 64-bit uptime in milliseconds, exactly the clock this library takes, and the one the sample's frame loop samples once per frame. `k_uptime_get_32()` (`include/zephyr/kernel.h:2171`) is its low 32 bits, and its own documentation advises against it: it computes the full 64-bit uptime anyway and truncates it, so there is "no benefit to using this over k_uptime_get() unless you know the application will never run long enough for the system clock to approach 2^32 ticks". This library refuses it at compile time (§6). `k_uptime_delta()` (`include/zephyr/kernel.h:2200`) works in `int64_t` throughout, the same choice §4 makes. The PTP sample measures its run time with the §2 idiom on the 32-bit clock, `(k_uptime_get_32() - uptime) / 1000` (`samples/net/ptp/src/main.c:83`), which is sound for a span of seconds. And `k_cycle_get_32()` (`include/zephyr/kernel.h:2219`) is the same problem on a much shorter fuse: a 32-bit counter of hardware cycles at a few hundred MHz wraps in seconds, so §2's subtraction is mandatory and §3's bound on elapsed time is measured in seconds too.
 - **Arduino.** `millis()` is a 32-bit millisecond counter, and the idiom every sketch is told to use is `if (millis() - start >= interval)` — subtract, then compare — rather than `if (millis() >= start + interval)`, which breaks at the wrap. It is §2 exactly.
 - **Linux.** `jiffies` is a wrapping tick counter, and `time_after(a, b)` in `include/linux/jiffies.h` compares two readings as `(long)((b) - (a)) < 0`: subtract in unsigned, then convert to signed, valid while they are under half the range apart. That is §2 and §3 in one macro. The kernel also keeps `jiffies_64`, and reaching for it is §4's other answer.
 - **TCP and DNS.** Sequence numbers and zone serials are modular counters, and RFC 1982, "Serial Number Arithmetic", defines comparing them the same way, including the half-range rule. Those counters cannot be widened, because their width is on the wire, which is why the rule exists at all.
@@ -436,7 +436,7 @@ constexpr Sequence wipe = SequenceBuilder{}
                               .repeat(1)
                               .build_const();
 
-/* The sketch's extender: call at least once per 49.7 days. */
+/* The cookbook's extender: call at least once per 49.7 days. */
 struct Clock64 {
     uint32_t last = 0;
     int64_t  total = 0;
@@ -525,7 +525,6 @@ A position that follows a clock should be derived from it, not counted: store th
 - **`src/sequencer.cpp`** — §4–§7 as written: the wide position, the narrowing, and the one guard.
 - **`include/stripseq/sequencer.h`** — `wrapping_tick` and the deleted overloads of §6.
 - **`tests/sequencer.cpp`** — §8 as written: the table of positions, the continuity runs across 2³¹ and 2³², the `static_assert`s of §6, and a case for each section of this guide.
-- **[`../docs/API-SKETCH.md`](../docs/API-SKETCH.md), "Sequencer"** — the decisions this guide teaches, recorded beside the declarations they govern, with the worked examples in full.
 - **[`integer-arithmetic-guide.md`](integer-arithmetic-guide.md)** — the modular and signed arithmetic underneath §2, and how `Sequence::at()` folds a negative playhead onto the ring.
 - **[`testing-guide.md`](testing-guide.md) §8** — what the test suite for this code could and could not see: a bug that fails on one machine for the wrong reason, crashes on another, and on the target gets the right answer by accident.
 - **RFC 1982, "Serial Number Arithmetic"** — the half-range rule of §3, stated for sequence numbers, in eight pages.

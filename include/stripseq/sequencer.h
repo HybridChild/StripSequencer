@@ -4,8 +4,24 @@
  * Nothing stores a playhead as such. origin_ms_ and frozen_ are the two
  * representations, playing_ says which is authoritative, and the value is
  * derived on every call; a stored playhead advanced each frame would be the
- * tape model docs/DESIGN.md rejects. Why there is one bit here and not a state
- * machine is argued in docs/API-SKETCH.md, "Sequencer".
+ * tape model docs/DESIGN.md rejects.
+ *
+ * One bit, not a state machine, because every extra state is derivable.
+ * Complete is the playhead past total_duration_ms() -- and the wrong signal
+ * for removing a segment, whose last pixel is a full stagger behind, which is
+ * why removal asks Segment::finished(). Idle is a sequence with no steps.
+ * Paused and loaded-but-never-played are the same condition reached from two
+ * directions. With no states there are no transition verbs either; each is
+ * already one call or two:
+ *
+ *   start from the top   seek(0), then play(now)
+ *   stop                 seek(0)
+ *   resume               play(now)
+ *   unload               load(no_sequence)
+ *   re-trigger           load() again, which resets the playhead
+ *
+ * Every operation is total, which leaves SequenceBuilder::build() as the only
+ * place in the library that reports an error.
  */
 
 #ifndef STRIPSEQ_SEQUENCER_H_

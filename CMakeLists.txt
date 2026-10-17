@@ -1,6 +1,5 @@
 # StripSequencer -- a standalone, OS-agnostic C++20 library for animating
-# WS2812-style LED strips. See docs/DESIGN.md for the mechanism and
-# docs/IMPLEMENTATION-PLAN.md for how it gets built.
+# WS2812-style LED strips. See docs/DESIGN.md for the mechanism.
 #
 # 3.21 is the version that introduced PROJECT_IS_TOP_LEVEL, which everything
 # below uses to keep our own build settings out of a consumer's build.
@@ -37,6 +36,12 @@ target_include_directories(stripseq PUBLIC ${STRIPSEQ_INCLUDE_DIR})
 # already asked for. This is the only thing the library says about the
 # toolchain -- Zephyr owns the compiler, the standard library, the optimisation
 # level and the warning set for anything built inside it.
+#
+# C++20 rather than 17 for two things. consteval is what makes an invalid
+# sequence known at compile time a compile error, through build_const(); and
+# constinit is what lets a Strip sit at file scope with no constructor running
+# before main. Under 17 the first falls back to a runtime check and the second
+# to a dynamic initialiser.
 target_compile_features(stripseq PUBLIC cxx_std_20)
 
 # ---------------------------------------------------------------------------
@@ -97,8 +102,8 @@ if(STRIPSEQ_BUILD_TESTS)
     # file for why they cannot be test cases.
     stripseq_check_build_const()
 
-    # That the cookbook in the sketch and the one the tests compile are the
-    # same text; see the file for how it compares them.
+    # That the cookbook in docs/COOKBOOK.md and the one the tests compile are
+    # the same text; see the file for how it compares them.
     stripseq_add_cookbook_check()
 
     # Five, not four. The cross product of the two behavioural macros is four,

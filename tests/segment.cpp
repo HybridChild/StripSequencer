@@ -66,7 +66,7 @@ constexpr Sequence breathe = SequenceBuilder{}
                                  .fade_to(colors::black, 1000)
                                  .build_const();
 
-/* The sketch's mirror: the index flipped, so the far end leads. */
+/* The cookbook's mirror: the index flipped, so the far end leads. */
 int32_t mirror(uint16_t index, uint16_t count, int32_t delay_q8) {
     return ((count - 1 - index) * delay_q8) >> 8;
 }

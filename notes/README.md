@@ -2,9 +2,7 @@
 
 Teaching documents, each building one concept from first principles and using this repo — an OS-agnostic C++20 library for animating LED strips, built five times over and cross-compiled for a Cortex-M — as the running example. They are meant to be readable by someone who has never seen this project.
 
-The split mirrors [`../docs/`](../docs/): **`docs/` records what *this* project decided; `notes/` teaches the concept behind it.** Where a guide has a reference half, the table below names it. Several of these guides pair with a *file* rather than a document — the build system is small enough that `CMakeLists.txt` and `cmake/*.cmake` are their own reference.
-
-Guides arrive with the phase that produced them, and the table at the end names it. Phase 0 built every build path before there was any code worth building, so its guides are about the build; the guides from later phases are about the C++ inside it, and about the light that comes out of it.
+The split mirrors [`../docs/`](../docs/): **`docs/` and the comments in the code record what *this* project decided; `notes/` teaches the concept behind it.** Each guide's reference half is a file rather than a document, because every decision is recorded beside the code it governs, and the table below names it.
 
 ## Where to start
 
@@ -60,16 +58,16 @@ cmake-usage-requirements ───────────┤     one library,  
 
 ## All of them
 
-Rows are in the reading order above, so the column to scan for "can I start here?" is **Assumes you know**. **From** is the phase of [`../docs/IMPLEMENTATION-PLAN.md`](../docs/IMPLEMENTATION-PLAN.md) whose work the guide was written out of.
+Rows are in the reading order above, so the column to scan for "can I start here?" is **Assumes you know**.
 
-| # | Guide | Answers | Assumes you know | Reference half | From |
-| - | ----- | ------- | ---------------- | -------------- | ---- |
-| 1 | [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) | What does `PUBLIC` mean, if not access control? | What a compiler and linker do | *(the root `CMakeLists.txt` and `cmake/stripseq_variant.cmake`)* | Phase 0; the internal header in §3 from Phase 1 |
-| 2 | [`build-variants-guide.md`](build-variants-guide.md) | Why does one library need five builds? | #1 | [`../docs/API-SKETCH.md`](../docs/API-SKETCH.md), "Build-time configuration" | Phase 0 |
-| 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become a result for every case — and how do you test what must not compile? | #2, for §5; #6 §4, for §7; #8, lightly, for §8 | [`../docs/IMPLEMENTATION-PLAN.md`](../docs/IMPLEMENTATION-PLAN.md), Phase 0 and Phase 5; *(`cmake/stripseq_compile_fail.cmake`)* | Phase 0; §7 from Phase 2; §8 from Phase 3, its oracle from Phase 1 |
-| 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `STRIPSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* | Phase 0 |
-| 5 | [`cross-compiling-guide.md`](cross-compiling-guide.md) | What does compiling for a machine you cannot run actually prove? | #1 §3–§5, lightly; roughly what a microcontroller is | *(`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`)* | Phase 0 |
-| 6 | [`constant-initialisation-guide.md`](constant-initialisation-guide.md) | Why does nothing here run before `main`, and which keyword decides that? | #5 §5–§6; C++ classes and functions | [`../docs/API-SKETCH.md`](../docs/API-SKETCH.md), "Language requirements"; *(`SequenceBuilder::build_const()` in `include/stripseq/sequence.h`)* | Phase 2 |
-| 7 | [`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) | How do you do exact arithmetic with no floating point and no 64-bit divide? | #5 §6, for `nm -u`; C++ integer types | *(`src/sequence.cpp`, `Color::lerp()` in `include/stripseq/color.h`, and `make_gamma_table()` in `src/color.cpp`)* | Phase 2; §7 from Phase 1 |
-| 8 | [`wrapping-clocks-guide.md`](wrapping-clocks-guide.md) | How do you keep a position from a clock that wraps, for as long as the device runs? | #7 §1–§3, lightly; C++ integer types | [`../docs/API-SKETCH.md`](../docs/API-SKETCH.md), "Sequencer"; *(`src/sequencer.cpp`)* | Phase 3 |
-| 9 | [`gamma-and-color-guide.md`](gamma-and-color-guide.md) | Why does a fade snap off at the bottom, and where does a brightness knob belong? | #7 §1 and §4, lightly; C++ integer types | [`../docs/IMPLEMENTATION-PLAN.md`](../docs/IMPLEMENTATION-PLAN.md), Phase 1; *(`src/color.cpp` and `Color::hsv()` in `include/stripseq/color.h`)* | Phase 1 |
+| # | Guide | Answers | Assumes you know | Reference half |
+| - | ----- | ------- | ---------------- | -------------- |
+| 1 | [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) | What does `PUBLIC` mean, if not access control? | What a compiler and linker do | *(the root `CMakeLists.txt` and `cmake/stripseq_variant.cmake`)* |
+| 2 | [`build-variants-guide.md`](build-variants-guide.md) | Why does one library need five builds? | #1 | *(`include/stripseq/config.h`)* |
+| 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become a result for every case — and how do you test what must not compile? | #2, for §5; #6 §4, for §7; #8, lightly, for §8 | *(`tests/cookbook.cpp` and `cmake/stripseq_compile_fail.cmake`)* |
+| 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `STRIPSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* |
+| 5 | [`cross-compiling-guide.md`](cross-compiling-guide.md) | What does compiling for a machine you cannot run actually prove? | #1 §3–§5, lightly; roughly what a microcontroller is | *(`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`)* |
+| 6 | [`constant-initialisation-guide.md`](constant-initialisation-guide.md) | Why does nothing here run before `main`, and which keyword decides that? | #5 §5–§6; C++ classes and functions | *(`SequenceBuilder::build_const()` in `include/stripseq/sequence.h`)* |
+| 7 | [`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) | How do you do exact arithmetic with no floating point and no 64-bit divide? | #5 §6, for `nm -u`; C++ integer types | *(`src/sequence.cpp`, `Color::lerp()` in `include/stripseq/color.h`, and `make_gamma_table()` in `src/color.cpp`)* |
+| 8 | [`wrapping-clocks-guide.md`](wrapping-clocks-guide.md) | How do you keep a position from a clock that wraps, for as long as the device runs? | #7 §1–§3, lightly; C++ integer types | *(`include/stripseq/sequencer.h` and `src/sequencer.cpp`)* |
+| 9 | [`gamma-and-color-guide.md`](gamma-and-color-guide.md) | Why does a fade snap off at the bottom, and where does a brightness knob belong? | #7 §1 and §4, lightly; C++ integer types | *(`src/color.cpp`, `to_bytes()` in `src/color_internal.h` and `Color::hsv()` in `include/stripseq/color.h`)* |
