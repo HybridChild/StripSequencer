@@ -115,3 +115,8 @@ jobs:
 
       - name: Build the sample, RGB
         run: ./scripts/sample-build.sh -p --rgb
+
+      # One configuration is enough: frame_cost has no adapter, so the channel
+      # setting takes no path of its own here that strip_demo does not cover.
+      - name: Build frame_cost
+        run: SAMPLE=frame_cost ./scripts/sample-build.sh -p

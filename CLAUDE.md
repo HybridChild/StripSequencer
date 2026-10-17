@@ -21,6 +21,7 @@ This is not licence to stop at every fork. Do everything that does not depend on
 - **[`docs/COOKBOOK.md`](docs/COOKBOOK.md) — how it is called.** How the pieces relate, one frame, driving a sequencer, and DESIGN.md's recipes as real code. The recipes are the acceptance criteria: `tests/cookbook.cpp` compiles them verbatim and a CTest entry fails if the two drift, so a recipe that needs an edit to compile is a finding about the API, not a reason to edit the copy. If Blink takes more than describing the sequence and loading, starting and placing it, something is wrong upstream.
 - **[`README.md`](README.md) and [`docs/FEATURES.md`](docs/FEATURES.md) — what it offers.** The front door and the feature-by-feature guide. Unlike the recipes, nothing checks their snippets, so a change to the API updates them by hand.
 - **[`samples/strip_demo/README.md`](samples/strip_demo/README.md) — the bench.** The sample, and the order to look in when the hardware disagrees with the host.
+- **[`samples/frame_cost/README.md`](samples/frame_cost/README.md) and [`tools/footprint/README.md`](tools/footprint/README.md) — what it costs.** Cycles per frame on the bench, and flash and object sizes on a bare-metal Cortex-M0 and M4. Both feed the README's footprint figures, which are copied by hand, so a change that moves them reruns the tool and updates the README.
 
 When something is decided, record it beside the thing it decides. Don't start a decision log.
 
@@ -32,7 +33,7 @@ These hold for every change.
 - **No floating point anywhere in the library**, not even at compile time. Many Cortex-M parts have no FPU, soft-float pulls in library code, and integer math is bit-exact across compilers, which is what makes the golden-frame hashes meaningful. Tests may use `double` as an independent oracle.
 - **No dynamic initialisation at file scope, and no function-local statics.** A function-local static with a non-constant initialiser emits a guard variable and calls `__cxa_guard_acquire`. Every table is `constexpr` or a `const` array in flash.
 - **Only `<cstdint>` and `<cstddef>`.** They are what Zephyr's default minimal C++ library provides, so a third header is a library that does not build there. Where a `min` is wanted, write it. `scripts/cross-check.sh` enforces this, along with an allowlist of the run-time helpers each object may call.
-- **Every change ends green**: all five variants (`default`, `rgbw`, `nogamma`, `rgbw_nogamma`, `tight`) on gcc and clang, the cross-check for both cores, and the Zephyr build of the sample in both channel configurations.
+- **Every change ends green**: all five variants (`default`, `rgbw`, `nogamma`, `rgbw_nogamma`, `tight`) on gcc and clang, the cross-check for both cores, and the Zephyr builds of the samples: strip_demo in both channel configurations, frame_cost in the bench's.
 
 ## The learning goal, and the guides in `notes/`
 

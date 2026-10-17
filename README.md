@@ -108,7 +108,7 @@ target_compile_definitions(stripseq PUBLIC STRIPSEQ_WHITE_CHANNEL=1)
 
 `PUBLIC` matters. An application compiled with a different `STRIPSEQ_WHITE_CHANNEL` from the library links cleanly against a `Color` of the wrong size.
 
-## Memory
+## Footprint
 
 On a 32-bit target, at the default capacities:
 
@@ -117,9 +117,40 @@ On a 32-bit target, at the default capacities:
 | `Sequence` | 112 B | 148 B | Flash, when built with `build_const()` |
 | `Sequencer` | 24 B | 24 B | RAM; it refers to its sequence rather than copying it |
 | `Segment` | 20 B | 20 B | Inside the strip, `STRIPSEQ_MAX_SEGMENTS` of them |
+| `Strip` | 92 B | 92 B | RAM; its segments, and where your buffer is |
 | Pixel buffer | 3 B per pixel | 4 B per pixel | Yours |
 
-A sequence grows by one step's size, 12 bytes or 16 in RGBW, for each step of `STRIPSEQ_MAX_STEPS`. Nothing runs before `main()`: every table and every `constexpr` sequence is constant-initialised, and a `Strip` can be `constinit` at file scope.
+A sequence grows by one step's size, 12 bytes or 16 in RGBW, for each step of `STRIPSEQ_MAX_STEPS`, and a strip by 20 bytes for each slot of `STRIPSEQ_MAX_SEGMENTS`. Nothing runs before `main()`: every table and every `constexpr` sequence is constant-initialised, and a `Strip` can be `constinit` at file scope.
+
+### Flash
+
+The library's code and constants, linked into an application that calls every part of the API, at `-Os` with `--gc-sections`, by GCC 15:
+
+| Configuration | Cortex-M0 | Cortex-M4 |
+| --- | --: | --: |
+| RGB, gamma (the default) | 1936 B | 1888 B |
+| RGB, no gamma | 1666 B | 1618 B |
+| RGBW, gamma | 1968 B | 1900 B |
+| RGBW, no gamma | 1698 B | 1630 B |
+
+Gamma is the 256-byte table, and the white channel costs almost nothing in code. The constants include one empty `Sequence`, which every sequencer refers to until something is loaded. The library has no RAM of its own: all of it is in the objects above.
+
+On top of that come the compiler's run-time helpers: 916 B on a Cortex-M0 and 834 B on a Cortex-M4. 544 B of it on the M0 and 832 B on the M4 is 64-bit division, `__aeabi_uldivmod` and the routines behind it, there for the one 64-bit remainder in `Sequencer::playhead`. The bench's Zephyr image links it anyway, for the kernel's sleeps and the UART driver's baud rate, so there it costs nothing extra. Building a sequence at run time adds about 300 B where `SequenceBuilder` is used; `build_const()` adds nothing. [`tools/footprint/`](tools/footprint/README.md) produces these figures, symbol by symbol.
+
+### Time per frame
+
+`Strip::render()` over 60 pixels on the bench board, a Cortex-M7 at 480 MHz with caches on, warm, built at `-Os`:
+
+| Every pixel… | RGB | RGBW |
+| --- | --: | --: |
+| on a hold | 9,354 cycles (19.5 µs) | 9,115 cycles (19.0 µs) |
+| mid-fade | 13,000 cycles (27.1 µs) | 13,594 cycles (28.3 µs) |
+| in a comet's tail, staggered | 13,671 cycles (28.5 µs) | 14,062 cycles (29.3 µs) |
+| mid-fade in a rainbow spread across the strip | 16,858 cycles (35.1 µs) | 15,821 cycles (33.0 µs) |
+| in the last of eight eased fades | 21,036 cycles (43.8 µs) | 18,703 cycles (39.0 µs) |
+| painted twice, a comet over a rainbow | 29,843 cycles (62.2 µs) | 28,937 cycles (60.3 µs) |
+
+That is 150 to 350 cycles a pixel for each segment covering it. At 60 frames a second, the most expensive of these is under 0.4% of this core. A core without a divide instruction or caches will take more. [`samples/frame_cost/`](samples/frame_cost/README.md) measures them.
 
 ## Documentation
 
@@ -138,6 +169,7 @@ scripts/test.sh                    # run every test in every variant
 CXX=g++-16 scripts/build.sh build-gcc && scripts/test.sh build-gcc
 scripts/cross-check.sh             # freestanding Cortex-M4 and M0 builds
 scripts/sample-build.sh            # the Zephyr sample; --rgb for the RGB path
+tools/footprint/footprint.sh       # flash and object sizes, Cortex-M0 and M4
 ```
 
 The host suite builds the whole library five times, once per configuration that changes compiled behaviour plus one at tight capacities, and runs every test in each. The cross-check compiles the library for bare-metal Cortex-M with only the two headers Zephyr's minimal C++ library provides, and fails if an object calls a run-time helper outside a short allowlist: a soft-float routine, `operator new`, anything from libc, or a division the design does not account for. CI runs the host suite on gcc and clang, the cross-check, and the Zephyr sample in both channel configurations.

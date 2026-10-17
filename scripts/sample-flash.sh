@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Flash the bring-up sample to the Nucleo-H753ZI over its ST-LINK.
+# Flash a sample to the Nucleo-H753ZI over its ST-LINK: the bring-up sample,
+# unless SAMPLE= names another, as for scripts/sample-build.sh.
 #
 #   scripts/sample-flash.sh              # what scripts/sample-build.sh built
 #   scripts/sample-flash.sh --rgb        # what scripts/sample-build.sh --rgb built
+#   SAMPLE=frame_cost scripts/sample-flash.sh
 #   STLINK_SERIAL=0052... scripts/sample-flash.sh   # one probe of several
 #
 # The openocd runner, because the board defaults to stm32cubeprogrammer, which
@@ -17,9 +19,11 @@ WORKSPACE="${ZEPHYR_WORKSPACE:-$HOME/zephyr-workspace}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+SAMPLE="${SAMPLE:-strip_demo}"
 BUILD_DIR="$REPO/build-zephyr"
+[[ "$SAMPLE" != strip_demo ]] && BUILD_DIR+="-$SAMPLE"
 if [[ "${1:-}" == "--rgb" ]]; then
-    BUILD_DIR="$REPO/build-zephyr-rgb"
+    BUILD_DIR+="-rgb"
     shift
 fi
 
