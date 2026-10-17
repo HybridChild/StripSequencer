@@ -91,7 +91,7 @@ TEST_CASE("add refuses a segment that runs past the end of the strip") {
     CHECK(strip.add(Segment(6, 4, seq)));       /* exactly to the end */
     CHECK_FALSE(strip.add(Segment(6, 5, seq)));
     CHECK_FALSE(strip.add(Segment(10, 1, seq)));
-    CHECK_FALSE(strip.add(Segment(65535, 2, seq)));   /* would wrap in uint16_t */
+    CHECK_FALSE(strip.add(Segment(65535, 2, seq)));   /* ends at 65537, which a uint16_t sum wraps to 1 */
     CHECK(strip.segment_count() == 1);
 }
 
@@ -140,12 +140,18 @@ TEST_CASE("a segment assigned past the end paints its visible part only") {
             CHECK(shows(memory.pixels, i, colors::red));
     }
     SUBCASE("wholly off the strip: nothing painted, and no reason to come back") {
+        /* Starting at the end leaves no room. Starting past it is the case
+         * that needs refusing: pixel_count - first wraps in uint16_t, and the
+         * room it computes would aim the writes into the guard. */
         seq.load(breathe);
         seq.play(0);
-        strip.segment(0) = Segment(kPixels, 3, seq);
-        CHECK(strip.render(500) == hold_forever);
-        for (uint16_t i = 0; i < kPixels; ++i)
-            CHECK(shows(memory.pixels, i, colors::black));
+        for (uint16_t first : {kPixels, uint16_t{kPixels + 1}}) {
+            CAPTURE(first);
+            strip.segment(0) = Segment(first, 3, seq);
+            CHECK(strip.render(500) == hold_forever);
+            for (uint16_t i = 0; i < kPixels; ++i)
+                CHECK(shows(memory.pixels, i, colors::black));
+        }
     }
 
     for (uint8_t b : memory.guard)

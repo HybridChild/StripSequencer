@@ -79,6 +79,22 @@ int32_t at_min_offset(uint16_t, uint16_t, int32_t) { return min_offset_ms; }
 Sample never_still(int32_t, uint16_t, uint16_t) { return {colors::red, 0}; }
 Sample always_still(int32_t, uint16_t, uint16_t) { return {colors::red, hold_forever}; }
 
+/* What a ColorFn was called with, per index. Recorded rather than encoded in
+ * the color it returns, because gamma folds small channel values together and
+ * would hide a wrong argument. */
+struct Call {
+    bool     seen;
+    int32_t  playhead_ms;
+    uint16_t count;
+};
+Call calls[kPixels];
+
+Sample recorded(int32_t playhead_ms, uint16_t index, uint16_t count) {
+    if (index < kPixels)
+        calls[index] = {true, playhead_ms, count};
+    return {colors::green, 0};
+}
+
 /* What a pixel at `position` shows, worked out in int64_t rather than through
  * the narrowed playhead: modulo the loop for an endless sequence, and pinned to
  * either end of int32_t for a finite one, which is past both of its ends. */
@@ -273,9 +289,10 @@ TEST_CASE("removing an OffsetFn restores the default and keeps the delay") {
 }
 
 TEST_CASE("the largest stagger at either end of the sequencer's range is exact") {
-    /* The comparison is with int64_t arithmetic, because the host suite runs
-     * without UBSan and arm64 wraps signed overflow silently: a stagger that
-     * overflowed would still paint something, just not this. */
+    /* The comparison is with int64_t arithmetic, independent of the int32_t
+     * arithmetic it checks. Signed overflow wraps silently wherever UBSan is
+     * not watching, and a stagger that overflowed would still paint
+     * something, just not this. */
     for (const Sequence* s : {&endless_777, &three_colors}) {
         for (int32_t sought : {INT32_MAX, INT32_MAX - 3, INT32_MIN, INT32_MIN + 3}) {
             for (int32_t q8 : {largest_q8, -largest_q8}) {
@@ -329,6 +346,43 @@ TEST_CASE("an OffsetFn's offset is clamped to the default's range") {
                 CHECK(same_bytes(a, b, kBytes));
             }
         }
+    }
+}
+
+/* ------------------------------------------------------------------------ */
+/* The ColorFn                                                               */
+/* ------------------------------------------------------------------------ */
+
+TEST_CASE("a ColorFn is asked about each pixel's own playhead, index and count") {
+    /* Placed away from pixel 0, so an index counted along the strip rather
+     * than the segment shows, and staggered, so the unstaggered playhead
+     * shows. */
+    constexpr uint16_t first = 3;
+    constexpr uint16_t count = 5;
+    Sequencer seq;
+    seq.load(endless_777);
+    seq.play(0);
+    Segment s(first, count, seq);
+    REQUIRE(s.set_pixel_delay(30));
+    s.set_color_fn(recorded);
+
+    for (Call& c : calls)
+        c = {};
+    uint8_t buffer[kBytes];
+    CHECK(render_alone(s, buffer, 1000) == 0);
+
+    const int32_t playhead = seq.playhead(1000);
+    for (uint16_t i = 0; i < kPixels; ++i) {
+        CAPTURE(i);
+        if (i < count) {
+            REQUIRE(calls[i].seen);
+            CHECK(calls[i].playhead_ms == playhead - 30 * i);
+            CHECK(calls[i].count == count);
+        } else {
+            CHECK_FALSE(calls[i].seen);
+        }
+        const bool inside = i >= first && i < first + count;
+        CHECK(shows(buffer, i, inside ? colors::green : colors::black));
     }
 }
 

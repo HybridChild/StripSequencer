@@ -8,7 +8,8 @@ bool Strip::add(const Segment& s) {
     if (count_ >= STRIPSEQ_MAX_SEGMENTS)
         return false;
     /* In uint32_t, so a segment near the top of the uint16_t range cannot wrap
-     * its end back onto the strip. */
+     * its end back onto the strip whatever the width of int. Promotion alone
+     * keeps the sum exact only where int is wider than 16 bits. */
     if (uint32_t{s.first_} + s.count_ > pixel_count_)
         return false;
     segments_[count_++] = s;

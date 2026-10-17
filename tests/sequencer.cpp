@@ -449,13 +449,19 @@ TEST_CASE("a finite sequence left playing for 60 days stays on its landing color
     CHECK(seq.playhead(777777 + 60 * ms_per_day) == limit_ms);
 }
 
-TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
-    /* The arithmetic the limit rests on, and the room it leaves. */
-    CHECK(int64_t{limit_ms} - largest_lag_ms > int64_t{longest_total_ms});
-    CHECK(int64_t{limit_ms} + largest_lead_ms <= INT32_MAX);
-    CHECK(-int64_t{limit_ms} + largest_lead_ms < 0);
-    CHECK(-int64_t{limit_ms} - largest_lag_ms >= INT32_MIN);
+/* The arithmetic the limit rests on, and the room it leaves. These read the
+ * constants above, not the library's own, which are private to its sources:
+ * they are the proof the limit is worked out from. The test case below is
+ * what checks the library against it. */
+static_assert(int64_t{limit_ms} - largest_lag_ms > int64_t{longest_total_ms});
+static_assert(int64_t{limit_ms} + largest_lead_ms <= INT32_MAX);
+static_assert(-int64_t{limit_ms} + largest_lead_ms < 0);
+static_assert(-int64_t{limit_ms} - largest_lag_ms >= INT32_MIN);
 
+/* And an endless loop of the longest length still leaves room either way. */
+static_assert(int64_t{longest_total_ms} - 1 + largest_lead_ms <= INT32_MAX);
+
+TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
     /* The builder does accept a total that long, and one more is refused. */
     Sequence longest;
     REQUIRE(SequenceBuilder{}.start_color(colors::black).hold(colors::red, longest_total_ms)
@@ -469,9 +475,6 @@ TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
     CHECK(longest.at(limit_ms - largest_lag_ms).color == colors::green);
     CHECK(longest.at(limit_ms - largest_lag_ms).hold_ms == hold_forever);
     CHECK(longest.at(-limit_ms + largest_lead_ms).color == colors::black);
-
-    /* And an endless loop of the longest length still leaves room either way. */
-    CHECK(int64_t{longest_total_ms} - 1 + largest_lead_ms <= INT32_MAX);
 }
 
 TEST_CASE("the playhead is continuous where a 32-bit clock would break") {

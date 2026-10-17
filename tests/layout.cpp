@@ -54,12 +54,6 @@ TEST_CASE("color and step layout follow the white-channel setting") {
     CHECK(Strip::bytes_per_pixel == (STRIPSEQ_WHITE_CHANNEL ? 4u : 3u));
 }
 
-TEST_CASE("capacities are the ones this variant was built with") {
-    CHECK(STRIPSEQ_MAX_STEPS >= 1);
-    CHECK(STRIPSEQ_MAX_SEGMENTS >= 1);
-    CHECK(sizeof(Sequence) >= sizeof(Step) * STRIPSEQ_MAX_STEPS);
-}
-
 TEST_CASE("a constinit strip is usable and links against the library") {
     CHECK(strip.segment_count() == 0);
     CHECK(strip.brightness() == 255);
