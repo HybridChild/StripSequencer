@@ -26,6 +26,11 @@
 # so the source text must never pass through a list operation.
 
 if(CMAKE_SCRIPT_MODE_FILE)
+    # A script run with -P inherits no policies from the project, so without
+    # this an older CMake applies its oldest behaviour -- under which
+    # while(TRUE) is false and the loop below never runs.
+    cmake_minimum_required(VERSION 3.21)
+
     foreach(_var SKETCH COOKBOOK)
         if(NOT DEFINED ${_var})
             message(FATAL_ERROR "cookbook check: -D${_var}=<path> is required")
