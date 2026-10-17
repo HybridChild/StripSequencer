@@ -16,7 +16,6 @@ The shape of the project is a **standalone CMake library that a Zephyr module wr
 - [Phase 5 — The cookbook as tests](#phase-5--the-cookbook-as-tests)
 - [Phase 6 — Zephyr integration](#phase-6--zephyr-integration)
 - [Phase 7 — Hardening and release](#phase-7--hardening-and-release)
-- [Decisions deferred to their phase](#decisions-deferred-to-their-phase)
 - [Risk register](#risk-register)
 
 ## Ground rules
@@ -472,15 +471,6 @@ Then the README: what it is, the three-line blink, the four macros, how to consu
 - The README gives flash and RAM for each of the four behavioural configurations and the per-frame cycle cost for a 60-pixel strip.
 - Any golden hash a warning fix invalidates is regenerated deliberately and its diff reviewed.
 - `v0.1.0` is tagged.
-
-## Decisions deferred to their phase
-
-Everything the sketch settled stays settled. These are genuinely open and are called out where they arise rather than being decided in the abstract now.
-
-| Decision | Phase | Recommendation |
-| --- | --- | --- |
-| Whether `add()` rejects a segment that exceeds the buffer | 4 | Yes — it is the only place the strip and the segment's extent are both known |
-| Whether `set_pixel_delay` rejects a delay that would overflow the stagger | 4 | Yes — it keeps the check out of the per-pixel loop and reuses the existing `bool` |
 
 ## Risk register
 
