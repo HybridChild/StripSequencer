@@ -1,10 +1,10 @@
-# StripSequencer — bench bring-up
+# strip_demo
 
-How the library meets the bench hardware, and in what order to look. The sample in [`samples/strip_demo/`](../samples/strip_demo/) is the platform side the library leaves out — the frame loop, the clock, the channel permute and the strip update; this note is what to do with it.
+The library on real hardware under Zephyr, and a check of that hardware in six stages. The library leaves out everything platform-shaped, and [`src/main.cpp`](src/main.cpp) is that missing half: the frame loop on a `k_work_delayable`, `k_uptime_get()` sampled once per frame, the hold turned into a reschedule, the channel permute, and the strip update.
 
 ## The bench
 
-A Nucleo-H753ZI driving 11 ILPL-K501 pixels — SK6812-class RGBW, green-red-blue-white on the wire — from I2S3, data out on PD6, through `worldsemi,ws2812-i2s`. Everything board-specific is in [`boards/nucleo_h753zi.overlay`](../samples/strip_demo/boards/nucleo_h753zi.overlay), and each value there carries its reason: the nibble timing, the DMA controllers the I2S binding needs and the board leaves off, and the `color-mapping` the RGBW path reads to build its permute.
+A Nucleo-H753ZI driving 11 ILPL-K501 pixels — SK6812-class RGBW, green-red-blue-white on the wire — from I2S3, data out on PD6, through `worldsemi,ws2812-i2s`. Everything board-specific is in [`boards/nucleo_h753zi.overlay`](boards/nucleo_h753zi.overlay), and each value there carries its reason: the nibble timing, the DMA controllers the I2S binding needs and the board leaves off, and the `color-mapping` the RGBW path reads to build its permute.
 
 ## Build, flash, watch
 
@@ -14,11 +14,13 @@ scripts/sample-flash.sh
 scripts/console.sh             # 115200 8N1 on the ST-LINK port
 ```
 
+The scripts expect a Zephyr v4.4.1 workspace at `~/zephyr-workspace`, or wherever `ZEPHYR_WORKSPACE` points. The sample names this repository in `ZEPHYR_EXTRA_MODULES`, so the workspace's `west.yml` never has to know about it.
+
 `scripts/sample-build.sh --rgb` builds the same sample with `CONFIG_STRIPSEQ_WHITE_CHANNEL=n`, which takes the other adapter path: `led_strip_update_rgb()` on the buffer as it stands instead of a permute and `led_strip_update_channels()`. On this strip it runs with the white die dark, which is the driver's documented behaviour rather than a fault. CI builds both.
 
 ## The stages
 
-The user button (B1) advances. Each stage names itself on the console when it starts, and prints how many frames it rendered, and over how long, when it ends. They run cheapest signal first, so a failure is localised by the first stage that shows it.
+The user button advances. Each stage names itself on the console when it starts, and prints how many frames it rendered, and over how long, when it ends. They run cheapest signal first, so a failure is localised by the first stage that shows it.
 
 | Stage | What it proves | What a failure looks like |
 | --- | --- | --- |
@@ -31,4 +33,8 @@ The user button (B1) advances. Each stage names itself on the console when it st
 
 Solid red and the white die are seeked rather than played, so they are static too and also print `1 frames` when left. The stages wrap, so pressing again after the gradient starts over at red.
 
-The sample runs at a quarter of full brightness. Bring-up proves wiring, timing and code paths, not light output, and eleven RGBW pixels at full white draw more than a USB-powered bench should be asked for.
+The sample runs at a quarter of full brightness. The stages prove wiring, timing and code paths, not light output, and eleven RGBW pixels at full white draw more than a USB-powered bench should be asked for.
+
+## On other hardware
+
+The application reads three things from the devicetree: a `led-strip` alias naming any `led_strip` driver, that node's `chain-length` for the pixel count, and an `sw0` alias for the button, which most development boards already define. An RGBW build also reads the node's `color-mapping` to build its permute. Add an overlay under `boards/` that provides them and build with `BOARD=<your board> scripts/sample-build.sh`, adding `--rgb` for a strip without a white channel.

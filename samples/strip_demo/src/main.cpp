@@ -1,5 +1,5 @@
 /* The bring-up app: the Zephyr side of the library, driving the bench strip
- * through the stages of the bring-up order in docs/BRING-UP.md.
+ * through the stages described in this sample's README.md.
  *
  * The library never touches hardware or reads a clock, so everything platform-
  * shaped is here: the frame loop on a k_work_delayable, k_uptime_get() sampled
