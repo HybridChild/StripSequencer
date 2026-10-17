@@ -12,6 +12,10 @@
 # to be 64-bit, and arithmetic the core cannot do in an instruction. Nothing is
 # linked and nothing is run: on a target with no startup file and no linker
 # script, compiling and reading the objects is the whole signal.
+#
+# Needs CMake 3.24 or later, for --fresh, which is newer than the 3.21 the
+# library asks of a consumer: the script is a developer's tool, not part of
+# what a consumer builds.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

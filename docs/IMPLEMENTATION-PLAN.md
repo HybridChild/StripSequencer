@@ -390,7 +390,7 @@ A **golden hash** per recipe over a table of timestamps then guards against sile
 - All eleven recipes compile unmodified and pass in every variant.
 - The verbatim check passes, and fails when a single token of a sketch recipe is changed without the test.
 - Every recipe matches its golden hash in every variant, and `tight` matches the default's table.
-- Blink is still three lines.
+- Blink is still describing the sequence, then loading, starting and placing it.
 
 ## Phase 6 — Zephyr integration
 

@@ -2,7 +2,7 @@
 
 The calling surface for the mechanism described in [DESIGN.md](DESIGN.md). Signatures only, no bodies.
 
-Its purpose is to check that the design survives contact with real code, and the test is the [cookbook](#the-cookbook-as-code): the ten recipes from DESIGN.md's cookbook plus the overlay example from its render section, written out as they would actually be called. If Blink is not three lines, something is wrong upstream.
+Its purpose is to check that the design survives contact with real code, and the test is the [cookbook](#the-cookbook-as-code): the ten recipes from DESIGN.md's cookbook plus the overlay example from its render section, written out as they would actually be called. If Blink takes more than describing the sequence and loading, starting and placing it, something is wrong upstream.
 
 How it gets built is in [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md). Decisions are recorded where the thing they decide is declared; [open questions](#open-questions) at the end lists what is still genuinely undecided.
 
