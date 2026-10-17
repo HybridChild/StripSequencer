@@ -2,7 +2,7 @@
 
 *A from-first-principles guide to how a test framework and a test runner divide the work, using doctest and CTest.*
 
-This is a teaching document, not project documentation. It explains what a C++ test framework actually does, why CTest is a separate layer that knows nothing about your framework, what test *discovery* buys over the naive wiring, and how to find out what a passing suite does not see. The running example is this repository's suite: one set of test cases compiled into five differently configured binaries, and reported by CTest as one independent result per case per configuration. It assumes [`build-variants-guide.md`](build-variants-guide.md) for where the five come from.
+This is a teaching document, not project documentation. It explains what a C++ test framework actually does, why CTest is a separate layer that knows nothing about your framework, what test *discovery* buys over the naive wiring, how to find out what a passing suite does not see, and how to test a function whose inputs are too many to choose by hand. The running example is this repository's suite: one set of test cases compiled into five differently configured binaries, and reported by CTest as one independent result per case per configuration. It assumes [`build-variants-guide.md`](build-variants-guide.md) for where the five come from.
 
 **The shape of this document:**
 
@@ -12,8 +12,9 @@ This is a teaching document, not project documentation. It explains what a C++ t
 - **§6** — the one-line translation unit, and the honest limit of what it proves.
 - **§7** — tests that must *not* compile, which no test framework can run, and what `try_compile` does instead.
 - **§8** — tests that pass for the wrong reason: planting bugs to see which ones the suite misses, a bug the target hardware hides, and a test that agrees with itself.
-- **§9** — nine exercises.
-- **§10–§11** — the model in a paragraph, and where to go next.
+- **§9** — tests nobody wrote by hand: properties instead of expected values, a generator aimed at the code's decisions, and a failure that replays from one number.
+- **§10** — twelve exercises.
+- **§11–§12** — the model in a paragraph, and where to go next.
 
 ---
 
@@ -107,19 +108,19 @@ So the test has to be a whole compiler run, observed from outside — and the th
 
 Four decisions in that file are the general lessons.
 
-**Failing is not enough; name the failure.** A probe that fails to compile proves nothing on its own, because it might have failed for an unrelated reason — a typo, a missing include, a header that moved, or a *different* rule firing first. So each case carries the name of the failure function its sequence should reach, and the compiler's output must contain that name. Because `build_const()` names each error after itself, this checks *which* error, not merely *an* error. §9 Exercise 5 shows the difference: with one rule removed, the probe for it still fails to compile — because another rule caught the same sequence — and only the name check notices.
+**Failing is not enough; name the failure.** A probe that fails to compile proves nothing on its own, because it might have failed for an unrelated reason — a typo, a missing include, a header that moved, or a *different* rule firing first. So each case carries the name of the failure function its sequence should reach, and the compiler's output must contain that name. Because `build_const()` names each error after itself, this checks *which* error, not merely *an* error. §10 Exercise 5 shows the difference: with one rule removed, the probe for it still fails to compile — because another rule caught the same sequence — and only the name check notices.
 
 **A positive control.** Case 0 is a valid sequence, through the same probe file with the same flags, and it must compile. Without it, a probe broken for every case — a wrong include path, a renamed header — would make every negative case pass, because every one of them would fail to compile.
 
-**`try_compile`, never `check_cxx_source_compiles`.** CMake's `check_*()` modules look like the obvious tool, and they are built for feature detection: whether the compiler supports a flag does not change between configures, so once a result is in the cache they skip the check and report the cached answer. For a test that is fatal — it would pass once per build tree and report that first answer forever, whatever the headers became (§9 Exercise 7). `try_compile` itself always compiles. It does store its result as a cache entry — CMake 3.25 added `NO_CACHE` to stop that, and this project's minimum is 3.21 — but it never reads one back.
+**`try_compile`, never `check_cxx_source_compiles`.** CMake's `check_*()` modules look like the obvious tool, and they are built for feature detection: whether the compiler supports a flag does not change between configures, so once a result is in the cache they skip the check and report the cached answer. For a test that is fatal — it would pass once per build tree and report that first answer forever, whatever the headers became (§10 Exercise 7). `try_compile` itself always compiles. It does store its result as a cache entry — CMake 3.25 added `NO_CACHE` to stop that, and this project's minimum is 3.21 — but it never reads one back.
 
-**Make the build reconfigure when the probe's inputs change.** A configure-time check runs when CMake configures, and editing a header is not something CMake configures for: it tracks the headers each object file includes, so `cmake --build` after an edit to `sequence.h` recompiles every test, and runs no probe. A mistake that only the probes can see — a failure branch that no longer calls its function — would survive an edit, a build and a full `ctest` run. The fix is the directory property `CMAKE_CONFIGURE_DEPENDS`: every file listed there is a dependency of the build system itself, so a change to one makes the next build start with *Re-running CMake*. The check lists the probe and every header it reaches, which costs nine small compiles on any build after one of them changes. The list is maintained by hand, so a new `#include` in `sequence.h` has to be added to it (§9 Exercise 6).
+**Make the build reconfigure when the probe's inputs change.** A configure-time check runs when CMake configures, and editing a header is not something CMake configures for: it tracks the headers each object file includes, so `cmake --build` after an edit to `sequence.h` recompiles every test, and runs no probe. A mistake that only the probes can see — a failure branch that no longer calls its function — would survive an edit, a build and a full `ctest` run. The fix is the directory property `CMAKE_CONFIGURE_DEPENDS`: every file listed there is a dependency of the build system itself, so a change to one makes the next build start with *Re-running CMake*. The check lists the probe and every header it reaches, which costs nine small compiles on any build after one of them changes. The list is maintained by hand, so a new `#include` in `sequence.h` has to be added to it (§10 Exercise 6).
 
 ## 8. Tests that pass for the wrong reason
 
 A green suite says that nothing the tests looked at went wrong. It says nothing about what they did not look at, and the only way to find that out is to break the code on purpose and see whether anything notices. Each deliberate bug is a *mutant*; a test that fails because of it *kills* it; one that survives every test is a finding. Tools exist that plant thousands mechanically — Mull, for C++ under Clang — but planting a handful by hand, at the lines you were least sure of, teaches more per minute, and needs nothing but an editor.
 
-Done to `Sequencer` (§9 Exercise 8), seven mutants give this:
+Done to `Sequencer` (§10 Exercise 8), seven mutants give this:
 
 | Planted in `src/sequencer.cpp` | Killed by |
 | --- | --- |
@@ -145,17 +146,35 @@ Integer division by zero is undefined behaviour in C++, and what actually happen
 
 Three machines, three behaviours, and the one that runs the tests is the most forgiving: the host carries on with a wrong answer, and catches the mutant only because that answer is not 0. It is not 0 everywhere it is asked, either — 2⁴⁰ ms has a low word of 0, and that check passes. Had the test checked only that the segment shows black — which `at()` answers for an empty sequence whatever playhead it is given — it would pass on the host, and the board would fault. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
 
-What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 for the reason it is named for (§9 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
+What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 for the reason it is named for (§10 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
 
 **A test that agrees with itself.** The third way to pass for the wrong reason needs no mutant and no second machine to see, only a look at where the expected value comes from. `tests/convert.cpp` has to know, for each of the 256 top bytes a channel can have, what the gamma table should turn it into. The convenient expectation is the library's own answer: read the table, or paste a copy of the function that generates it into the test. Either one passes whatever the generator does, wrong included, because the test now checks that the code equals itself. An expectation is only evidence when it is computed **another way** — an *oracle* that shares nothing with the code but the definition both are meant to meet.
 
 Here the definition is `round(255 · (in/255)^2.5)`, and the library computes it by integer comparison, with no floating point allowed (see [`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §7). The test computes it with `std::pow` and `std::lround` in `double`: the rule against floating point is about the library, and a test is free to use whatever makes its expectation obviously right. The two methods fail in unrelated ways, so agreement at all 256 entries means something. Plant the most likely slip — the generator's search loses its halves and floors instead of rounding, wrong at 111 entries — and three of the five `to_bytes` cases fail ([`gamma-and-color-guide.md`](gamma-and-color-guide.md), Exercise 5). Against a pasted copy of the generator, none would.
 
+## 9. Tests nobody wrote by hand
+
+Every case so far is an *example*: someone chose an input and worked out the answer it should get. That is the right shape for most of a suite, and it has one blind spot that no amount of care removes — the inputs nobody thought to choose. `Sequence::at()` is where that blind spot is widest. Its playhead is any `int32_t`, four billion values, and the sequence it is asked about is anything `build()` accepts: up to eight steps, each with a color, a transition and a duration, then a repeat count and two optional end colors. The easing curves can be tested over every input, because they have only 65,536 ([`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §8); here that is not on offer. What is on offer is generating inputs by the thousand and checking each one, which is what `tests/fuzz.cpp` does — and it raises three questions an example never does.
+
+**What to check, when nobody knows the answer.** A generated sequence comes with no hand-worked expected value. What it has is *properties*: statements true of every input, which a program can check without knowing the answer in advance. They come in three kinds, and the harness uses all three.
+
+- **A model, computed another way.** §8's oracle, scaled up. `expect()` works out what `at()` should answer from the steps the generator chose, in `int64_t`, where nothing wraps: the textbook `((p % n) + n) % n` for the ring, and a plain division for which pass a playhead falls in. `at()` does neither — it folds a negative playhead by hand, in `uint32_t` — so the two agree only where both meet the definition. A model of the builder's rules predicts every `Error` the same way.
+- **Relations between answers.** Some properties need no model, only a second question. One loop later is the same answer: anywhere for an endless sequence, and between the first pass and the last for a finite one. And a hold of *n* is exact, so `at(p + k)` shows the same color with a hold of exactly *n* − *k*. "The color stays put" is the obvious property, and it catches only half of what `hold_ms` can get wrong: an overstated hold drops frames and an understated one wastes them, and only the countdown fails both.
+- **Invariants.** A fade's color lies between the color it comes from and the one it goes to, channel by channel, and anywhere later in the same fade lies between this point and the target. The second matters as much as the first. A product that overflows inside `progress()` wraps *t* back towards zero partway through a long fade; every color it produces is still between the endpoints, and only comparing two points catches the jump (§10 Exercise 12).
+
+**Where to look.** Generation is most of the work, and uniform randomness is the wrong default. Draw each duration uniformly from `uint32_t` and seven in eight exceed the builder's 2²⁹ ms limit on their own; a sequence of several almost never fits, so `build()` refuses nearly everything, `at()` is almost never called — and every property holds, vacuously, of a sequence that was never built. The harness guards against that directly: it counts the inputs that built, and fails if fewer than a third did (§10 Exercise 11). Then it aims. Most durations are small, so that sequences fit, and the rest come from a table of the values where the code makes a decision: 0, where a fade becomes an error; 65,536, past which `progress()` shifts; the limit and one either side; `UINT32_MAX`. Playheads are aimed the same way — at each step's edges in passes either side of zero and of the last, at the ends of `int32_t` — and only sometimes anywhere at all. A generator is a statement, in code, of where you think the bugs are.
+
+**Making a failure a number.** A random test that fails once and never again is worse than none. Every input here comes from a seed, through splitmix64: a few lines that produce the same stream on every compiler. `<random>` could supply the engine, since `std::mt19937` is fully specified, but not the distributions — how `std::uniform_int_distribution` maps engine output onto a range is left to the standard library, and libstdc++ and libc++ answer differently. So a failure reports its seed, and `STRIPSEQ_FUZZ_SEED` replays exactly that input in any build (§10 Exercise 10). What the harness does not do is *shrink*. Property-testing libraries — QuickCheck, which started the idea, Hypothesis, RapidCheck for C++ — respond to a failure by searching for the smallest input that still fails, and report that. Here you get a seed and a playhead, and the reading is yours.
+
+**Bytes as the interface.** `check()` reads every value out of a byte buffer, with zeros past its end, so every buffer is a valid input and the seeded loop is only one way to make them. A *coverage-guided fuzzer* is another. libFuzzer calls a function named `LLVMFuzzerTestOneInput` with bytes, compiles the code under test with instrumentation that records which branches each input reached, and keeps and mutates the inputs that reached somewhere new. It needs no theory of where the bugs are, so it finds branches the generator was never aimed at; it does need clang with its fuzzer runtime, which Apple's clang does not ship, and a build target of its own. Writing the properties against bytes rather than against a random-number generator is what lets either one drive them.
+
+**What it adds, measured.** §8's method answers this too. Eleven bugs planted in `at()`, `progress()` and `build()` — among them the negative fold, a hold one too long, the first-pass test, the landing boundary, the length limit, and the color a fade starts from — are all killed by the harness, and ten of them by the example cases as well. The eleventh is the order of `build()`'s two endless-color checks: with both `start_color()` and `landing_color()` set on an endless sequence, the order decides which error is reported, every example sets only one of them, and nobody would think to write the case. That is the honest shape of the result. On code that already has a careful suite, a generator adds few kills per mutant; what it buys is the combinations nobody enumerated, and hundreds of thousands of calls to `at()` through UBSan in the sanitizers job rather than a few hundred. It has survivors of its own, too. Make `progress()` start shifting above 65,535 ms instead of 65,536, and a fade of exactly 65,536 ms comes out a level of *t* lower in places, out of 65,536: every property still holds, and so does every example. Properties pin down relations, not exact values, and only an example pins down an exact value — whether one level in 65,536, far below the eight-bit output, deserves one is the judgement §8 describes.
+
 ---
 
-## 9. Exercises
+## 10. Exercises
 
-Nine, all on the host.
+Twelve, all on the host.
 
 ```sh
 ./scripts/build.sh
@@ -472,13 +491,81 @@ arm-none-eabi-objdump -d _udivsi3.o | grep -A3 -E '^ *10[0c]:'
 
 **Proves:** the same remainder returns a wrong answer, kills the process, faults the board, or is reported, depending only on the machine. A test that fails on one of them may be failing for a reason it was not written for, and one that passes on the host proves nothing about the target; the sanitizer is what makes the test mean the same thing everywhere.
 
+### Exercise 10 — A failure is a number
+
+*Demonstrates §9: a seed is a complete bug report.*
+
+In `Sequence::at()`, make every held step report one millisecond too many: change `return Sample{step.color, end - local};` to `return Sample{step.color, end - local + 1};`. Build, and run the harness alone:
+
+```sh
+cmake --build build --target tests_default && ./build/tests_default -tc='generated*'
+```
+
+```
+tests/fuzz.cpp:511: ERROR: hold_ms disagrees with the model
+  logged: seed 0, playhead 6069; replay with STRIPSEQ_FUZZ_SEED=0
+```
+
+The very first input caught it. Replay that one input, and nothing else:
+
+```sh
+STRIPSEQ_FUZZ_SEED=0 ./build/tests_default -tc='generated*'
+```
+
+The same two lines come back, from one input rather than twenty thousand, and they would in any variant, on any compiler. Now run the whole binary with `./build/tests_default | grep 'test cases:'`: about a dozen example cases fail as well, so this was never the harness's bug to find alone. **Revert it.**
+
+**Proves:** deterministic generation turns a random failure into a bug report one number long, which replays the same input in any build. A property failing alongside the examples is the usual case, not the exception.
+
+### Exercise 11 — A generator that tests nothing
+
+*Demonstrates §9: a property holds vacuously of input that never reaches the code.*
+
+In `tests/fuzz.cpp`, make every duration uniform over `uint32_t` by adding one line at the top of `draw_duration()`:
+
+```cpp
+uint32_t draw_duration(Bytes& in) {
+    return in.u32();
+```
+
+```sh
+cmake --build build --target tests_default && ./build/tests_default -tc='generated*'
+```
+
+```
+tests/fuzz.cpp:523: ERROR: CHECK( built * 3 >= iterations ) is NOT correct!
+  values: CHECK( 564 >= 20000 )
+  logged: built := 188
+```
+
+188 inputs out of 20,000 built a sequence, under one percent. Every property check passed — against those 188 and nothing else — and without the floor this would be a green test. **Revert it.**
+
+**Proves:** a generator needs a check on what it generates, not only on what the code does with it. Uniform over the type is rarely uniform over the inputs that matter.
+
+### Exercise 12 — What only the harness sees, and what nobody does
+
+*Demonstrates §9: the combination no example covers, a property that needs two points, and a survivor.*
+
+Make each change below on its own, and run the examples and the harness separately; revert before the next:
+
+```sh
+cmake --build build --target tests_default
+./build/tests_default -tce='generated*' | grep 'test cases:'
+./build/tests_default -tc='generated*' | grep -A1 ERROR
+```
+
+1. In `SequenceBuilder::build()`, swap the `LandingColorOnEndless` check and the `StartColorOnEndless` check below it. Every example passes, and the harness reports `build() disagrees with the model` at seed 9: an endless sequence with both colors set.
+2. In `progress()`, change `while (duration > 65536)` to `while (duration > 131072)`. Fades from 65,537 ms to 131,072 ms now multiply unshifted, and `elapsed * full` wraps `uint32_t`. The harness reports `a fade went backwards`, and one example fails, "a fade longer than a minute stays monotonic and reaches its target". Build it under UBSan as in Exercise 9 and nothing more is reported: unsigned wrap is defined, so to a sanitizer this is not a bug at all ([`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §4).
+3. In `progress()`, change `while (duration > 65536)` to `while (duration > 65535)`. Nothing fails, and nothing fails with `STRIPSEQ_FUZZ_ITERATIONS=2000000` either.
+
+**Proves:** a generator earns its place on the combinations nobody enumerated; an invariant that compares two points catches what one point cannot, and what a sanitizer cannot either; and a change too small for any property to see survives every input, which only an example with an exact value could catch.
+
 ---
 
-## 10. The model in one paragraph
+## 11. The model in one paragraph
 
-A test framework and a test runner solve different problems, and the seam between them is where the useful choices live. The framework — doctest here, a single header — collects cases through namespace-scope objects that register themselves before `main`, runs them, and reports values rather than just failures. CTest knows none of that: to it a test is a command line that passes if the process exits zero, so the two layers must be joined either by one test per binary or by one test per case, and the second is worth having because it gives per-case names, real parallelism, and a failure that diagnoses itself. Discovery bridges them by running the freshly linked binary with `--list-test-cases` at build time and generating ordinary `add_test` calls with `--test-case=` filters — which means new cases appear only after a build, and a cross-compiled suite cannot be discovered at all. What that costs is set by the shape of the build rather than the framework: because tests include the headers that build-time macros change, the whole suite compiles once per configuration, and a header-only framework's compile speed is multiplied by the number of variants on every build. One kind of test sits outside both layers: a promise that some code *fails* to compile cannot live in a file that has to compile, so it becomes a compiler run that CMake's `try_compile` performs at configure time: each probe must fail, must fail by naming the expected error, and is paired with a control that must succeed — and the headers it compiles are configure dependencies, so a change to them makes the next build run it again. And a green result, of either kind, says only that nothing the tests looked at went wrong on this machine: planting bugs on purpose shows what the tests do not look at, a survivor is either a missing test or code that cannot matter, and undefined behaviour can pass a test on a forgiving processor and crash on another — which is why a sanitizer build, not a second machine, is what makes a test mean the same thing everywhere. And an expectation computed by the code under test checks nothing, so the oracle has to reach the same definition another way.
+A test framework and a test runner solve different problems, and the seam between them is where the useful choices live. The framework — doctest here, a single header — collects cases through namespace-scope objects that register themselves before `main`, runs them, and reports values rather than just failures. CTest knows none of that: to it a test is a command line that passes if the process exits zero, so the two layers must be joined either by one test per binary or by one test per case, and the second is worth having because it gives per-case names, real parallelism, and a failure that diagnoses itself. Discovery bridges them by running the freshly linked binary with `--list-test-cases` at build time and generating ordinary `add_test` calls with `--test-case=` filters — which means new cases appear only after a build, and a cross-compiled suite cannot be discovered at all. What that costs is set by the shape of the build rather than the framework: because tests include the headers that build-time macros change, the whole suite compiles once per configuration, and a header-only framework's compile speed is multiplied by the number of variants on every build. One kind of test sits outside both layers: a promise that some code *fails* to compile cannot live in a file that has to compile, so it becomes a compiler run that CMake's `try_compile` performs at configure time: each probe must fail, must fail by naming the expected error, and is paired with a control that must succeed — and the headers it compiles are configure dependencies, so a change to them makes the next build run it again. And a green result, of either kind, says only that nothing the tests looked at went wrong on this machine: planting bugs on purpose shows what the tests do not look at, a survivor is either a missing test or code that cannot matter, and undefined behaviour can pass a test on a forgiving processor and crash on another — which is why a sanitizer build, not a second machine, is what makes a test mean the same thing everywhere. And an expectation computed by the code under test checks nothing, so the oracle has to reach the same definition another way. Past the inputs anyone chose, a generator supplies thousands, checked against properties rather than answers — a model computed another way, relations between answers, invariants — and the test stands or falls on the generator: aimed at the decisions in the code, checked for having built anything at all, and deterministic, so that a failure is a seed that replays.
 
-## 11. Where to go next
+## 12. Where to go next
 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
@@ -486,5 +573,7 @@ A test framework and a test runner solve different problems, and the seam betwee
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`tests/cookbook.cpp`** — where the suite becomes an acceptance test: the eleven cookbook recipes, each with property assertions and a golden-frame hash.
+- **`tests/fuzz.cpp`** — §9 in full: the generator, the model, every property, and the seeded loop that drives them.
+- **[`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §8** — the other way past examples, when the inputs are few enough to try every one.
 - **[`wrapping-clocks-guide.md`](wrapping-clocks-guide.md)** — the code §8's mutants were planted in: what the narrowing and each guard in `Sequencer` are for, and the exercises that break them one at a time.
 - **doctest's own `doctest.cmake`** — the ~200 lines behind §4, and short enough to read once to see that discovery really is just generated `add_test` calls.

@@ -10,7 +10,7 @@ The guides fall into two groups. The first five are about the build — targets,
 
 1. **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md)** — the foundation. What a CMake target is, and what `PUBLIC` really controls. Every build guide below assumes it, and the bug in its §6 is the reason the other four exist in the shape they do.
 2. **[`build-variants-guide.md`](build-variants-guide.md)** — the direct consequence: when a build-time macro changes a *type*, one compiled library is not enough, and the build has to carry several at once.
-3. **[`testing-guide.md`](testing-guide.md)** — how each test case becomes five CTest results, one per configuration, why the suite is compiled once per variant, how to test code that must *not* compile, and how to find out what a passing suite does not see. Wants #2 for the per-variant argument, and #6 §4 for what the compile-failure probes are probing.
+3. **[`testing-guide.md`](testing-guide.md)** — how each test case becomes five CTest results, one per configuration, why the suite is compiled once per variant, how to test code that must *not* compile, how to find out what a passing suite does not see, and how to test with inputs nobody wrote by hand. Wants #2 for the per-variant argument, #6 §4 for what the compile-failure probes are probing, and #7 lightly for the generated tests.
 4. **[`dependencies-guide.md`](dependencies-guide.md)** — *self-contained after #1.* Where `doctest::doctest` comes from: installed packages, fetched ones, and the imported targets both produce.
 5. **[`cross-compiling-guide.md`](cross-compiling-guide.md)** — *off to the side.* Compiling for a machine you cannot run: toolchain files, freestanding C++, and the sharp distinction between what a compile-only check proves and what it does not. Also the bridge to the C++ guides: its §5–§6 teach reading an object file with `nm` and `objdump`, which both of them use as evidence.
 6. **[`constant-initialisation-guide.md`](constant-initialisation-guide.md)** — why nothing in this library runs before `main`: `constexpr`, `consteval`, `constinit` and `inline constexpr`, what each one actually promises, and how `build_const()` makes an invalid sequence a compile error. Wants #5 §5–§6.
@@ -54,6 +54,7 @@ cmake-usage-requirements ───────────┤     one library,  
 - **Wondering why `ctest` prints five results for every test case?** #3 §3–§4, and nothing else.
 - **Timing something with `millis()` or `k_uptime_get_32()`?** #8 §2–§3 is the whole of what you need, and its Exercise 2 takes two minutes.
 - **A test passes here and crashes elsewhere?** #3 §8, and its Exercise 9.
+- **A function with too many inputs to test by example?** #3 §9, and its Exercises 10–12.
 - **Chasing a build failure?** The lab at the end of each guide is a set of numbered exercises with commands, expected output and a **Proves:** line. Several of them *are* the failure you are looking at, reproduced deliberately.
 
 ## All of them
@@ -64,7 +65,7 @@ Rows are in the reading order above, so the column to scan for "can I start here
 | - | ----- | ------- | ---------------- | -------------- |
 | 1 | [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) | What does `PUBLIC` mean, if not access control? | What a compiler and linker do | *(the root `CMakeLists.txt` and `cmake/stripseq_variant.cmake`)* |
 | 2 | [`build-variants-guide.md`](build-variants-guide.md) | Why does one library need five builds? | #1 | *(`include/stripseq/config.h`)* |
-| 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become a result for every case — and how do you test what must not compile? | #2, for §5; #6 §4, for §7; #8, lightly, for §8 | *(`tests/cookbook.cpp` and `cmake/stripseq_compile_fail.cmake`)* |
+| 3 | [`testing-guide.md`](testing-guide.md) | How does one binary become a result for every case — and how do you test what must not compile? | #2, for §5; #6 §4, for §7; #8, lightly, for §8; #7, lightly, for §9 | *(`tests/cookbook.cpp` and `cmake/stripseq_compile_fail.cmake`)* |
 | 4 | [`dependencies-guide.md`](dependencies-guide.md) | Where does someone else's library come from? | #1 | *(the `STRIPSEQ_BUILD_TESTS` block in the root `CMakeLists.txt`)* |
 | 5 | [`cross-compiling-guide.md`](cross-compiling-guide.md) | What does compiling for a machine you cannot run actually prove? | #1 §3–§5, lightly; roughly what a microcontroller is | *(`cmake/arm-none-eabi.cmake` and `scripts/cross-check.sh`)* |
 | 6 | [`constant-initialisation-guide.md`](constant-initialisation-guide.md) | Why does nothing here run before `main`, and which keyword decides that? | #5 §5–§6; C++ classes and functions | *(`SequenceBuilder::build_const()` in `include/stripseq/sequence.h`)* |
