@@ -89,6 +89,7 @@ if(STRIPSEQ_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/convert.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/fuzz.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/segment.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/strip.cpp
