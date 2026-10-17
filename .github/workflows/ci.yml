@@ -155,10 +155,17 @@ jobs:
           cd "$ZEPHYR_WORKSPACE"
           west config manifest.project-filter -- '-.*,+cmsis_6,+hal_stm32'
           west update --narrow -o=--depth=1
-          west sdk install -t arm-zephyr-eabi -H -d "$ZEPHYR_SDK_INSTALL_DIR"
 
       - name: Install Zephyr's Python requirements
         run: pip install -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-base.txt"
+
+      # After the requirements, not with the workspace: west sdk is one of
+      # Zephyr's own extension commands, and imports what they list.
+      - name: Install the SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd "$ZEPHYR_WORKSPACE"
+          west sdk install -t arm-zephyr-eabi -H -d "$ZEPHYR_SDK_INSTALL_DIR"
 
       # Both settings, because they take different code paths in the adapter:
       # update_channels() and a permute, or update_rgb() and a straight cast.

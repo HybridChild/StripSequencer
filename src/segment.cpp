@@ -37,14 +37,24 @@ bool Segment::set_pixel_delay(int32_t ms) {
 
 bool Segment::set_pixel_delay_q8(int32_t ms_q8) {
     /* Checked once here so the pixel loop can multiply in int32_t without a
-     * test of its own: |ms_q8| * span must not pass INT32_MAX. Asked as a
-     * division, so it stays in 32 bits, and costs one per call rather than
-     * per pixel. Magnitude negated in uint32_t, so INT32_MIN is no special
-     * case, and a one-pixel segment, with no span, accepts any delay. */
+     * test of its own: |ms_q8| * span must not pass INT32_MAX. Magnitude
+     * negated in uint32_t, so INT32_MIN is no special case, and a one-pixel
+     * segment, with no span, accepts any delay.
+     *
+     * The product is taken in two 16-bit halves of the magnitude, so it
+     * stays in 32 bits with no 64-bit multiply, and every partial product
+     * fits: span is under 2^16 and each half at most 2^16 - 1. Never ask it
+     * as INT32_MAX / span instead. Besides costing a library call on a
+     * Cortex-M0, GCC 13 then also declares __aeabi_idiv for the unsigned
+     * division of a divisor it can bound, and the linker pulls in an
+     * undefined symbol whether or not anything calls it. */
     const uint32_t span = count_ > 0 ? count_ - 1u : 0u;
     const uint32_t magnitude = ms_q8 < 0 ? 0u - static_cast<uint32_t>(ms_q8)
                                          : static_cast<uint32_t>(ms_q8);
-    if (span != 0 && magnitude > static_cast<uint32_t>(INT32_MAX) / span)
+    const uint32_t high = (magnitude >> 16) * span;
+    if (high > (static_cast<uint32_t>(INT32_MAX) >> 16))
+        return false;
+    if ((magnitude & 0xFFFFu) * span > static_cast<uint32_t>(INT32_MAX) - (high << 16))
         return false;
     delay_q8_ = ms_q8;
     return true;

@@ -150,6 +150,30 @@ TEST_CASE("the setters accept the largest stagger either way and refuse one more
     CHECK_FALSE(s.set_pixel_delay(largest_q8 / 256 + 1));
 }
 
+TEST_CASE("the setters' bound is the product's, for every length of segment") {
+    /* The setter takes the product in two halves, so its bound has corners a
+     * single length does not reach: the high half alone over the limit, and
+     * the low half carrying it over. Every span against the product in
+     * int64_t, at the bound, one past it, and both ends of int32_t. */
+    Sequencer seq;
+    for (uint32_t count = 2; count <= UINT16_MAX; ++count) {
+        CAPTURE(count);
+        Segment s(0, static_cast<uint16_t>(count), seq);
+        const int64_t span = count - 1;
+        const int64_t bound = INT32_MAX / span;
+        for (int64_t q8 : {bound, bound + 1, -bound, -bound - 1, int64_t{INT32_MAX},
+                           int64_t{INT32_MIN}}) {
+            /* One past the bound leaves int32_t when the span is 1. */
+            if (q8 > INT32_MAX || q8 < INT32_MIN)
+                continue;
+            CAPTURE(q8);
+            const int64_t product = q8 * span;
+            CHECK(s.set_pixel_delay_q8(static_cast<int32_t>(q8)) ==
+                  (product >= -INT32_MAX && product <= INT32_MAX));
+        }
+    }
+}
+
 TEST_CASE("a segment of one pixel takes any delay that can be stored") {
     /* No pixel is staggered, so nothing multiplies the delay, and it is free to
      * be a replacement's parameter. The millisecond setter still refuses a

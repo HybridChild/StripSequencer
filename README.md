@@ -128,10 +128,10 @@ The library's code and constants, linked into an application that calls every pa
 
 | Configuration | Cortex-M0 | Cortex-M4 |
 | --- | --: | --: |
-| RGB, gamma (the default) | 1882 B | 1786 B |
-| RGB, no gamma | 1612 B | 1516 B |
-| RGBW, gamma | 1934 B | 1852 B |
-| RGBW, no gamma | 1664 B | 1582 B |
+| RGB, gamma (the default) | 1890 B | 1798 B |
+| RGB, no gamma | 1620 B | 1528 B |
+| RGBW, gamma | 1942 B | 1864 B |
+| RGBW, no gamma | 1672 B | 1594 B |
 
 Gamma is the 256-byte table, and the white channel costs almost nothing in code. The constants include one empty `Sequence`, which every sequencer refers to until something is loaded. The library has no RAM of its own: all of it is in the objects above.
 
