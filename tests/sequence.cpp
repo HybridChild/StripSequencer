@@ -121,7 +121,8 @@ TEST_CASE("endless: far-negative and far-positive playheads land in the right pl
 }
 
 TEST_CASE("endless: shifting a playhead by whole loops changes nothing") {
-    /* The property the sequencer's re-basing in Phase 3 rests on. */
+    /* The property that lets the sequencer narrow an endless playhead modulo
+     * the loop. */
     const Sequence s = built(SequenceBuilder{}
                                  .hold(colors::red, 70)
                                  .fade_to(colors::blue, 130)

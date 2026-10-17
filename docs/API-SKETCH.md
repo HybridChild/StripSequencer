@@ -100,7 +100,7 @@ A step count is not always known at compile time. Sequences are built at run tim
 
 Three further objections, none decisive alone. The fluent builder would go viral: each `.fade_to()` would have to return a `SequenceBuilder<N+1>` by value rather than a reference, since its type changes with every call — workable, and a known pattern, but it degrades error messages badly. `Segment` could no longer hold a plain `Sequencer*`, because `Sequencer<2>` and `Sequencer<6>` are unrelated types; the fixes are a virtual base, costing a vtable pointer per sequencer and an indirect call in the per-pixel path, or templating `Segment` and `Strip` too, which would stop one strip driving segments whose sequencers differ in size. And every distinct `N` instantiates its own copy of `at()`, the duration arithmetic and the builder, where a macro emits one — on an MCU flash is usually the tighter budget.
 
-What this costs is a global ceiling: one animation needing sixteen steps forces every sequencer in the project to sixteen. At the default capacity a `Sequence` is about 112 bytes and a `Sequencer` about 124, whether it holds a six-step rainbow or a two-step blink, so a right-sized `Sequencer<2>` would have come in near 52. Across four undersized sequencers the waste is roughly one pixel buffer's worth on a hundred-pixel strip, against Zephyr-class hardware with tens to hundreds of kilobytes.
+What this costs is a global ceiling: one animation needing sixteen steps forces every sequencer in the project to sixteen. At the default capacity a `Sequence` is about 112 bytes and a `Sequencer` about 136, whether it holds a six-step rainbow or a two-step blink, so a right-sized `Sequencer<2>` would have come in near 64. Across four undersized sequencers the waste is roughly one pixel buffer's worth on a hundred-pixel strip, against Zephyr-class hardware with tens to hundreds of kilobytes.
 
 If that ceiling ever becomes the real problem, the cheaper escape is caller-supplied storage — `Sequencer(Step* buf, uint8_t cap)` — which gives per-sequencer sizing with no templates and one copy of the code. It is not free: DESIGN.md cites sequencers owning their steps outright as the design's model for avoiding caller-owned lifetimes, so it trades away a stated property. It can be done later without disturbing the mechanism, which is the reason not to pre-empt it.
 
@@ -495,7 +495,9 @@ using OffsetFn = int32_t (*)(uint16_t index, uint16_t count, int32_t delay_q8);
 //   returns      a Sample. See Sample for the contract; reporting the hold
 //                honestly is what lets a segment driven by your function sleep
 //                exactly as long as one driven by a step list. Returning 0
-//                always is safe and costs only power; overstating is a bug.
+//                always paints correctly but costs power, and on a finite
+//                sequence it means the segment never reports finished();
+//                overstating is a bug.
 using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
 
 // Fit intent: the delay that spreads total_ms evenly across count pixels.

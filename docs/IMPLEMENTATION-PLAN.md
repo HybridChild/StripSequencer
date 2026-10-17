@@ -281,7 +281,7 @@ The core is two lines: the position is `now_ms - origin_ms_` while playing and `
 **Guides.** One, and a section of another.
 
 - [`wrapping-clocks-guide.md`](../notes/wrapping-clocks-guide.md) — keeping a position from a clock that wraps: deriving it rather than counting it, subtracting before converting, the 24.8-day limit on the difference rather than the 49.7-day wrap of the clock, the two ways out of that limit — moving the origin to stay inside it, or widening the type until it cannot be reached — and refusing the narrow type at compile time once the wide one is chosen. The `Sequencer` is the whole of the material, so the guide belongs to the phase that writes it.
-- [`testing-guide.md`](../notes/testing-guide.md) §8 — tests that pass for the wrong reason: planting bugs to find what the suite misses, the equivalent mutant `pause()` turned out to guard against, and the division by zero that arm64 forgives, x86-64 traps and a Cortex-M under Zephyr faults on, which is the case for running the host suite under UBSan.
+- [`testing-guide.md`](../notes/testing-guide.md) §8 — tests that pass for the wrong reason: planting bugs to find what the suite misses, the equivalent mutant `pause()` turned out to guard against, and the division by zero that x86-64 traps, arm64 answers wrongly and a Cortex-M under Zephyr answers correctly by accident, which is the case for running the host suite under UBSan.
 
 **Exit criteria:**
 

@@ -283,8 +283,8 @@ public:
 
 private:
     /* The limit is what lets the sequencer cap a finite playhead at 2^30 ms and
-     * still have every segment finish, and lets it re-base an endless one long
-     * before the playhead runs out of range -- see Sequencer::playhead(). */
+     * still have every segment finish, and keeps an endless one's remainder
+     * plus any stagger inside int32_t -- see Sequencer::playhead(). */
     static constexpr uint64_t max_duration_ms = uint64_t{1} << 29;
 
     /* The sequence under construction. build() copies it out and fills in the
