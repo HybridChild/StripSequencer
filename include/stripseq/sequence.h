@@ -295,7 +295,7 @@ private:
      * builder needs the distinction twice: to reject either call on an endless
      * sequence even when the color is black, and to know when build() should
      * supply the default instead. Sequence keeps neither bit, so at() never
-     * branches on one. Not std::optional: <optional> is outside the three
+     * branches on one. Not std::optional: <optional> is outside the two
      * headers the core may include. */
     bool start_set_ = false;
     bool landing_set_ = false;

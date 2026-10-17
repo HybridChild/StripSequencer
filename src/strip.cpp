@@ -44,7 +44,7 @@ uint8_t Strip::brightness() const { return brightness_; }
 
 uint32_t Strip::render(int64_t now_ms) {
     /* A loop rather than memset, which would need <cstring>: not a freestanding
-     * header in C++20, and outside the three the library includes. The
+     * header in C++20, and outside the two the library includes. The
      * compiler is free to emit memset for it anyway. */
     const size_t bytes = size_t{pixel_count_} * bytes_per_pixel;
     for (size_t i = 0; i < bytes; ++i)

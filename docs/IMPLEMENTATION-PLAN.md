@@ -135,14 +135,14 @@ Tests that only make sense in one configuration guard on the macro rather than l
 
 **doctest** is the test framework, fetched with `FetchContent` and guarded by `STRIPSEQ_BUILD_TESTS`, which defaults to `PROJECT_IS_TOP_LEVEL` so a consumer never builds our tests. It is a single header, compiles far faster than Catch2 or GoogleTest, and needs no separate build — which matters because the test suite is compiled five times, once per variant, and that cost is inherent: the tests see the headers, so they cannot be shared across configurations. doctest also ships the `doctest_discover_tests` module used above, which enumerates the binary's cases and registers each with CTest. That buys real parallelism under `ctest -j` and failure output that names the case, where a plain `add_test` per variant would report five results and tell you only which configuration broke.
 
-The **freestanding cross-compile check** is the cheapest possible proxy for "this actually works on the MCU": compile the library only — no tests, no link — with `arm-none-eabi-g++ -mcpu=cortex-m4 -ffreestanding -fno-exceptions -fno-rtti -Os`. It catches host-libc dependencies, accidental heap use through `operator new`, and code that only compiles because the host happens to be 64-bit. Run it in CI from Phase 0, where fixing a violation is one line, rather than in Phase 6, where it is an archaeology exercise.
+The **freestanding cross-compile check** is the cheapest possible proxy for "this actually works on the MCU": compile the library only — no tests, no link — with `arm-none-eabi-g++ -ffreestanding -fno-exceptions -fno-rtti -Os`, twice. Once for a soft-float Cortex-M4, where floating point becomes a call, and once for a Cortex-M0, which has no divide instruction and no 32 × 32 → 64 multiply, so every division and wide product becomes one too. Both builds use `-nostdinc++` and a two-header shim in `cmake/minimal-libcpp/`, which is what Zephyr's default minimal C++ library provides, so a third standard header fails here rather than in a Zephyr build. Then every symbol an object leaves undefined is checked against an allowlist of the run-time helpers the design accepts: `__aeabi_uidiv`, `__aeabi_uidivmod`, `memcpy` and `memset` anywhere, and `__aeabi_uldivmod` in `sequencer.cpp` only, for `Sequencer::playhead`'s 64-bit remainder. It catches host-libc dependencies, a third header, accidental heap use through `operator new`, floating point, a signed or 64-bit division, and code that only compiles because the host happens to be 64-bit. Run it in CI from Phase 0, where fixing a violation is one line, rather than in Phase 6, where it is an archaeology exercise.
 
 CI is two GitHub Actions host jobs, gcc and clang, plus the cross-compile job. The variants are not a matrix axis: one configure produces all five libraries and all five test binaries in the same tree, and `doctest_discover_tests` reports each case under its variant's prefix — so a matrix over variants would rebuild everything five times for the same coverage and the same per-variant reporting. Adding the Zephyr build job waits for Phase 6.
 
 **Exit criteria:**
 
 - `cmake --build build && ctest` passes in all five variants on gcc and clang, RGBW among them and not as an afterthought.
-- The cross-compile job produces an object file.
+- The cross-compile job builds for both cores and passes the allowlist; adding a `#include <type_traits>` to any source file makes it fail, and so does a `uint64_t` division anywhere but `sequencer.cpp`.
 - The umbrella header compiles standalone (a `#include <stripseq/stripseq.h>`-only translation unit, which catches missing includes inside headers).
 
 ## Phase 1 — Configuration, color and output conversion
@@ -427,7 +427,7 @@ The sample is the adapter from the sketch made real: a `k_work_delayable` frame 
 
 Read out of `~/zephyr-workspace` rather than assumed. Recorded here so Phase 6 does not rediscover them; the rest of the platform detail can wait until the phase starts.
 
-- **The module selects no C++ library.** Zephyr's default is `CONFIG_MINIMAL_LIBCPP` (`lib/cpp/Kconfig:107`), which ships only `<cstddef>`, `<cstdint>` and `<new>` (`lib/cpp/minimal/include/`) and compiles with `-nostdinc++`, so the toolchain's own headers are out of reach. The core includes the first two and nothing else, so it builds there as it is; a `select REQUIRES_FULL_LIBCPP` would pull in the whole of libstdc++ for nothing.
+- **The module selects no C++ library.** Zephyr's default is `CONFIG_MINIMAL_LIBCPP` (`lib/cpp/Kconfig:107`), which ships only `<cstddef>`, `<cstdint>` and `<new>` (`lib/cpp/minimal/include/`) and compiles with `-nostdinc++` (`CMakeLists.txt:2441`), so the toolchain's own headers are out of reach. The core includes the first two and nothing else, so it builds there as it is, and the Phase 0 cross-check builds it the same way; a `select REQUIRES_FULL_LIBCPP` would pull in the whole of libstdc++ for nothing.
 - **`led_strip_update_rgb()` cannot drive the white die.** `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero, and `struct led_rgb` has no fourth channel. RGBW must use `led_strip_update_channels()`.
 - **`update_channels()` applies no color mapping**, so the adapter owns the permute. Against our neutral `R,G,B,W`, a `GRBW` strip is one swap of bytes 0 and 1 per pixel.
 - **I2S3 needs DMA that nothing enables by default.** `dma1` and `dmamux1` are `status = "disabled"` in `stm32h7.dtsi` and the board dts leaves them that way, while the I2S binding requires `dmas`. The overlay needs both set okay, plus `CONFIG_DMA=y`.
@@ -465,7 +465,7 @@ Check the no-dynamic-initialisation rule mechanically rather than by reading: `n
 
 Measure and publish the footprint — flash and RAM for each of the four behavioural configurations, plus per-frame cycle cost for a 60-pixel strip — in the README. DESIGN.md and the sketch both make size arguments (a `Sequence` at ~116 bytes, a `Segment` at 20, the macro-versus-template trade); those arguments should end up with measured numbers behind them.
 
-Then the README: what it is, the three-line blink, the four macros, how to consume it standalone and as a Zephyr module, and links to the two design documents. Tag `v0.1.0`.
+Then the README: what it is, the Blink recipe, the four macros, how to consume it standalone and as a Zephyr module, and links to the two design documents. Tag `v0.1.0`.
 
 **Exit criteria:**
 

@@ -1,0 +1,42 @@
+// <cstdint> as Zephyr's minimal C++ library provides it: the C header, and its
+// names in std. With -nostdinc++ and this directory on the include path, the
+// cross-check sees exactly the C++ headers a Zephyr build does -- this one,
+// <cstddef> beside it, and nothing else. See cmake/arm-none-eabi.cmake.
+
+#ifndef STRIPSEQ_MINIMAL_LIBCPP_CSTDINT_
+#define STRIPSEQ_MINIMAL_LIBCPP_CSTDINT_
+
+#include <stdint.h>
+
+namespace std {
+using ::int8_t;
+using ::int16_t;
+using ::int32_t;
+using ::int64_t;
+using ::intmax_t;
+using ::int_fast8_t;
+using ::int_fast16_t;
+using ::int_fast32_t;
+using ::int_fast64_t;
+using ::int_least8_t;
+using ::int_least16_t;
+using ::int_least32_t;
+using ::int_least64_t;
+using ::uint8_t;
+using ::uint16_t;
+using ::uint32_t;
+using ::uint64_t;
+using ::uintmax_t;
+using ::uint_fast8_t;
+using ::uint_fast16_t;
+using ::uint_fast32_t;
+using ::uint_fast64_t;
+using ::uint_least8_t;
+using ::uint_least16_t;
+using ::uint_least32_t;
+using ::uint_least64_t;
+using ::intptr_t;
+using ::uintptr_t;
+}  // namespace std
+
+#endif  // STRIPSEQ_MINIMAL_LIBCPP_CSTDINT_

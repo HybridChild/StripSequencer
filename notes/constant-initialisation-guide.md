@@ -184,7 +184,8 @@ Seven, all compile-only, using the same cross compiler and flags as `scripts/cro
 mkdir -p /tmp/stripseq-lab && cd /tmp/stripseq-lab
 REPO=~/path/to/StripSequencer                 # wherever you cloned it
 xcxx() { arm-none-eabi-g++ -std=c++20 -mcpu=cortex-m4 -mthumb -ffreestanding \
-           -fno-exceptions -fno-rtti -Os -I"$REPO/include" "$@"; }
+           -fno-exceptions -fno-rtti -Os -nostdinc++ -isystem "$REPO/cmake/minimal-libcpp" \
+           -I"$REPO/include" "$@"; }
 ```
 
 ### Exercise 1 — Two `const` objects, two sections

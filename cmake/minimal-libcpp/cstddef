@@ -1,0 +1,16 @@
+// <cstddef> as Zephyr's minimal C++ library provides it: the C header, and its
+// names in std. See cstdint beside it.
+
+#ifndef STRIPSEQ_MINIMAL_LIBCPP_CSTDDEF_
+#define STRIPSEQ_MINIMAL_LIBCPP_CSTDDEF_
+
+#include <stddef.h>
+
+namespace std {
+using ::ptrdiff_t;
+using ::size_t;
+using ::max_align_t;
+using nullptr_t = decltype(nullptr);
+}  // namespace std
+
+#endif  // STRIPSEQ_MINIMAL_LIBCPP_CSTDDEF_

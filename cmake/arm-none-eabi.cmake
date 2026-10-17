@@ -6,7 +6,7 @@
 # while fixing it is one line rather than an archaeology exercise.
 #
 #   cmake -B build-cross -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
-#         -DSTRIPSEQ_BUILD_TESTS=OFF
+#         -DSTRIPSEQ_BUILD_TESTS=OFF [-DSTRIPSEQ_CROSS_CPU=cortex-m0]
 #
 # Note where the flags are: in the toolchain file, which is the *consumer* side
 # of the boundary. The library itself still sets none, per the ground rule.
@@ -24,14 +24,23 @@ set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
 set(CMAKE_AR           arm-none-eabi-gcc-ar)
 set(CMAKE_RANLIB       arm-none-eabi-gcc-ranlib)
 
-# cortex-m4, not the bench board's cortex-m7: with no -mfpu it is soft-float,
-# which makes an accidental floating-point operation expensive and visible
-# rather than free. The stricter proxy is the more useful one here.
+# The core to compile for. cortex-m4 by default, not the bench board's
+# cortex-m7: with no -mfpu it is soft-float, which makes an accidental
+# floating-point operation expensive and visible rather than free. cortex-m0 is
+# the other end: no divide instruction and no 32 x 32 -> 64 multiply, so every
+# division and every wide product the library does shows up as a call.
+# scripts/cross-check.sh builds both.
+set(STRIPSEQ_CROSS_CPU cortex-m4 CACHE STRING "-mcpu for the cross-compile check")
+
+# -nostdinc++ removes the compiler's own C++ headers, and minimal-libcpp/ puts
+# back the two that Zephyr's default minimal C++ library ships. A third
+# standard header then fails to compile here, as it would in a Zephyr build,
+# rather than being found in GCC's libstdc++ and passing.
 #
 # _INIT rather than a plain set(): these are defaults the cache picks up, so a
 # caller can still override them from the command line.
-set(CMAKE_CXX_FLAGS_INIT "-mcpu=cortex-m4 -mthumb -ffreestanding -fno-exceptions -fno-rtti -Os")
-set(CMAKE_C_FLAGS_INIT   "-mcpu=cortex-m4 -mthumb -ffreestanding -Os")
+set(CMAKE_CXX_FLAGS_INIT "-mcpu=${STRIPSEQ_CROSS_CPU} -mthumb -ffreestanding -fno-exceptions -fno-rtti -Os -nostdinc++ -isystem ${CMAKE_CURRENT_LIST_DIR}/minimal-libcpp")
+set(CMAKE_C_FLAGS_INIT   "-mcpu=${STRIPSEQ_CROSS_CPU} -mthumb -ffreestanding -Os")
 
 # Look for programs on the host, but never search the host's headers/libraries.
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BEFORE)
