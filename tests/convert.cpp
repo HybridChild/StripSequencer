@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>   /* range-for over a braced list; gcc insists */
 
 #include <stripseq/color.h>
 
