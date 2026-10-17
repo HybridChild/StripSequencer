@@ -44,7 +44,8 @@ cmake/
   stripseq_compile_fail.cmake  # configure-time check that build_const() rejects invalid sequences
   stripseq_cookbook_check.cmake  # CTest step that every cookbook block in the sketch appears in tests/cookbook.cpp
   arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
-scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand; clean.sh deletes the build trees
+scripts/                    # build.sh, test.sh, cross-check.sh, sample-build.sh -- what CI runs, runnable by hand;
+                            # sample-flash.sh and console.sh for the bench; clean.sh deletes the build trees
 .github/workflows/ci.yml
 include/stripseq/
   config.h                  # the four macros, each #ifndef-guarded
@@ -394,7 +395,7 @@ A **golden hash** per recipe over a table of timestamps then guards against sile
 
 ## Phase 6 — Zephyr integration
 
-**Goal:** the library builds inside a Zephyr application and drives the bench hardware — a Nucleo-H753ZI with an 11-pixel RGBW strip on I2S3 / PB2.
+**Goal:** the library builds inside a Zephyr application and drives the bench hardware — a Nucleo-H753ZI with an 11-pixel RGBW strip on I2S3 / PD6.
 
 **Deliverables:**
 
@@ -430,8 +431,8 @@ Read out of `~/zephyr-workspace` rather than assumed. Recorded here so Phase 6 d
 - **The module selects no C++ library.** Zephyr's default is `CONFIG_MINIMAL_LIBCPP` (`lib/cpp/Kconfig:107`), which ships only `<cstddef>`, `<cstdint>` and `<new>` (`lib/cpp/minimal/include/`) and compiles with `-nostdinc++` (`CMakeLists.txt:2441`), so the toolchain's own headers are out of reach. The core includes the first two and nothing else, so it builds there as it is, and the Phase 0 cross-check builds it the same way; a `select REQUIRES_FULL_LIBCPP` would pull in the whole of libstdc++ for nothing.
 - **`led_strip_update_rgb()` cannot drive the white die.** `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero, and `struct led_rgb` has no fourth channel. RGBW must use `led_strip_update_channels()`.
 - **`update_channels()` applies no color mapping**, so the adapter owns the permute. Against our neutral `R,G,B,W`, a `GRBW` strip is one swap of bytes 0 and 1 per pixel.
-- **I2S3 needs DMA that nothing enables by default.** `dma1` and `dmamux1` are `status = "disabled"` in `stm32h7.dtsi` and the board dts leaves them that way, while the I2S binding requires `dmas`. The overlay needs both set okay, plus `CONFIG_DMA=y`.
-- **The draft overlay's timing values are SK6812, not WS2812B** — `nibble-one = <0xC>` is 625 ns high against the binding default's 937.5 ns, and `reset-delay = <80>` agrees. Consistent with the RGBW mapping, and worth confirming from the part number since it also fixes `STRIPSEQ_WHITE_CHANNEL=1`.
+- **I2S3 needs DMA that nothing enables by default.** `dma1` and `dmamux1` are `status = "disabled"` in `stm32h7.dtsi` and the board dts leaves them that way, while the I2S binding requires `dmas`. The overlay needs both set okay. `CONFIG_DMA` needs nothing: `I2S_STM32` selects it (`drivers/i2s/Kconfig.stm32:11`), along with `CACHE_MANAGEMENT` on the M7, and the driver flushes the D-cache over each block before the DMA reads it.
+- **The strip's timing is SK6812, not WS2812B** — the pixels are ILPL-K501, SK6812-class RGBW in GRBW order, so `nibble-one = <0xC>` is 625 ns high against the binding default's 937.5 ns, and `reset-delay = <80>` agrees. The part is also what fixes `STRIPSEQ_WHITE_CHANNEL=1`.
 
 **Bring-up order, cheapest signal first.** Solid red confirms wiring, permute and power. Then a white-only color, because nothing else distinguishes a working `update_channels` path from `update_rgb`'s silent zero. Then blink for the frame loop and the hold path, comet for the stagger and its sign, rainbow for HSV and the ring seam. Last, load a static gradient and confirm the workqueue is genuinely idle rather than spinning — if it is not, the hold fold is returning 0 where it should return `hold_forever`, and that is a Phase 2 bug surfacing late.
 

@@ -1,0 +1,62 @@
+/*
+ * The bench strip: 11 SK6812-class RGBW pixels (ILPL-K501) on I2S3, data out
+ * on PD6. Only the data pin is routed; the bit and word clocks run inside the
+ * peripheral and never need to leave the chip.
+ */
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/*
+ * The I2S binding requires dmas, and i2s3's point at dmamux1, which routes to
+ * dma1 -- both "disabled" in stm32h7.dtsi and left that way by the board. With
+ * either one off, the I2S driver never initialises and neither does the strip.
+ */
+&dma1 {
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};
+
+&i2s3 {
+	status = "okay";
+	pinctrl-0 = <&spi3_mosi_pd6>;
+	pinctrl-names = "default";
+
+	led_strip: ilpl_k501@0 {
+		status = "okay";
+		compatible = "worldsemi,ws2812-i2s";
+		reg = <0>;
+
+		chain-length = <11>;
+
+		/*
+		 * Each data bit is one 4-bit nibble of a 100 kHz, 16-bit stereo I2S
+		 * stream: 3.2 MHz, 312.5 ns per I2S bit, 1.25 us per LED bit. 0xC is
+		 * 625 ns high and 0x8 is 312.5 ns, the SK6812's T1H and T0H. The
+		 * binding's default 0xE (937.5 ns) is WS2812B timing. PLL1_Q runs
+		 * I2S3 at 480 MHz, which divides to this word clock exactly.
+		 */
+		lrck-period = <10>;
+		nibble-one = <0xC>;
+		nibble-zero = <0x8>;
+		reset-delay = <80>;
+
+		/*
+		 * The order the chip expects on the wire. The RGB path hands this
+		 * to the driver; led_strip_update_channels() consults it nowhere,
+		 * so on the RGBW path the sample reads it to build its own permute.
+		 */
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE
+				 LED_COLOR_ID_WHITE>;
+	};
+};
+
+/ {
+	aliases {
+		led-strip = &led_strip;
+	};
+};

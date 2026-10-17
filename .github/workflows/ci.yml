@@ -61,3 +61,57 @@ jobs:
 
       - name: Check the archive exists
         run: arm-none-eabi-nm build-cross/libstripseq.a
+
+  zephyr:
+    name: zephyr module and sample
+    runs-on: ubuntu-latest
+    env:
+      ZEPHYR_WORKSPACE: ${{ github.workspace }}/../zephyr-ws
+      # Named rather than registered: west sdk install registers the SDK in
+      # ~/.cmake, which a cache restore does not bring back.
+      ZEPHYR_SDK_INSTALL_DIR: ${{ github.workspace }}/../zephyr-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build device-tree-compiler
+          pip install west
+
+      # The version the bench workspace runs, and only the two modules the
+      # sample's build reads -- hal_stm32 and cmsis_6. A build against the
+      # whole manifest gives the same image, byte for byte, for ten times the
+      # download.
+      - name: Cache the workspace and SDK
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ZEPHYR_WORKSPACE }}
+            ${{ env.ZEPHYR_SDK_INSTALL_DIR }}
+          key: zephyr-v4.4.1-hal_stm32-cmsis_6-sdk-arm
+
+      - name: Set up the workspace
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.4.1 \
+                    -o=--depth=1 "$ZEPHYR_WORKSPACE"
+          cd "$ZEPHYR_WORKSPACE"
+          west config manifest.project-filter -- '-.*,+cmsis_6,+hal_stm32'
+          west update --narrow -o=--depth=1
+          west sdk install -t arm-zephyr-eabi -H -d "$ZEPHYR_SDK_INSTALL_DIR"
+
+      - name: Install Zephyr's Python requirements
+        run: pip install -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-base.txt"
+
+      # Both settings, because they take different code paths in the adapter:
+      # update_channels() and a permute, or update_rgb() and a straight cast.
+      - name: Build the sample, RGBW
+        run: ./scripts/sample-build.sh -p
+
+      - name: Build the sample, RGB
+        run: ./scripts/sample-build.sh -p --rgb

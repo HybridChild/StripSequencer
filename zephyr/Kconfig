@@ -1,0 +1,52 @@
+# The four build-time knobs of include/stripseq/config.h, as Kconfig. The
+# defaults here are config.h's own, so a Zephyr build with nothing set compiles
+# the same library as a host build with nothing set.
+
+menuconfig STRIPSEQ
+	bool "StripSequencer LED strip animation library"
+	depends on CPP
+	depends on STD_CPP20 || STD_CPP2B || STD_CPP23
+	help
+	  An OS-agnostic library for animating WS2812-style LED strips. It
+	  needs C++20 and nothing else: it includes only <cstddef> and
+	  <cstdint>, so Zephyr's default minimal C++ library is enough, and
+	  it uses no heap, exceptions, RTTI or floating point.
+
+	  A dependency rather than a select, because the C++ standard is the
+	  application's choice and the library never sets a toolchain flag.
+
+if STRIPSEQ
+
+config STRIPSEQ_MAX_STEPS
+	int "Steps a sequence can hold"
+	default 8
+	range 1 255
+	help
+	  Sets the size of every Sequence, and so of every Sequencer.
+
+config STRIPSEQ_MAX_SEGMENTS
+	int "Segments a strip can hold"
+	default 4
+	range 1 255
+	help
+	  Sets the size of every Strip.
+
+config STRIPSEQ_WHITE_CHANNEL
+	bool "Fourth (white) channel"
+	help
+	  Adds a white channel to every Color and every output pixel, for
+	  RGBW parts such as the SK6812. Changes sizeof(Color) and
+	  Strip::bytes_per_pixel, so the pixel buffer must be sized from the
+	  latter. An RGBW strip under Zephyr is driven through
+	  led_strip_update_channels(): led_strip_update_rgb() has no fourth
+	  channel and the ws2812 drivers send zero for white.
+
+config STRIPSEQ_GAMMA
+	bool "Gamma correction"
+	default y
+	help
+	  Applies a 256-entry gamma table during the 16-to-8-bit output
+	  conversion. Off, the conversion is linear and the table is not
+	  linked.
+
+endif # STRIPSEQ

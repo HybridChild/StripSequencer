@@ -1,0 +1,6 @@
+# Makes this repository a Zephyr module. Zephyr reads zephyr/CMakeLists.txt and
+# zephyr/Kconfig from here; nothing outside zephyr/ knows Zephyr exists.
+name: stripseq
+build:
+  cmake: zephyr
+  kconfig: zephyr/Kconfig
