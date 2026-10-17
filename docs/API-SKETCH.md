@@ -41,7 +41,7 @@ classDiagram
     Sequence *-- "1..MAX_STEPS" Step
     Strip *-- "0..MAX_SEGMENTS" Segment : owns copies
     Segment o-- "1" Sequencer : borrows
-    Segment --> "0..1" PlayheadFn : replaces step 1
+    Segment --> "0..1" OffsetFn : replaces step 1
     Segment --> "0..1" ColorFn : replaces step 2
     Strip o-- "1" PixelBuffer : borrows
 ```
@@ -49,7 +49,7 @@ classDiagram
 - **Ownership is by copy.** A `Sequence` passed to `load()` may be a temporary, since the sequencer keeps its own copy. A `Segment` built locally is copied by `add()`, so changing the local one afterwards changes nothing on the strip; the strip's copy is reached through `strip.segment(i)`.
 - **What is borrowed belongs to your code.** The buffer and every sequencer a segment points at must outlive whatever points at them. Static storage, which the cookbook uses throughout, satisfies both.
 - **Many segments may point at one sequencer**, which is how two parts of a strip run in lockstep. Nothing points the other way: a sequencer does not know which segments read it.
-- **`PlayheadFn` and `ColorFn` are plain function pointers**, held by the segment and null unless installed. Null means the default for that step.
+- **`OffsetFn` and `ColorFn` are plain function pointers**, held by the segment and null unless installed. Null means the default for that step.
 
 ### Two kinds of call
 
@@ -427,7 +427,7 @@ A negative position, from playing after a `seek` to before the start, is wrapped
 
 *A finite sequence's answer is its position clamped to 2^30 ms, about 12.4 days, either side of zero.* A finite sequence's position is absolute, since 1730 ms into a sequence that plays three 500 ms loops and then lands is not the same moment as 230 ms. But once it is far enough past the end, every pixel shows the landing color and every segment reports `finished()`, and once it is far enough before the start, every pixel shows the start color, so a value far out in either direction stands for all the ones beyond it. Clamping the answer is enough on its own, because the `int64_t` difference underneath cannot overflow on its way to the clamp. The Wipe recipe is the case that runs into it: its sequencer is never paused, because the landing color is what keeps the strip green, and after 12.4 days its playhead reads 2^30 for good. A sought position reads back exactly anywhere inside ±2^30, so a paused progress bar reads back what it set.
 
-What makes 2^30 exact is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment's own overflow guard keeps any stagger under 2^23 ms. So 2^30 minus a stagger is always past every total and 2^30 plus one still fits in `int32_t`, and the same holds in mirror image below zero. That is also why the limit is a constant rather than `total_duration_ms()`: `Segment::finished()` asks whether the playhead *minus the segment's largest stagger* is past the total, so a playhead clamped at the total would leave every staggered segment short of finishing forever, and the sequencer cannot clamp at the total plus a stagger, since it does not know which segments read from it. The same 2^29 applies to one loop of an endless sequence, where it keeps the remainder plus any stagger inside `int32_t` too. The one thing the clamp can change is a start-color hold longer than 12 days, which it understates, and understating a hold costs a frame.
+What makes 2^30 exact is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment keeps any stagger under 2^23 ms, by its overflow guard on the default and a clamp on a replacement's offset. So 2^30 minus a stagger is always past every total and 2^30 plus one still fits in `int32_t`, and the same holds in mirror image below zero. That is also why the limit is a constant rather than `total_duration_ms()`: `Segment::finished()` asks whether the playhead *minus the segment's largest stagger* is past the total, so a playhead clamped at the total would leave every staggered segment short of finishing forever, and the sequencer cannot clamp at the total plus a stagger, since it does not know which segments read from it. The same 2^29 applies to one loop of an endless sequence, where it keeps the remainder plus any stagger inside `int32_t` too. The one thing the clamp can change is a start-color hold longer than 12 days, which it understates, and understating a hold costs a frame.
 
 **There is one bit of state here, not a state machine.** A sequencer's playhead either follows the clock or it does not. The obvious extra states are all derivable and none of them earns storage:
 
@@ -456,40 +456,38 @@ The only part of the design that knows pixels exist.
 
 namespace stripseq {
 
-// Step 1 of the render loop: where does this pixel look?
+// Step 1 of the render loop: how far behind the segment's playhead does this
+// pixel look?
 //
-//   playhead_ms  the sequencer's own playhead, unstaggered -- the single number
-//                the sequencer owns, identical for every pixel in the segment,
-//                and already narrowed, so an offset under 2^23 ms either way
-//                cannot overflow it (see Sequencer::playhead).
-//   index        the pixel's position *within the segment*, 0-based -- not its
-//                position on the strip. A segment therefore behaves identically
-//                wherever it sits, and hash(index) stays stable if it moves.
-//   count        how many pixels the segment covers. The only way a replacement
-//                can normalise position: mirroring is (count - 1 - index).
-//   returns      this pixel's playhead, which is what step 2 gets asked about.
+//   index     the pixel's position *within the segment*, 0-based -- not its
+//             position on the strip. A segment therefore behaves identically
+//             wherever it sits, and hash(index) stays stable if it moves.
+//   count     how many pixels the segment covers. The only way a replacement
+//             can normalise position: mirroring is (count - 1 - index).
+//   delay_q8  the segment's pixel_delay, in 1/256 ms. The default reads it as
+//             lag per pixel, (index * delay_q8) >> 8; a replacement reads it
+//             however it documents -- Twinkle takes it as the span its offsets
+//             scatter across.
+//   returns   the offset in ms, positive for behind. The segment subtracts it
+//             from the sequencer's playhead to get this pixel's.
 //
-// Note what is absent: pixel_delay. The offset it produces is precisely the
-// difference between the returned value and playhead_ms -- the default is
-// playhead_ms - index * pixel_delay. A replacement computes that difference
-// for itself, so the delay is applied neither before the call nor after it.
-// Installing a replacement therefore clears the segment's pixel_delay, and the
-// setters refuse while one is in place, so no dormant value can linger.
-// Twinkle relies on this -- hash(index) has to *be* the offset, not be added to
-// a linear ramp already in place. A replacement gets no context pointer, so one
-// that wants a configurable stagger must bake the constant in (see DESIGN.md,
-// Deferred).
+// An offset rather than a playhead, so that the segment does the subtraction
+// on every path. A replacement's offset is clamped to the same 2^23 ms either
+// way that the setters' guard gives the default, and the sequencer's playhead
+// is already narrowed, so no pixel's playhead can leave int32_t whatever is
+// installed (see Sequencer::playhead). The price is that step 1 cannot warp
+// time per pixel: reversing or rescaling a pixel's playhead is beyond it, and
+// a ColorFn, which receives that playhead, may do what it likes with it.
 //
-// Both plug-in types take (playhead_ms, index, count) in that order, so the
-// pipeline reads playhead in -> playhead out -> color out with the spatial
-// context trailing in both.
-using PlayheadFn = int32_t (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
+// pixel_delay is a replacement's one parameter, which is what lets a Twinkle
+// span or a mirror's delay be set at run time. Anything richer -- a hash
+// seeded per device, say -- needs the context pointer DESIGN.md defers.
+using OffsetFn = int32_t (*)(uint16_t index, uint16_t count, int32_t delay_q8);
 
 // Step 2: what color is at that playhead?
 //
-//   playhead_ms  *this pixel's* playhead -- what step 1 returned, already
-//                staggered. Deliberately not the same number PlayheadFn was
-//                handed, despite the shared parameter name.
+//   playhead_ms  *this pixel's* playhead: the sequencer's, less the offset
+//                step 1 returned.
 //   index        as above: position within the segment, 0-based.
 //   count        as above: pixels in the segment. Present so that a color may
 //                depend on position directly, not only through time.
@@ -516,22 +514,24 @@ public:
     // A default-constructed segment covers no pixels and paints nothing.
     constexpr Segment() = default;
 
-    // Both setters feed the *default* step 1 only, and each returns false if a
-    // PlayheadFn is installed -- the value is rejected rather than stored
-    // dormant. See the note on PlayheadFn above.
-    bool set_pixel_delay(int32_t ms);            // milliseconds of lag per pixel
+    // pixel_delay is step 1's parameter: lag per pixel to the default, and
+    // whatever an installed OffsetFn documents. Each setter returns false for
+    // a delay whose product with count - 1 would overflow the default's
+    // stagger, checked whatever is installed, so restoring the default never
+    // inherits a delay it cannot use.
+    bool set_pixel_delay(int32_t ms);            // milliseconds
     bool set_pixel_delay_q8(int32_t ms_q8);      // 1/256 ms, which is how it is stored
 
-    // Installing a PlayheadFn clears any pixel_delay, so a segment has either
-    // one or the other and never a dormant leftover. nullptr restores the
-    // default, with a delay of 0 until one is set again.
-    void set_playhead_fn(PlayheadFn fn);
+    // Leaves pixel_delay as it is, since every step 1 reads it. nullptr
+    // restores the default.
+    void set_offset_fn(OffsetFn fn);
     void set_color_fn(ColorFn fn);                // nullptr restores the default
 
     // True once every pixel here has passed the end of a finite sequence --
     // a full stagger later than the sequencer's own playhead reaching the end.
     // Narrower than "nothing here will change again", too: a sequencer that is
-    // not playing holds forever and is never finished.
+    // not playing holds forever and is never finished. Nor is one with an
+    // OffsetFn installed, since its offsets are not the library's to know.
     bool finished(int64_t now_ms) const;
     template <wrapping_tick T> bool finished(T) const = delete;
 
@@ -566,7 +566,7 @@ private:
     uint16_t   count_ = 0;
     Sequencer* sequencer_ = nullptr;
     int32_t    delay_q8_ = 0;
-    PlayheadFn where_ = nullptr;
+    OffsetFn   where_ = nullptr;
     ColorFn    what_  = nullptr;
 };                                 // 20 bytes on a 32-bit target
 
@@ -674,7 +674,7 @@ sequenceDiagram
         Seg->>Sqr: sequence()
         Sqr-->>Seg: const Sequence&
         loop each pixel i of the segment
-            Note over Seg: step 1: playhead − i × pixel_delay<br/>(or the segment's PlayheadFn)
+            Note over Seg: step 1: playhead − offset, i × pixel_delay<br/>(or the segment's OffsetFn)
             Seg->>Seq: at(pixel playhead)<br/>(or the segment's ColorFn)
             Seq-->>Seg: Sample { color, hold_ms }
             Note over Seg: brightness, gamma, 8-bit → buffer<br/>hold = min(hold, hold_ms)
@@ -835,14 +835,18 @@ strip.add(left);
 strip.add(right);
 ```
 
-The picture is not a reflection. Each segment counts its index from its own first pixel, so the two pixels k from the centre are 14 × 20 = 280 ms apart, and no pair of delays changes that. A mirror flips the index instead, with a `PlayheadFn` on the right half returning `playhead_ms - (count - 1 - index) * 20`.
+The picture is not a reflection. Each segment counts its index from its own first pixel, so the two pixels k from the centre are 14 × 20 = 280 ms apart, and no pair of delays changes that. A mirror flips the index instead, with an `OffsetFn` on the right half returning `((count - 1 - index) * delay_q8) >> 8`, and both halves set to a delay of 20.
 
 **Twinkle** — the only recipe that replaces a default.
 
 ```cpp
-static int32_t scatter(int32_t playhead_ms, uint16_t index, uint16_t /*count*/) {
-    uint32_t h = index * 2654435761u;      // Knuth's multiplicative hash
-    return playhead_ms - static_cast<int32_t>(h % 1980);
+// pixel_delay is the span the offsets scatter across, here 1980 ms.
+static int32_t scatter(uint16_t index, uint16_t /*count*/, int32_t span_q8) {
+    const int32_t span = span_q8 >> 8;
+    if (span <= 0)
+        return 0;
+    const uint32_t h = index * 2654435761u;      // Knuth's multiplicative hash
+    return static_cast<int32_t>(h % static_cast<uint32_t>(span));
 }
 
 seq.load(SequenceBuilder{}
@@ -852,7 +856,8 @@ seq.load(SequenceBuilder{}
 seq.play(now());
 
 Segment s(0, kPixels, seq);
-s.set_playhead_fn(scatter);
+s.set_offset_fn(scatter);
+s.set_pixel_delay(1980);
 strip.add(s);
 ```
 

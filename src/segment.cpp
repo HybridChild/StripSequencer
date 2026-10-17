@@ -10,7 +10,7 @@ Segment::Segment(uint16_t first, uint16_t count, Sequencer& seq)
 bool Segment::set_pixel_delay(int32_t /*ms*/) { return false; }        /* stub */
 bool Segment::set_pixel_delay_q8(int32_t /*ms_q8*/) { return false; }  /* stub */
 
-void Segment::set_playhead_fn(PlayheadFn /*fn*/) {}   /* stub */
+void Segment::set_offset_fn(OffsetFn /*fn*/) {}       /* stub */
 void Segment::set_color_fn(ColorFn /*fn*/) {}         /* stub */
 
 bool Segment::finished(int64_t /*now_ms*/) const {

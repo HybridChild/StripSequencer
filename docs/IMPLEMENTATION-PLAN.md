@@ -52,7 +52,7 @@ include/stripseq/
   color.h                   # Color, colors::, lerp, hsv        (all constexpr, header-only)
   sequence.h                # Transition, Step, Sample, Error, Sequence, SequenceBuilder
   sequencer.h
-  segment.h                 # PlayheadFn, ColorFn, spread, Segment
+  segment.h                 # OffsetFn, ColorFn, spread, Segment
   strip.h
   stripseq.h                # umbrella header, includes the rest
 src/
@@ -303,7 +303,7 @@ The core is two lines: the position is `now_ms - origin_ms_` while playing and `
 
 **Deliverables:**
 
-- `PlayheadFn`.
+- `OffsetFn`.
 - `ColorFn`.
 - `spread`.
 - `Segment` with its setters and `finished`.
@@ -313,17 +313,17 @@ The core is two lines: the position is `now_ms - origin_ms_` while playing and `
 
 *Segments write converted 8-bit bytes straight into the output buffer.* There is no 16-bit shadow buffer, and there must not be one — it would be per-pixel state, the thing DESIGN.md forbids outright, and on a 300-pixel RGBW strip it would cost 2.4 KB. So the render loop is: `memset` the strip's pixels to zero, then for each segment, for each pixel, compute the playhead, look up the `Sample`, convert through brightness and gamma, and store. Overlap resolves as last-writer-wins at 8 bits, which is exactly the documented behaviour. This also means brightness and gamma are applied once per painted pixel rather than once per strip pixel — slightly more work under overlap, and not worth a second pass to avoid.
 
-*The default `PlayheadFn` uses an arithmetic shift, not a division.* `playhead_ms - ((index * delay_q8_) >> 8)` floors consistently in both directions; `/ 256` truncates toward zero, which puts a one-count discontinuity at the origin — visible on a mirrored pair as a seam at the centre, and exactly the kind of artefact that gets misdiagnosed as a hardware problem.
+*The default offset uses an arithmetic shift, not a division.* `(index * delay_q8_) >> 8` floors consistently in both directions; `/ 256` truncates toward zero, which puts a one-count discontinuity at the origin — visible on a mirrored pair as a seam at the centre, and exactly the kind of artefact that gets misdiagnosed as a hardware problem.
 
-*Guard the stagger against overflow at set time, not per pixel.* `index * delay_q8_` overflows `int32_t` for a long segment and a large delay. Checking it inside the per-pixel loop, or promoting to `int64_t` there, costs on every pixel of every frame. Both setters already return `bool`, so the check belongs there: reject a delay whose product with `count_ - 1` would not fit. That reuses surface that already exists for a different rejection and keeps the hot loop as narrow as it looks.
+*Guard the stagger against overflow at set time, not per pixel.* `index * delay_q8_` overflows `int32_t` for a long segment and a large delay. Checking it inside the per-pixel loop, or promoting to `int64_t` there, costs on every pixel of every frame. Both setters already return `bool`, so the check belongs there: reject a delay whose product with `count_ - 1` would not fit. It runs whatever `OffsetFn` is installed, so removing a replacement never leaves the default holding a delay that overflows. That reuses surface that already exists for a different rejection and keeps the hot loop as narrow as it looks.
 
-*The sequencer's playhead is already narrowed, so staggering it cannot overflow.* The guard above keeps `index * delay_q8_` inside `int32_t`, and Phase 3's `playhead()` keeps the number it is subtracted from inside `[0, loop)` or ±2^30 on every path, paused and sought included, so a stagger under 2^23 ms in either direction leaves every pixel's playhead inside `int32_t` with no step of the segment's own. A `PlayheadFn` replacement receives the same narrowed playhead, so an offset of its own under 2^23 ms is just as safe; the library cannot bound one it does not compute.
+*The sequencer's playhead is already narrowed, so staggering it cannot overflow.* The guard above keeps `index * delay_q8_` inside `int32_t`, and Phase 3's `playhead()` keeps the number it is subtracted from inside `[0, loop)` or ±2^30 on every path, paused and sought included, so a stagger under 2^23 ms in either direction leaves every pixel's playhead inside `int32_t` with no step of the segment's own. An `OffsetFn` replacement's offset is the one the library cannot bound at set time, so the pixel loop clamps it to the same 2^23 ms either way — two comparisons, on the replacement path only — and the guarantee holds whatever is installed.
 
 *A segment whose sequencer is not playing holds forever.* `at()` reports its hold as if the playhead were moving, because a sequence cannot know whether anything is playing it. A paused or sought sequencer's pixels never change, so `paint` reports `hold_forever` for them whatever the lookup or a `ColorFn` returned. That is what lets a static gradient cost nothing to hold.
 
 *`spread` rounds to the nearest 1/256 ms instead of flooring.* Each pixel's error is then at most half a unit, so the accumulated error across a ring stays under 1 ms up to 511 pixels, where a floor reaches it at 257: a 300-pixel ring comes in at 0.58 ms rather than 1.16. It is computed as `(total / count) * 256` plus the remainder's share, so that `total * 256` is never formed — that overflows `uint32_t` past 4.6 hours, well inside the 2^29 ms the builder accepts, and the 64-bit alternative is a library call on a Cortex-M. A count of zero gives 0, and a result too large for `int32_t` saturates, which the stagger guard then rejects for any segment longer than one pixel.
 
-*`finished()` is a full stagger later than the sequencer's own end.* It is `playhead(now) - max_stagger > total_duration_ms()`, with `max_stagger` the largest offset across the segment's pixels — which is `(count_ - 1) * delay_q8_ >> 8` for a positive delay and zero for a negative one. It is false when the sequencer is not playing, false for an endless sequence, and false whenever a `PlayheadFn` replacement is installed, since the library cannot know the offsets a replacement produces.
+*`finished()` is a full stagger later than the sequencer's own end.* It is `playhead(now) - max_stagger > total_duration_ms()`, with `max_stagger` the largest offset across the segment's pixels — which is `(count_ - 1) * delay_q8_ >> 8` for a positive delay and zero for a negative one. It is false when the sequencer is not playing, false for an endless sequence, and false whenever an `OffsetFn` replacement is installed, since the library cannot know the offsets a replacement produces.
 
 *`add()` rejects a segment that does not fit the buffer.* The strip knows `pixel_count_`; a segment constructed independently does not. Returning false for `first + count > pixel_count_` catches the mistake at the call site instead of turning it into a buffer overrun at frame rate. The `Segment&` assignment path in `segment(at)` cannot be checked, since a reference has no way to refuse, so `paint` clips to `pixel_count_` as well: an overhanging segment that arrives that way paints its visible part rather than overrunning the buffer. The asymmetry — rejected through `add()`, clipped through assignment — is commented in the header.
 
@@ -341,6 +341,7 @@ The core is two lines: the position is `now_ms - origin_ms_` while playing and `
 - `add()` returns false for a segment running past the end of the strip, and the same segment assigned through `segment(i)` paints only its visible pixels, leaves guard bytes placed after the buffer untouched, and yields a hold from those pixels alone, while a lone segment assigned wholly off the strip paints nothing and `render` returns `hold_forever`.
 - `spread` produces a delay whose accumulated error across a ring is under 1 ms for every length up to 511 pixels, which is the reason `q8` exists at all.
 - A paused segment on a sequencer sought within a few ms of `INT32_MAX`, and one sought near `INT32_MIN`, paints the same pixels as `int64_t` arithmetic does, with the largest stagger the setters accept in either direction. The host suite runs without UBSan, and arm64 wraps signed overflow silently, so the comparison is what catches narrowing that does not reach the segment.
+- An `OffsetFn` returning `INT32_MAX` or `INT32_MIN`, on a sequencer sought to either end of its range, paints the same pixels as one returning the clamped offset.
 - A segment whose sequencer is not playing reports `hold_forever`, through the default lookup and through a `ColorFn`.
 - A finite sequence left playing for a simulated 60 days lets a segment with the largest accepted stagger report `finished()`.
 
@@ -372,7 +373,7 @@ Each recipe gets **property assertions** rather than only golden bytes, because 
 - **Progress bar:** no pixel lit at 0 %; seven fully lit and pixel 7 half-way through its fade at 25 %, a playhead of 75; fifteen lit at 50 % and all thirty at 100 %. At 50 % and 100 % the boundary falls exactly between two pixels, so no pixel is part-lit there and a test expecting one would fail on correct code. Part-lit means strictly between black and the full byte; its exact value moves with gamma and is the hash's business.
 - **Two halves, different animations:** each half paints exactly what its segment paints alone on a scratch strip, with nothing crossing pixel 14 | 15, and the hold is the smaller of the two.
 - **Two halves, converging:** the left half's pattern moves one pixel toward the centre every 20 ms, `frame(t + 20)[k + 1] == frame(t)[k]`, and the right half's moves the other way, `frame(t + 20)[15 + j] == frame(t)[16 + j]`.
-- **Twinkle:** pixels out of phase, which can be exact rather than visual — the hash gives the thirty pixels thirty distinct offsets, so no two share a phase — and `set_pixel_delay` returning false while the replacement is installed.
+- **Twinkle:** pixels out of phase, which can be exact rather than visual — the hash gives the thirty pixels thirty distinct offsets, so no two share a phase — and every offset falling inside the 1980 ms span the recipe passes to `set_pixel_delay`.
 - **Alert over a background:** the breathe underneath resumes at the phase it would have reached, which is the single strongest test of the stateless-lookup claim, and is checked against the breathe rendered alone on a scratch strip at the same `now`. `drop_finished` removes nothing before the alert's 720 ms and exactly the alert after them; `cancel_alert` removes it early and leaves the breathe painting.
 
 *The fake clock starts a second before 2^32 ms*, so every recipe's timestamp table crosses the point where a `uint32_t` would wrap. The library takes `int64_t` throughout and refuses a 32-bit reading at compile time, but a stray narrowing anywhere between `now()` and the playhead would compile, and it would cancel out of every difference taken on one side of 2^32. Crossing it turns that narrowing into a 2^32 ms jump in the middle of a recipe, which the properties and the hash both see.

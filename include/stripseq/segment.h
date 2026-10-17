@@ -16,40 +16,38 @@
 
 namespace stripseq {
 
-/* Step 1 of the render loop: where does this pixel look?
+/* Step 1 of the render loop: how far behind the segment's playhead does this
+ * pixel look?
  *
- *   playhead_ms  the sequencer's own playhead, unstaggered -- the single number
- *                the sequencer owns, identical for every pixel in the segment,
- *                and already narrowed, so an offset under 2^23 ms either way
- *                cannot overflow it (see Sequencer::playhead).
- *   index        the pixel's position *within the segment*, 0-based -- not its
- *                position on the strip. A segment therefore behaves identically
- *                wherever it sits, and hash(index) stays stable if it moves.
- *   count        how many pixels the segment covers. The only way a replacement
- *                can normalise position: mirroring is (count - 1 - index).
- *   returns      this pixel's playhead, which is what step 2 gets asked about.
+ *   index     the pixel's position *within the segment*, 0-based -- not its
+ *             position on the strip. A segment therefore behaves identically
+ *             wherever it sits, and hash(index) stays stable if it moves.
+ *   count     how many pixels the segment covers. The only way a replacement
+ *             can normalise position: mirroring is (count - 1 - index).
+ *   delay_q8  the segment's pixel_delay, in 1/256 ms. The default reads it as
+ *             lag per pixel, (index * delay_q8) >> 8; a replacement reads it
+ *             however it documents -- Twinkle takes it as the span its offsets
+ *             scatter across.
+ *   returns   the offset in ms, positive for behind. The segment subtracts it
+ *             from the sequencer's playhead to get this pixel's.
  *
- * Note what is absent: pixel_delay. The offset it produces is precisely the
- * difference between the returned value and playhead_ms -- the default is
- * playhead_ms - index * pixel_delay. A replacement computes that difference for
- * itself, so the delay is applied neither before the call nor after it.
- * Installing a replacement therefore clears the segment's pixel_delay, and the
- * setters refuse while one is in place, so no dormant value can linger.
- * Twinkle relies on this -- hash(index) has to *be* the offset, not be added to
- * a linear ramp already in place. A replacement gets no context pointer, so one
- * that wants a configurable stagger must bake the constant in (see
- * docs/DESIGN.md, Deferred).
+ * An offset rather than a playhead, so that the segment does the subtraction
+ * on every path. A replacement's offset is clamped to the same 2^23 ms either
+ * way that the setters' guard gives the default, and the sequencer's playhead
+ * is already narrowed, so no pixel's playhead can leave int32_t whatever is
+ * installed (see Sequencer::playhead). The price is that step 1 cannot warp
+ * time per pixel: reversing or rescaling a pixel's playhead is beyond it, and
+ * a ColorFn, which receives that playhead, may do what it likes with it.
  *
- * Both plug-in types take (playhead_ms, index, count) in that order, so the
- * pipeline reads playhead in -> playhead out -> color out with the spatial
- * context trailing in both. */
-using PlayheadFn = int32_t (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
+ * pixel_delay is a replacement's one parameter, which is what lets a Twinkle
+ * span or a mirror's delay be set at run time. Anything richer -- a hash
+ * seeded per device, say -- needs the context pointer docs/DESIGN.md defers. */
+using OffsetFn = int32_t (*)(uint16_t index, uint16_t count, int32_t delay_q8);
 
 /* Step 2: what color is at that playhead?
  *
- *   playhead_ms  *this pixel's* playhead -- what step 1 returned, already
- *                staggered. Deliberately not the same number PlayheadFn was
- *                handed, despite the shared parameter name.
+ *   playhead_ms  *this pixel's* playhead: the sequencer's, less the offset
+ *                step 1 returned.
  *   index        as above: position within the segment, 0-based.
  *   count        as above: pixels in the segment. Present so that a color may
  *                depend on position directly, not only through time.
@@ -77,22 +75,24 @@ public:
      * A default-constructed segment covers no pixels and paints nothing. */
     constexpr Segment() = default;
 
-    /* Both setters feed the *default* step 1 only, and each returns false if a
-     * PlayheadFn is installed -- the value is rejected rather than stored
-     * dormant. See the note on PlayheadFn above. */
-    bool set_pixel_delay(int32_t ms);            /* milliseconds of lag per pixel */
+    /* pixel_delay is step 1's parameter: lag per pixel to the default, and
+     * whatever an installed OffsetFn documents. Each setter returns false for
+     * a delay whose product with count - 1 would overflow the default's
+     * stagger, checked whatever is installed, so restoring the default never
+     * inherits a delay it cannot use. */
+    bool set_pixel_delay(int32_t ms);            /* milliseconds */
     bool set_pixel_delay_q8(int32_t ms_q8);      /* 1/256 ms, which is how it is stored */
 
-    /* Installing a PlayheadFn clears any pixel_delay, so a segment has either
-     * one or the other and never a dormant leftover. nullptr restores the
-     * default, with a delay of 0 until one is set again. */
-    void set_playhead_fn(PlayheadFn fn);
+    /* Leaves pixel_delay as it is, since every step 1 reads it. nullptr
+     * restores the default. */
+    void set_offset_fn(OffsetFn fn);
     void set_color_fn(ColorFn fn);                /* nullptr restores the default */
 
     /* True once every pixel here has passed the end of a finite sequence --
      * a full stagger later than the sequencer's own playhead reaching the end.
      * Narrower than "nothing here will change again", too: a sequencer that is
-     * not playing holds forever and is never finished. */
+     * not playing holds forever and is never finished. Nor is one with an
+     * OffsetFn installed, since its offsets are not the library's to know. */
     bool finished(int64_t now_ms) const;
     template <wrapping_tick T> bool finished(T) const = delete;
 
@@ -127,7 +127,7 @@ private:
     uint16_t   count_ = 0;
     Sequencer* sequencer_ = nullptr;
     int32_t    delay_q8_ = 0;
-    PlayheadFn where_ = nullptr;
+    OffsetFn   where_ = nullptr;
     ColorFn    what_  = nullptr;
 };                                 /* 20 bytes on a 32-bit target */
 
