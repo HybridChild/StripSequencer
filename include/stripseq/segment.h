@@ -63,8 +63,21 @@ using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
  * Rounded to the nearest 1/256 ms, so the accumulated error across a ring
  * stays under 1 ms up to 511 pixels; a floor reaches it at 257. A count
  * of 0 gives 0, and a delay too large for int32_t saturates. */
-constexpr int32_t spread(uint32_t /*total_ms*/, uint16_t /*count*/) {
-    return 0;   /* stub */
+constexpr int32_t spread(uint32_t total_ms, uint16_t count) {
+    if (count == 0)
+        return 0;
+
+    /* The whole milliseconds and the remainder's share of 256, rounded to
+     * nearest, so total_ms * 256 is never formed: in uint32_t it would wrap
+     * past 4.6 hours, and in uint64_t it is a library call on a Cortex-M.
+     * rest < count, so rest * 256 stays under 2^24. */
+    const uint32_t whole = total_ms / count;
+    const uint32_t rest = total_ms % count;
+    const uint32_t fraction = (rest * 256 + count / 2) / count;   /* 0..256 */
+
+    if (whole > (uint32_t{INT32_MAX} - fraction) / 256)
+        return INT32_MAX;
+    return static_cast<int32_t>(whole * 256 + fraction);
 }
 
 class Segment {

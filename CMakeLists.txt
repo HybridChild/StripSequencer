@@ -49,12 +49,6 @@ if(PROJECT_IS_TOP_LEVEL)
     # would demand a cast in most of them.
     set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # Clang reports private fields that nothing reads, and a stub reads
-        # nothing.
-        list(APPEND STRIPSEQ_WARNINGS -Wno-unused-private-field)
-    endif()
-
     target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()
 
@@ -90,7 +84,9 @@ if(STRIPSEQ_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/convert.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/segment.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/strip.cpp)
 
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_compile_fail.cmake)
