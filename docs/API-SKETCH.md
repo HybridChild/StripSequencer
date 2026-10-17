@@ -229,14 +229,14 @@ public:
     constexpr Sequence() = default;          // empty; valid to hold, not to render
 
     // The one question a sequence answers. The playhead is signed and unbounded:
-    // negative means before the timeline, large means past the end. Instants and
-    // durations elsewhere are uint32_t; only playheads are signed, and they must
-    // be -- a pixel pointing before the start of a timeline is the mechanism,
-    // not an edge case.
+    // negative means before the timeline, large means past the end. Durations
+    // elsewhere are uint32_t and clock readings int64_t; a playhead is signed, and
+    // it must be -- a pixel pointing before the start of a timeline is the
+    // mechanism, not an edge case.
     Sample at(int32_t playhead_ms) const;
 
     // These two are here for the library's own use rather than the caller's:
-    // Sequencer needs the loop length to re-base an endless origin, and
+    // Sequencer needs the loop length to narrow an endless playhead, and
     // Segment::finished() needs the total. Endless reads as hold_forever.
     constexpr uint32_t loop_duration_ms() const;   // one pass through the steps
     constexpr uint32_t total_duration_ms() const;  // loop x repeats
@@ -324,6 +324,11 @@ The playhead and the state around it. It owns a copy of its sequence.
 
 namespace stripseq {
 
+// A clock reading narrow enough to wrap while a device runs. Every function that
+// takes now_ms has a deleted overload for these; see "The clock" below.
+template <typename T>
+concept wrapping_tick = std::unsigned_integral<T> && sizeof(T) <= 4;
+
 class Sequencer {
 public:
     void load(const Sequence& s);     // copies; playhead 0, not playing
@@ -333,9 +338,12 @@ public:
     // seek:  it is set directly, and does not follow the clock until play.
     // play while playing and pause while paused change nothing: either one
     // re-derived from the other state's stale field would make the playhead jump.
-    void play(uint32_t now_ms);
-    void pause(uint32_t now_ms);
+    void play(int64_t now_ms);
+    void pause(int64_t now_ms);
     void seek(int32_t playhead_ms);
+
+    template <wrapping_tick T> void play(T) = delete;
+    template <wrapping_tick T> void pause(T) = delete;
 
     bool playing() const;
     // What a segment calls at() on, once per pixel, with that pixel's own
@@ -343,20 +351,20 @@ public:
     // only the unstaggered playhead.
     const Sequence& sequence() const;
 
-    // The sequencer's position at now_ms, unstaggered: now_ms - origin_ms_
-    // while playing, frozen_ otherwise. A segment asks once per render() and
-    // staggers every pixel from the answer.
-    //
-    // Non-const on purpose. It moves the origin as it goes -- by whole loops for
-    // an endless sequence, to hold a finite one at 2^30 ms past its start -- so
-    // the 49.7-day wrap is never reached, and that mutation has to happen
-    // somewhere the sequencer is being asked for its position anyway.
-    int32_t playhead(uint32_t now_ms);
+    // The sequencer's position at now_ms, unstaggered, narrowed to a range any
+    // accepted stagger can be added to or taken from: [0, loop) for an endless
+    // sequence, [-2^30, 2^30] for a finite one. A segment asks once per render()
+    // and staggers every pixel from the answer.
+    int32_t playhead(int64_t now_ms) const;
+
+    template <wrapping_tick T> int32_t playhead(T) const = delete;
 
 private:
+    int64_t position(int64_t now_ms) const;   // before narrowing
+
     Sequence sequence_;
-    uint32_t origin_ms_ = 0;    // playing: the instant playhead 0 sits at
-    int32_t  frozen_ = 0;       // not playing: the playhead itself
+    int64_t  origin_ms_ = 0;    // playing: the instant position 0 sits at
+    int64_t  frozen_ = 0;       // not playing: the position itself
     bool     playing_ = false;
 };
 
@@ -365,13 +373,13 @@ private:
 
 Nothing stores a playhead as such. `origin_ms_` and `frozen_` are the two representations, `playing_` says which is authoritative, and the value is derived on every call — a stored playhead that got advanced each frame would be the tape model DESIGN.md rejects.
 
-**What the calls store.** `playhead(now)` is answered one of two ways. While playing, the playhead follows the clock: the sequencer keeps `origin_ms_`, the clock reading at which the playhead was 0, and answers `now - origin_ms_`. Otherwise it keeps the playhead itself in `frozen_` and answers that, whatever `now` is. The calls switch between the two without letting the value jump:
+**What the calls store.** Underneath the playhead is a *position*, the number of milliseconds into the sequence, which is answered one of two ways. While playing, the position follows the clock: the sequencer keeps `origin_ms_`, the clock reading at which the position was 0, and answers `now - origin_ms_`. Otherwise it keeps the position itself in `frozen_` and answers that, whatever `now` is. The calls switch between the two without letting the value jump:
 
 | Call | Stores | Effect |
 | --- | --- | --- |
-| `load(s)` | `frozen_ = 0`, `playing_ = false` | The playhead sits at the start of the new sequence. |
-| `play(now)` | `origin_ms_ = now - frozen_`, `playing_ = true` | Picks the origin that puts the playhead at `frozen_` at this instant, so it carries on from where it stood, then re-bases or caps it once as `playhead()` does below. Nothing, if already playing. |
-| `pause(now)` | `frozen_ = playhead(now)`, `playing_ = false` | Records where the playhead is at this instant, as `playhead()` answers it, and keeps it there. Nothing, if not playing. |
+| `load(s)` | `frozen_ = 0`, `playing_ = false` | The position sits at the start of the new sequence. |
+| `play(now)` | `origin_ms_ = now - frozen_`, `playing_ = true` | Picks the origin that puts the position at `frozen_` at this instant, so it carries on from where it stood. Nothing, if already playing. |
+| `pause(now)` | `frozen_ = position(now)`, `playing_ = false` | Records where the position is at this instant, exactly, and keeps it there. Nothing, if not playing. |
 | `seek(p)` | `frozen_ = p`, `playing_ = false` | Sets the value directly. Nothing is following the clock, so no `now` is needed. |
 
 `play` and `pause` take `now` because each converts between a value and an origin on the clock; `seek` only ever sets a value. Each conversion reads the field the *other* state keeps current, which is why calling one in the state it would produce does nothing: `play` while playing would rebuild the origin from a `frozen_` left over from the last pause, and the playhead would jump back to it. Worked through, with clock time on the left:
@@ -385,24 +393,41 @@ t=5000  seek(2000)    frozen = 2000                 playhead(5000) = 2000   not 
 t=6000  play(6000)    origin = 6000 - 2000 = 4000   playhead(6100) = 2100
 ```
 
-The 2.5 s pause cost nothing: `play(4000)` put the origin 500 ms in the past, so the playhead resumed at exactly the value `pause` recorded.
+The 2.5 s pause cost nothing: `play(4000)` put the origin 500 ms in the past, so the position resumed at exactly the value `pause` recorded. `pause` stores the position rather than the narrowed playhead below, so the round trip is exact by construction, and neither call needs to know about range.
 
-**What `playhead()` answers.** A segment calls it once per `render()`, before its pixel loop, with the `now_ms` the strip was given, and every pixel in the segment is staggered from the one number it returns. Not playing, the answer is `frozen_` exactly as `load`, `pause` or `seek` left it, and `now` is ignored. Playing, it is `now - origin_ms_`, with the subtraction done in `uint32_t` before the result becomes signed. That order is what makes the millisecond counter's wrap a non-event: with `origin_ms_` at `4294967000` and `now` at `200`, two hundred milliseconds after the counter rolled over, the unsigned difference is `496`, which is exactly how long it has been playing. The difference stays right as long as the true elapsed time fits in an `int32_t`, about 24.8 days, and keeping it inside that range is the rest of the function's job.
+**The clock is `int64_t` milliseconds, so the position never needs protecting.** A difference of two such readings overflows after about 292 million years. The library therefore has no wrap to survive, no origin to move and nothing that must be called often enough to keep a value in range; `playhead()` is `const` because it only reads. The wrap of a narrower counter is real, but it belongs to whoever owns that counter. Under Zephyr the question never arises, since `k_uptime_get()` is already 64-bit. A bare-metal caller with only a 32-bit tick extends it once, in application code:
 
-**For an endless sequence, the answer is kept within one loop.** `at()` wraps an endless sequence's playhead by the loop length, so on a 500 ms loop `at(1730)` and `at(230)` are the same color, and so is every pixel staggered from either. Whenever the derived playhead reaches the loop length, `playhead()` moves `origin_ms_` forward by as many whole loops as fit and returns the remainder:
-
-```text
-loop = 500 ms
-origin = 1000, now = 2730   elapsed 1730   origin += 1500 -> 2500   returns 230
-origin = 2500, now = 2746   elapsed  246   nothing to move          returns 246
-origin = 2500, now = 3010   elapsed  510   origin +=  500 -> 3000   returns  10
+```cpp
+/* Application code: call at least once per 49.7 days. */
+struct Clock64 {
+    uint32_t last = 0;
+    int64_t  total = 0;
+    int64_t operator()(uint32_t now) {
+        total += static_cast<uint32_t>(now - last);   /* the wrap cancels here */
+        last = now;
+        return total;
+    }
+};
 ```
 
-Nothing downstream can see the move, because it shifts the origin and the answer by the same whole number of loops. What it buys is that the origin never trails the clock by more than a loop plus the gap since the last call, so the elapsed time never approaches the edge of its range — provided something asks at least once every 24.8 days, which a strip rendering at any frame rate does many millions of times over. That mutation is why the call is non-const: it happens where the sequencer is being asked for its position anyway. A negative playhead, from playing after a `seek` to before the start, is already one `at()` wraps correctly, and is left alone. A large positive one is not safe to leave: after `seek(INT32_MAX - 5)`, a playhead first asked for 6 ms after `play` would already have overflowed. So `play()` applies the same move once, the instant the playhead starts following the clock, for this and the finite cap below alike; `seek` still stores its value exactly. A sequence with no steps, which is what `load({})` leaves, has a loop of zero and is skipped, since there is nothing to wrap by.
+What the library does guard is the one way to get this wrong without noticing. A `uint32_t` passed where an `int64_t` is wanted converts silently — `-Wconversion` stays quiet, because no value is lost — and the wrap survives the conversion as a jump of 2^32 ms backwards, a finite sequence back to its start color after 49.7 days. So every function that takes `now_ms` has a deleted overload for any unsigned type of 32 bits or fewer, and `seq.play(k_uptime_get_32())` fails to compile rather than failing after seven weeks. It is a constrained template rather than an overload on `uint32_t` itself because `uint32_t` is `unsigned int` on one target and `unsigned long` on another, and because a plain `uint32_t` overload would make `play(1000)` ambiguous; a constrained template never matches an `int`, so a literal still reaches the `int64_t` overload.
 
-**For a finite sequence, the answer is capped.** It cannot be re-based, because its position is absolute: 1730 ms into a sequence that plays three 500 ms loops and then lands is not the same moment as 230 ms. Once the playhead is far enough past the end, though, its exact value stops mattering — every pixel shows the landing color and every segment reports `finished()` — so it only has to stay there. When the derived playhead passes 2^30 ms, about 12.4 days, `playhead()` sets `origin_ms_` to `now - 2^30` and returns 2^30, and keeps returning it from then on. Capping only the returned value would not be enough: the unsigned difference underneath would keep growing, and the cast would still turn it negative at 24.8 days. The Wipe recipe is the case this protects. Its sequencer is never paused, because the landing color is what keeps the strip green, and without the cap the strip would go black after 24.8 days and wipe again after 49.7.
+**What `playhead()` answers: the position, narrowed.** A segment calls it once per `render()`, before its pixel loop, with the `now_ms` the strip was given, and every pixel in the segment is staggered from the one number it returns. That stagger is added or taken in `int32_t`, so the answer has to sit far enough inside `int32_t` for any accepted stagger to fit on either side of it. The narrowing that gets it there is exact through `at()`, which is why it can apply on every path, paused and sought positions included.
 
-The cap is a constant rather than `total_duration_ms()` because of what `Segment::finished()` asks: whether the playhead *minus the segment's largest stagger* is past the total. A sequencer capped at the total would leave every staggered segment short of finishing forever, and it cannot cap at the total plus the stagger, since it does not know which segments read from it. What makes 2^30 safe is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment's own overflow guard keeps any stagger under 2^23 ms, so a capped playhead minus a stagger is always past the total and never near overflowing. The same 2^29 applies to one loop of an endless sequence, where it guarantees the playhead reaches the end of a loop, and re-bases, long before it could run out of range.
+*An endless sequence's answer is its position modulo the loop.* `at()` wraps an endless sequence's playhead by the loop length anyway, so on a 500 ms loop `at(1730)` and `at(230)` are the same color, and so is every pixel staggered from either:
+
+```text
+loop = 500 ms, play(1000)
+now = 2730   position 1730   returns 230
+now = 2746   position 1746   returns 246
+now = 3010   position 2010   returns  10
+```
+
+A negative position, from playing after a `seek` to before the start, is wrapped up into the loop as well, which `at()` would have done to it. A sequence with no steps, which is what `load({})` leaves, has a loop of zero and answers 0, since there is nothing to wrap by and `at()` answers black whatever it is asked. So `seek(5000)` on a 1000 ms loop reads back 0: an endless sequence has no "5000 ms in" distinct from "0 ms in", and neither does anything that reads from it.
+
+*A finite sequence's answer is its position clamped to 2^30 ms, about 12.4 days, either side of zero.* A finite sequence's position is absolute, since 1730 ms into a sequence that plays three 500 ms loops and then lands is not the same moment as 230 ms. But once it is far enough past the end, every pixel shows the landing color and every segment reports `finished()`, and once it is far enough before the start, every pixel shows the start color, so a value far out in either direction stands for all the ones beyond it. Clamping the answer is enough on its own, because the `int64_t` difference underneath cannot overflow on its way to the clamp. The Wipe recipe is the case that runs into it: its sequencer is never paused, because the landing color is what keeps the strip green, and after 12.4 days its playhead reads 2^30 for good. A sought position reads back exactly anywhere inside ±2^30, so a paused progress bar reads back what it set.
+
+What makes 2^30 exact is two limits set elsewhere. The builder rejects a sequence longer than 2^29 ms, about 6.2 days, with `Error::TooLong`, and the segment's own overflow guard keeps any stagger under 2^23 ms. So 2^30 minus a stagger is always past every total and 2^30 plus one still fits in `int32_t`, and the same holds in mirror image below zero. That is also why the limit is a constant rather than `total_duration_ms()`: `Segment::finished()` asks whether the playhead *minus the segment's largest stagger* is past the total, so a playhead clamped at the total would leave every staggered segment short of finishing forever, and the sequencer cannot clamp at the total plus a stagger, since it does not know which segments read from it. The same 2^29 applies to one loop of an endless sequence, where it keeps the remainder plus any stagger inside `int32_t` too. The one thing the clamp can change is a start-color hold longer than 12 days, which it understates, and understating a hold costs a frame.
 
 **There is one bit of state here, not a state machine.** A sequencer's playhead either follows the clock or it does not. The obvious extra states are all derivable and none of them earns storage:
 
@@ -434,7 +459,9 @@ namespace stripseq {
 // Step 1 of the render loop: where does this pixel look?
 //
 //   playhead_ms  the sequencer's own playhead, unstaggered -- the single number
-//                the sequencer owns, identical for every pixel in the segment.
+//                the sequencer owns, identical for every pixel in the segment,
+//                and already narrowed, so an offset under 2^23 ms either way
+//                cannot overflow it (see Sequencer::playhead).
 //   index        the pixel's position *within the segment*, 0-based -- not its
 //                position on the strip. A segment therefore behaves identically
 //                wherever it sits, and hash(index) stays stable if it moves.
@@ -505,7 +532,8 @@ public:
     // a full stagger later than the sequencer's own playhead reaching the end.
     // Narrower than "nothing here will change again", too: a sequencer that is
     // not playing holds forever and is never finished.
-    bool finished(uint32_t now_ms) const;
+    bool finished(int64_t now_ms) const;
+    template <wrapping_tick T> bool finished(T) const = delete;
 
     // How a caller finds a segment again after the strip's list has shifted.
     // The sequencer is the identity because the application already holds it
@@ -532,7 +560,7 @@ private:
     // and so cannot be checked, and would otherwise overrun the buffer.
     friend class Strip;
     uint32_t paint(uint8_t* buffer, uint16_t pixel_count, uint8_t brightness,
-                   uint32_t now_ms) const;
+                   int64_t now_ms) const;
 
     uint16_t   first_ = 0;
     uint16_t   count_ = 0;
@@ -597,7 +625,8 @@ public:
     // Not automatic: a finished segment keeps painting its landing color, which
     // is exactly what the wipe recipe depends on. This is opt-in cleanup for
     // overlays, and it exists mainly so the reverse iteration is written once.
-    uint8_t drop_finished(uint32_t now_ms);
+    uint8_t drop_finished(int64_t now_ms);
+    template <wrapping_tick T> uint8_t drop_finished(T) = delete;
 
     void set_brightness(uint8_t level);   // 0..255, applied during 8-bit conversion
     uint8_t brightness() const;
@@ -606,7 +635,8 @@ public:
     // smallest hold across every pixel of every segment. 0 = call again at your
     // frame rate, n = nothing changes for n ms, hold_forever = nothing on this
     // strip will ever change again.
-    uint32_t render(uint32_t now_ms);
+    uint32_t render(int64_t now_ms);
+    template <wrapping_tick T> uint32_t render(T) = delete;
 
 private:
     // Owned outright, which is the point: there is no array to hand in, so two
@@ -893,7 +923,7 @@ Not part of the library. This is what the platform side looks like, and it is wh
 const struct device* dev = DEVICE_DT_GET(DT_ALIAS(led_strip));
 
 void frame_work(struct k_work* work) {
-    const uint32_t now = k_uptime_get_32();   // sampled once for the whole frame
+    const int64_t now = k_uptime_get();       // sampled once for the whole frame
     strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
 

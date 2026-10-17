@@ -70,7 +70,8 @@ public:
     /* Removes every segment reporting finished(), and returns how many went.
      * Not automatic: a finished segment keeps painting its landing color, which
      * is exactly what the wipe recipe depends on. */
-    uint8_t drop_finished(uint32_t now_ms);
+    uint8_t drop_finished(int64_t now_ms);
+    template <wrapping_tick T> uint8_t drop_finished(T) = delete;
 
     void set_brightness(uint8_t level);   /* 0..255, applied during 8-bit conversion */
     uint8_t brightness() const;
@@ -79,7 +80,8 @@ public:
      * smallest hold across every pixel of every segment. 0 = call again at your
      * frame rate, n = nothing changes for n ms, hold_forever = nothing on this
      * strip will ever change again. */
-    uint32_t render(uint32_t now_ms);
+    uint32_t render(int64_t now_ms);
+    template <wrapping_tick T> uint32_t render(T) = delete;
 
 private:
     /* Owned outright, which is the point: there is no array to hand in, so two

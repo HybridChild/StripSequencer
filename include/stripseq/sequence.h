@@ -78,14 +78,14 @@ public:
     constexpr Sequence() = default;          /* empty; valid to hold, not to render */
 
     /* The one question a sequence answers. The playhead is signed and unbounded:
-     * negative means before the timeline, large means past the end. Instants and
-     * durations elsewhere are uint32_t; only playheads are signed, and they must
-     * be -- a pixel pointing before the start of a timeline is the mechanism,
-     * not an edge case. */
+     * negative means before the timeline, large means past the end. Durations
+     * elsewhere are uint32_t and clock readings int64_t; a playhead is signed, and
+     * it must be -- a pixel pointing before the start of a timeline is the
+     * mechanism, not an edge case. */
     Sample at(int32_t playhead_ms) const;
 
     /* These two are here for the library's own use rather than the caller's:
-     * Sequencer needs the loop length to re-base an endless origin, and
+     * Sequencer needs the loop length to narrow an endless playhead, and
      * Segment::finished() needs the total. Endless reads as hold_forever.
      *
      * Neither can overflow: the builder rejects anything over 2^29 ms. */

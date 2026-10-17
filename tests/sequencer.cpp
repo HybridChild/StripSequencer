@@ -1,15 +1,15 @@
 /* Sequencer: the playhead, derived from a clock reading.
  *
  * The cases are grouped by what the sequencer promises. The calls move between
- * following the clock and standing still without the playhead jumping. An
- * endless sequence's playhead is re-based by whole loops, which nothing
- * downstream can see. A finite one is capped at 2^30, where nothing downstream
- * can tell the difference either. The uint32_t clock wraps every 49.7 days
- * without any of it showing.
+ * following the clock and standing still without the playhead jumping. The
+ * position underneath is int64_t and is kept exactly, however far it runs.
+ * What playhead() hands out is that position narrowed -- into one loop for an
+ * endless sequence, to within 2^30 of zero for a finite one -- and nothing
+ * downstream can tell the narrowed answer from the exact one. A 32-bit clock
+ * reading is refused at compile time, because widening one keeps its wrap.
  *
- * The long runs step the clock in a prime stride rather than every
- * millisecond, so they stay fast in every variant, and check each answer
- * against the same position computed in int64_t with no re-basing at all.
+ * The narrowing is checked against a table of positions rather than by
+ * running a clock for days: the clock is a parameter, so day 60 is one call.
  */
 
 #include <doctest/doctest.h>
@@ -19,6 +19,7 @@
 
 #include <stripseq/sequence.h>
 #include <stripseq/sequencer.h>
+#include <stripseq/strip.h>
 
 #include "support.h"
 
@@ -32,21 +33,21 @@ Sequence built(const SequenceBuilder& b) {
     return s;
 }
 
-constexpr uint32_t ms_per_day = 24u * 60u * 60u * 1000u;
+constexpr int64_t ms_per_day = 24 * 60 * 60 * 1000;
 
-/* The cap a finite sequence's playhead is held at, and the two limits that
- * make it safe: the longest total the builder accepts, and the largest stagger
- * a segment accepts, which is a q8 delay times a pixel index that still fits
- * in an int32_t, shifted down by 8. */
-constexpr int32_t cap_ms = int32_t{1} << 30;
+/* The limit a finite sequence's playhead is narrowed to, and the two limits
+ * that make it exact: the longest total the builder accepts, and the largest
+ * stagger a segment accepts, which is a q8 delay times a pixel index that
+ * still fits in an int32_t, shifted down by 8. */
+constexpr int32_t limit_ms = int32_t{1} << 30;
 constexpr uint32_t longest_total_ms = uint32_t{1} << 29;
 constexpr int32_t largest_stagger_ms = (int32_t{1} << 23) - 1;
 
-/* 777 ms a loop, which divides neither the strides below nor a day. */
+/* 777 ms a loop, which divides neither a power of two nor a day. */
 constexpr Sequence endless_777 =
     SequenceBuilder{}.hold(colors::red, 400).fade_to(colors::green, 377).build_const();
 
-/* The Wipe recipe's sequence: 200 ms of fade, then green for good. */
+/* The Wipe recipe's sequence: black, 200 ms of fade, then green for good. */
 constexpr Sequence wipe = SequenceBuilder{}
                               .start_color(colors::black)
                               .fade_to(colors::green, 200)
@@ -54,22 +55,53 @@ constexpr Sequence wipe = SequenceBuilder{}
                               .repeat(1)
                               .build_const();
 
-/* Long enough that the worked examples below never reach its end, and landing
- * on green like the wipe, so the two can share the 60-day run. */
+/* Long enough that the worked examples below never reach its end. */
 constexpr Sequence finite_long =
     SequenceBuilder{}.hold(colors::red, 100000).landing_color(colors::green).repeat(1).build_const();
 
-/* What a uint32_t millisecond clock reads `elapsed` after `start`: the true
- * time, wrapped every 49.7 days, as a real one would be. */
-uint32_t clock_after(uint32_t start, int64_t elapsed) {
-    return start + static_cast<uint32_t>(elapsed);
+int32_t mod_loop(int64_t position, uint32_t loop) {
+    return static_cast<int32_t>(((position % loop) + loop) % loop);
 }
 
-int32_t mod_loop(int64_t elapsed, uint32_t loop) {
-    return static_cast<int32_t>(((elapsed % loop) + loop) % loop);
-}
+/* Positions an int32_t or a uint32_t cannot hold, beside ones they can. */
+constexpr int64_t two_31 = int64_t{1} << 31;
+constexpr int64_t two_32 = int64_t{1} << 32;
+constexpr int64_t two_40 = int64_t{1} << 40;
+
+/* Whether a call compiles for a clock reading of type T. */
+template <typename T>
+concept plays_with = requires(Sequencer s, T t) { s.play(t); };
+template <typename T>
+concept pauses_with = requires(Sequencer s, T t) { s.pause(t); };
+template <typename T>
+concept reads_with = requires(const Sequencer s, T t) { s.playhead(t); };
+template <typename T>
+concept finishes_with = requires(const Segment s, T t) { s.finished(t); };
+template <typename T>
+concept renders_with = requires(Strip& s, T t) { s.render(t); };
+template <typename T>
+concept drops_with = requires(Strip& s, T t) { s.drop_finished(t); };
+
+template <typename T>
+constexpr bool every_call_takes = plays_with<T> && pauses_with<T> && reads_with<T> &&
+                                  finishes_with<T> && renders_with<T> && drops_with<T>;
+template <typename T>
+constexpr bool no_call_takes = !plays_with<T> && !pauses_with<T> && !reads_with<T> &&
+                               !finishes_with<T> && !renders_with<T> && !drops_with<T>;
 
 }  // namespace
+
+/* ------------------------------------------------------------------------ */
+/* The clock is 64 bits, and a narrower one is refused                       */
+/* ------------------------------------------------------------------------ */
+
+/* At namespace scope, so a regression is a compile error naming the line. */
+static_assert(every_call_takes<int64_t>);
+static_assert(every_call_takes<uint64_t>);
+static_assert(every_call_takes<int>, "a literal such as 1000 must still be accepted");
+static_assert(no_call_takes<uint32_t>, "k_uptime_get_32() must not compile");
+static_assert(no_call_takes<uint16_t>);
+static_assert(no_call_takes<uint8_t>);
 
 /* ------------------------------------------------------------------------ */
 /* load, and a sequencer that has never been told anything                   */
@@ -79,7 +111,7 @@ TEST_CASE("a default sequencer stands at 0, not playing, with no steps") {
     Sequencer seq;
     CHECK_FALSE(seq.playing());
     CHECK(seq.sequence().loop_duration_ms() == 0);
-    for (uint32_t now : {0u, 1234u, UINT32_MAX}) {
+    for (int64_t now : {int64_t{0}, int64_t{1234}, two_40, INT64_MAX}) {
         CAPTURE(now);
         CHECK(seq.playhead(now) == 0);
     }
@@ -95,7 +127,7 @@ TEST_CASE("load copies the sequence, resets the playhead to 0 and stops it") {
     CHECK_FALSE(seq.playing());
     CHECK(seq.sequence().loop_duration_ms() == 777);
     CHECK(seq.sequence().total_duration_ms() == hold_forever);
-    for (uint32_t now : {3500u, 9999u, 0u}) {
+    for (int64_t now : {3500, 9999, 0}) {
         CAPTURE(now);
         CHECK(seq.playhead(now) == 0);
     }
@@ -127,8 +159,8 @@ TEST_CASE("pause then play preserves the playhead exactly") {
         seq.play(50);
 
         /* Pause at an awkward instant, sit out an awkward gap, carry on. */
-        uint32_t now = 50;
-        for (uint32_t i = 0; i < 40; ++i) {
+        int64_t now = 50;
+        for (int64_t i = 0; i < 40; ++i) {
             now += 37 * i + 11;
             const int32_t before = seq.playhead(now);
             seq.pause(now);
@@ -145,16 +177,70 @@ TEST_CASE("pause then play preserves the playhead exactly") {
     }
 }
 
-TEST_CASE("seek stops the playhead following the clock, and stores it exactly") {
-    for (int32_t p : {INT32_MIN, -1, 0, 1, 2000, INT32_MAX - 5, INT32_MAX}) {
+TEST_CASE("pause keeps the position itself, not the narrowed playhead") {
+    /* Paused 2^40 + 123 ms in, on a loop that does not divide it: a pause that
+     * stored the narrowed answer would resume in phase too, so the check is
+     * that the position carries on from the exact value, a second later. */
+    Sequencer seq;
+    seq.load(endless_777);
+    seq.play(0);
+    seq.pause(two_40 + 123);
+    seq.play(5);
+    CHECK(seq.playhead(1005) == mod_loop(two_40 + 1123, 777));
+
+    /* Where the difference shows: a finite position far below the start,
+     * which a narrowed pause would have pulled up to -2^30. */
+    seq.load(wipe);
+    seq.seek(INT32_MIN);
+    seq.play(0);
+    seq.pause(1000);
+    REQUIRE(seq.playhead(1000) == -limit_ms);
+    seq.play(0);
+    CHECK(seq.playhead(two_31 - 1000 + 50) == 50);
+}
+
+TEST_CASE("seek reads back exactly within the narrowed range") {
+    for (int32_t p : {-limit_ms, -1, 0, 1, 2000, limit_ms}) {
         Sequencer seq;
-        seq.load(endless_777);
+        seq.load(wipe);
         seq.play(100);
         seq.seek(p);
         CAPTURE(p);
         CHECK_FALSE(seq.playing());
         CHECK(seq.playhead(100) == p);
-        CHECK(seq.playhead(500000) == p);   /* not re-based: nothing is playing */
+        CHECK(seq.playhead(500000) == p);   /* nothing is playing */
+    }
+
+    /* An endless sequence reads back within one loop, in phase. */
+    for (int32_t p : {-778, -1, 0, 776, 777, 5000}) {
+        Sequencer seq;
+        seq.load(endless_777);
+        seq.seek(p);
+        CAPTURE(p);
+        CHECK(seq.playhead(0) == mod_loop(p, 777));
+    }
+}
+
+TEST_CASE("seek to either end of int32_t, then play") {
+    for (int32_t p : {INT32_MIN, INT32_MIN + 5, INT32_MAX - 5, INT32_MAX}) {
+        CAPTURE(p);
+
+        Sequencer finite;
+        finite.load(wipe);
+        finite.seek(p);
+        const int32_t expected = p < 0 ? -limit_ms : limit_ms;
+        CHECK(finite.playhead(0) == expected);
+        finite.play(1000);
+        CHECK(finite.playhead(2000) == expected);
+        CHECK(wipe.at(finite.playhead(2000)).color ==
+              (p < 0 ? colors::black : colors::green));
+
+        Sequencer endless;
+        endless.load(endless_777);
+        endless.seek(p);
+        CHECK(endless.playhead(0) == mod_loop(p, 777));
+        endless.play(1000);
+        CHECK(endless.playhead(2000) == mod_loop(int64_t{p} + 1000, 777));
     }
 }
 
@@ -180,22 +266,36 @@ TEST_CASE("play while playing and pause while paused change nothing") {
     CHECK(seq.playhead(12345) == 42);
 }
 
-TEST_CASE("a negative playhead plays toward 0 and is left alone until then") {
-    Sequencer seq;
-    seq.load(endless_777);
-    seq.seek(-300);
-    seq.play(1000);
-    CHECK(seq.playhead(1100) == -200);
-    CHECK(seq.playhead(1299) == -1);
-    CHECK(seq.playhead(1300) == 0);
-    CHECK(seq.playhead(1400) == 100);
+TEST_CASE("a negative playhead plays toward 0") {
+    SUBCASE("finite: exactly, before the start") {
+        Sequencer seq;
+        seq.load(finite_long);
+        seq.seek(-300);
+        seq.play(1000);
+        CHECK(seq.playhead(1100) == -200);
+        CHECK(seq.playhead(1299) == -1);
+        CHECK(seq.playhead(1300) == 0);
+        CHECK(seq.playhead(1400) == 100);
+    }
+
+    SUBCASE("endless: wrapped into the loop, where at() would have put it") {
+        Sequencer seq;
+        seq.load(endless_777);
+        seq.seek(-300);
+        seq.play(1000);
+        CHECK(seq.playhead(1100) == 577);
+        CHECK(seq.playhead(1299) == 776);
+        CHECK(seq.playhead(1300) == 0);
+        CHECK(seq.playhead(1400) == 100);
+        CHECK(endless_777.at(577).color == endless_777.at(-200).color);
+    }
 }
 
 /* ------------------------------------------------------------------------ */
-/* Endless: re-basing by whole loops                                         */
+/* The narrowing                                                             */
 /* ------------------------------------------------------------------------ */
 
-TEST_CASE("the sketch's re-base example") {
+TEST_CASE("the sketch's endless example") {
     Sequencer seq;
     seq.load(built(SequenceBuilder{}.hold(colors::red, 250).hold(colors::black, 250)));
     seq.play(1000);
@@ -204,194 +304,121 @@ TEST_CASE("the sketch's re-base example") {
     CHECK(seq.playhead(3010) == 10);
 }
 
-TEST_CASE("an endless playhead is always within one loop, from 0") {
+/* The positions every narrowing case below is asked about: either side of
+ * zero, a loop and a few, either side of the finite limit, where an int32_t
+ * and a uint32_t would run out, and far beyond. */
+constexpr int64_t positions[] = {
+    -two_40, -two_32 - 1, -two_31 - 1, -two_31, -int64_t{limit_ms} - 1, -int64_t{limit_ms},
+    -778, -777, -1, 0, 1, 776, 777, 778, 777 * 1000 + 5,
+    longest_total_ms, int64_t{limit_ms}, int64_t{limit_ms} + 1,
+    two_31 - 1, two_31, two_31 + 1, two_32 - 1, two_32, two_32 + 1,
+    60 * ms_per_day, two_40, int64_t{1} << 62,
+};
+
+TEST_CASE("an endless playhead is its position modulo the loop, wherever it is") {
+    const int64_t start = two_40;
     Sequencer seq;
     seq.load(endless_777);
-    seq.play(0);
-    for (uint32_t now = 0; now < 20000; now += 13) {
-        const int32_t p = seq.playhead(now);
-        CAPTURE(now);
+    seq.play(start);
+    for (int64_t position : positions) {
+        CAPTURE(position);
+        const int32_t p = seq.playhead(start + position);
         CHECK(p >= 0);
         CHECK(p < 777);
+        CHECK(p == mod_loop(position, 777));
+
+        /* Exact through at(), wherever an int32_t could hold the position. */
+        if (position >= INT32_MIN && position <= INT32_MAX) {
+            const Sample exact = endless_777.at(static_cast<int32_t>(position));
+            CHECK(endless_777.at(p).color == exact.color);
+            CHECK(endless_777.at(p).hold_ms == exact.hold_ms);
+        }
     }
 }
 
-TEST_CASE("re-basing over ten days matches the un-rebased arithmetic") {
-    const Sequence& s = endless_777;
-    const uint32_t loop = s.loop_duration_ms();
-    const uint32_t start = 123456;
-
+TEST_CASE("a finite playhead is its position clamped to 2^30 either side of 0") {
+    const int64_t start = two_40;
     Sequencer seq;
-    seq.load(s);
+    seq.load(wipe);
     seq.play(start);
+    for (int64_t position : positions) {
+        CAPTURE(position);
+        const int32_t p = seq.playhead(start + position);
+        const int64_t expected = position < -limit_ms ? -limit_ms
+                               : position > limit_ms  ? limit_ms
+                                                      : position;
+        CHECK(p == expected);
 
-    /* Ten days is under 24.8, so the plain int32_t elapsed time is still a
-     * valid playhead to compare against. */
-    for (uint32_t elapsed = 0; elapsed <= 10 * ms_per_day; elapsed += 7919) {
-        const int32_t p = seq.playhead(start + elapsed);
-        if (p != mod_loop(elapsed, loop) ||
-            !(s.at(p).color == s.at(static_cast<int32_t>(elapsed)).color)) {
-            CAPTURE(elapsed);
-            CHECK(p == mod_loop(elapsed, loop));
-            CHECK(s.at(p).color == s.at(static_cast<int32_t>(elapsed)).color);
-            break;
-        }
-    }
-    CHECK(seq.playhead(start + 10 * ms_per_day) == mod_loop(10 * int64_t{ms_per_day}, loop));
-}
-
-/* ------------------------------------------------------------------------ */
-/* The 49.7-day wrap                                                         */
-/* ------------------------------------------------------------------------ */
-
-TEST_CASE("the clock wrapping produces no discontinuity") {
-    SUBCASE("finite, millisecond by millisecond across the wrap") {
-        Sequencer seq;
-        seq.load(finite_long);
-        seq.play(UINT32_MAX - 100);
-        int32_t last = seq.playhead(UINT32_MAX - 100);
-        CHECK(last == 0);
-        for (uint32_t now = UINT32_MAX - 99; now != 300; ++now) {
-            const int32_t p = seq.playhead(now);
-            if (p != last + 1) {
-                CAPTURE(now);
-                CHECK(p == last + 1);
-                break;
-            }
-            last = p;
-        }
-        CHECK(seq.playhead(299) == 400);
-    }
-
-    SUBCASE("endless, for 60 days and so across the wrap at least once") {
-        const uint32_t loop = endless_777.loop_duration_ms();
-        const uint32_t start = UINT32_MAX - 5 * ms_per_day;
-
-        Sequencer seq;
-        seq.load(endless_777);
-        seq.play(start);
-        for (int64_t elapsed = 0; elapsed <= 60 * int64_t{ms_per_day}; elapsed += 7919) {
-            const uint32_t now = clock_after(start, elapsed);
-            const int32_t p = seq.playhead(now);
-            if (p != mod_loop(elapsed, loop)) {
-                CAPTURE(elapsed);
-                CHECK(p == mod_loop(elapsed, loop));
-                break;
-            }
-        }
-    }
-
-    SUBCASE("paused across the wrap and resumed after it") {
-        Sequencer seq;
-        seq.load(finite_long);
-        seq.play(UINT32_MAX - 1000);
-        seq.pause(UINT32_MAX - 400);
-        REQUIRE(seq.playhead(UINT32_MAX - 400) == 600);
-        seq.play(5000);
-        CHECK(seq.playhead(5000) == 600);
-        CHECK(seq.playhead(5050) == 650);
+        /* The color is exact everywhere; the hold is exact everywhere but a
+         * start-color hold past the limit, which the clamp understates. */
+        const Sample got = wipe.at(p);
+        if (position < 0)
+            CHECK(got.color == colors::black);
+        else if (position >= 200)
+            CHECK(got.color == colors::green);
+        if (position >= -limit_ms && position <= INT32_MAX)
+            CHECK(got.hold_ms == wipe.at(static_cast<int32_t>(position)).hold_ms);
     }
 }
 
-/* ------------------------------------------------------------------------ */
-/* Finite: the cap at 2^30                                                   */
-/* ------------------------------------------------------------------------ */
+TEST_CASE("a finite sequence left playing for 60 days stays on its landing color") {
+    /* The Wipe recipe's whole life, in the calls a strip would make: play, and
+     * then nothing but reading, for longer than either 32-bit limit. */
+    Sequencer seq;
+    seq.load(wipe);
+    seq.play(777777);
+    for (int64_t day : {0, 1, 12, 13, 24, 25, 49, 50, 60}) {
+        CAPTURE(day);
+        const int32_t p = seq.playhead(777777 + 200 + day * ms_per_day);
+        CHECK(wipe.at(p).color == colors::green);
+        CHECK(wipe.at(p).hold_ms == hold_forever);
+    }
+    CHECK(seq.playhead(777777 + 60 * ms_per_day) == limit_ms);
+}
 
-TEST_CASE("a capped playhead minus any stagger is past any accepted total") {
-    /* The arithmetic the cap rests on, and the room it leaves. */
-    CHECK(int64_t{cap_ms} - largest_stagger_ms > int64_t{longest_total_ms});
+TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
+    /* The arithmetic the limit rests on, and the room it leaves. */
+    CHECK(int64_t{limit_ms} - largest_stagger_ms > int64_t{longest_total_ms});
+    CHECK(int64_t{limit_ms} + largest_stagger_ms <= INT32_MAX);
+    CHECK(-int64_t{limit_ms} + largest_stagger_ms < 0);
+    CHECK(-int64_t{limit_ms} - largest_stagger_ms >= INT32_MIN);
 
     /* The builder does accept a total that long, and one more is refused. */
     Sequence longest;
-    REQUIRE(SequenceBuilder{}.hold(colors::red, longest_total_ms).landing_color(colors::green)
-                .repeat(1).build(longest) == Error::None);
+    REQUIRE(SequenceBuilder{}.start_color(colors::black).hold(colors::red, longest_total_ms)
+                .landing_color(colors::green).repeat(1).build(longest) == Error::None);
     CHECK(longest.total_duration_ms() == longest_total_ms);
     Sequence too_long;
     CHECK(SequenceBuilder{}.hold(colors::red, longest_total_ms + 1).repeat(1).build(too_long) ==
           Error::TooLong);
 
-    /* So the most-staggered pixel of a capped segment shows the landing color. */
-    CHECK(longest.at(cap_ms - largest_stagger_ms).color == colors::green);
-    CHECK(longest.at(cap_ms - largest_stagger_ms).hold_ms == hold_forever);
+    /* So the most-staggered pixel at either limit shows the color at that end. */
+    CHECK(longest.at(limit_ms - largest_stagger_ms).color == colors::green);
+    CHECK(longest.at(limit_ms - largest_stagger_ms).hold_ms == hold_forever);
+    CHECK(longest.at(-limit_ms + largest_stagger_ms).color == colors::black);
+
+    /* And an endless loop of the longest length still leaves room either way. */
+    CHECK(int64_t{longest_total_ms} - 1 + largest_stagger_ms <= INT32_MAX);
 }
 
-TEST_CASE("a finite sequence left playing for 60 days stays on its landing color") {
-    for (const Sequence* s : {&wipe, &finite_long}) {
-        const uint32_t start = 777777;
-
+TEST_CASE("the playhead is continuous where a 32-bit clock would break") {
+    /* Millisecond by millisecond across 2^31 and 2^32 ms of play, where an
+     * int32_t difference turns negative and a uint32_t clock wraps. */
+    for (int64_t edge : {two_31, two_32}) {
         Sequencer seq;
-        seq.load(*s);
-        seq.play(start);
-        bool capped = false;
-        for (int64_t elapsed = 0; elapsed <= 60 * int64_t{ms_per_day}; elapsed += 7919) {
-            const uint32_t now = clock_after(start, elapsed);
+        seq.load(endless_777);
+        seq.play(edge);   /* the clock itself crosses the same edge */
+        int32_t last = seq.playhead(edge + edge - 1000);
+        for (int64_t now = edge + edge - 999; now <= edge + edge + 1000; ++now) {
             const int32_t p = seq.playhead(now);
-
-            /* Exact until the cap, then the cap for good. */
-            const int32_t expected =
-                elapsed > cap_ms ? cap_ms : static_cast<int32_t>(elapsed);
-            const bool landed = elapsed <= s->total_duration_ms() ||
-                                (s->at(p).color == colors::green &&
-                                 s->at(p).hold_ms == hold_forever);
-            if (p != expected || !landed) {
-                CAPTURE(elapsed);
-                CHECK(p == expected);
-                CHECK(landed);
+            if (p != (last + 1) % 777) {
+                CAPTURE(edge);
+                CAPTURE(now);
+                CHECK(p == (last + 1) % 777);
                 break;
             }
-            capped = capped || p == cap_ms;
+            last = p;
         }
-        CHECK(capped);
-        const int32_t at_61_days = seq.playhead(clock_after(start, 61 * int64_t{ms_per_day}));
-        CHECK(at_61_days == cap_ms);
-        CHECK(s->at(at_61_days).color == colors::green);
-
-        /* Pausing at the cap and playing again stays there too. */
-        seq.pause(clock_after(start, 62 * int64_t{ms_per_day}));
-        CHECK(seq.playhead(0) == cap_ms);
-        seq.play(12345);
-        CHECK(seq.playhead(12345 + 10 * ms_per_day) == cap_ms);
-    }
-}
-
-/* ------------------------------------------------------------------------ */
-/* play() moves the origin once, the instant it starts following the clock   */
-/* ------------------------------------------------------------------------ */
-
-TEST_CASE("play after a seek near INT32_MAX does not overflow") {
-    /* The first playhead() call comes a second after play: the raw elapsed
-     * time would have passed INT32_MAX 994 ms earlier. */
-    const int32_t sought = INT32_MAX - 5;
-
-    SUBCASE("finite: held at the cap, on its landing color") {
-        Sequencer seq;
-        seq.load(wipe);
-        seq.seek(sought);
-        CHECK(seq.playhead(1000) == sought);   /* seek itself stays exact */
-        seq.play(1000);
-        const int32_t p = seq.playhead(2000);
-        CHECK(p == cap_ms);
-        CHECK(wipe.at(p).color == colors::green);
-    }
-
-    SUBCASE("endless: in phase with where it was sought") {
-        const uint32_t loop = endless_777.loop_duration_ms();
-        Sequencer seq;
-        seq.load(endless_777);
-        seq.seek(sought);
-        seq.play(1000);
-        CHECK(seq.playhead(2000) == mod_loop(int64_t{sought} + 1000, loop));
-        CHECK(endless_777.at(seq.playhead(2000)).color ==
-              endless_777.at(mod_loop(int64_t{sought} + 1000, loop)).color);
-    }
-
-    SUBCASE("play across the clock's wrap as well") {
-        const uint32_t loop = endless_777.loop_duration_ms();
-        Sequencer seq;
-        seq.load(endless_777);
-        seq.seek(sought);
-        seq.play(UINT32_MAX - 200);
-        CHECK(seq.playhead(800) == mod_loop(int64_t{sought} + 1001, loop));
     }
 }
 
@@ -403,12 +430,12 @@ TEST_CASE("an empty sequence left playing does not divide by zero") {
     Sequencer seq;
     seq.load(Sequence{});
     seq.play(5000);
-    for (uint32_t elapsed : {0u, 1u, 999u, 1000000u, 20 * ms_per_day}) {
+    for (int64_t elapsed : {int64_t{0}, int64_t{1}, int64_t{999}, 20 * ms_per_day, two_40}) {
         CAPTURE(elapsed);
-        CHECK(seq.playhead(5000 + elapsed) == static_cast<int32_t>(elapsed));
+        CHECK(seq.playhead(5000 + elapsed) == 0);
         CHECK(seq.sequence().at(seq.playhead(5000 + elapsed)).color == colors::black);
     }
     seq.pause(5000 + 20 * ms_per_day);
     seq.play(0);
-    CHECK(seq.playhead(1) == static_cast<int32_t>(20 * ms_per_day) + 1);
+    CHECK(seq.playhead(1) == 0);
 }

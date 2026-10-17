@@ -19,7 +19,9 @@ namespace stripseq {
 /* Step 1 of the render loop: where does this pixel look?
  *
  *   playhead_ms  the sequencer's own playhead, unstaggered -- the single number
- *                the sequencer owns, identical for every pixel in the segment.
+ *                the sequencer owns, identical for every pixel in the segment,
+ *                and already narrowed, so an offset under 2^23 ms either way
+ *                cannot overflow it (see Sequencer::playhead).
  *   index        the pixel's position *within the segment*, 0-based -- not its
  *                position on the strip. A segment therefore behaves identically
  *                wherever it sits, and hash(index) stays stable if it moves.
@@ -91,7 +93,8 @@ public:
      * a full stagger later than the sequencer's own playhead reaching the end.
      * Narrower than "nothing here will change again", too: a sequencer that is
      * not playing holds forever and is never finished. */
-    bool finished(uint32_t now_ms) const;
+    bool finished(int64_t now_ms) const;
+    template <wrapping_tick T> bool finished(T) const = delete;
 
     /* How a caller finds a segment again after the strip's list has shifted.
      * The sequencer is the identity because the application already holds it
@@ -118,7 +121,7 @@ private:
      * and so cannot be checked, and would otherwise overrun the buffer. */
     friend class Strip;
     uint32_t paint(uint8_t* buffer, uint16_t pixel_count, uint8_t brightness,
-                   uint32_t now_ms) const;
+                   int64_t now_ms) const;
 
     uint16_t   first_ = 0;
     uint16_t   count_ = 0;

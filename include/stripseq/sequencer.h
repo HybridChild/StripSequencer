@@ -11,11 +11,23 @@
 #ifndef STRIPSEQ_SEQUENCER_H_
 #define STRIPSEQ_SEQUENCER_H_
 
+#include <concepts>
 #include <cstdint>
 
 #include "stripseq/sequence.h"
 
 namespace stripseq {
+
+/* A clock reading narrow enough to wrap while a device runs: 32-bit
+ * milliseconds roll over after 49.7 days. Every function that takes now_ms
+ * takes int64_t, and has a deleted overload for these, because widening one
+ * converts silently -- -Wconversion stays quiet, since no value is lost -- and
+ * keeps the wrap as a 2^32 ms jump backwards. Extend the tick to 64 bits
+ * first: under Zephyr that is k_uptime_get() in place of k_uptime_get_32().
+ * Spelled as a concept rather than as uint32_t, which is unsigned int on one
+ * target and unsigned long on another. */
+template <typename T>
+concept wrapping_tick = std::unsigned_integral<T> && sizeof(T) <= 4;
 
 class Sequencer {
 public:
@@ -27,9 +39,12 @@ public:
      * play while playing and pause while paused change nothing: either one
      * re-derived from the other state's stale field would make the playhead
      * jump. */
-    void play(uint32_t now_ms);
-    void pause(uint32_t now_ms);
+    void play(int64_t now_ms);
+    void pause(int64_t now_ms);
     void seek(int32_t playhead_ms);
+
+    template <wrapping_tick T> void play(T) = delete;
+    template <wrapping_tick T> void pause(T) = delete;
 
     bool playing() const;
     /* What a segment calls at() on, once per pixel, with that pixel's own
@@ -37,20 +52,24 @@ public:
      * only the unstaggered playhead. */
     const Sequence& sequence() const;
 
-    /* The sequencer's position at now_ms, unstaggered: now_ms - origin_ms_
-     * while playing, frozen_ otherwise. A segment asks once per render() and
-     * staggers every pixel from the answer.
-     *
-     * Non-const on purpose. It moves the origin as it goes -- by whole loops for
-     * an endless sequence, to hold a finite one at 2^30 ms past its start -- so
-     * the 49.7-day wrap is never reached, and that mutation has to happen
-     * somewhere the sequencer is being asked for its position anyway. */
-    int32_t playhead(uint32_t now_ms);
+    /* The sequencer's position at now_ms, unstaggered, narrowed to a range any
+     * accepted stagger can be added to or taken from: [0, loop) for an endless
+     * sequence, [-2^30, 2^30] for a finite one. Both are exact through at(),
+     * which reads an endless playhead modulo the loop and shows a finite one's
+     * start color below 0 and its landing color past its total. A segment asks
+     * once per render() and staggers every pixel from the answer. */
+    int32_t playhead(int64_t now_ms) const;
+
+    template <wrapping_tick T> int32_t playhead(T) const = delete;
 
 private:
+    /* The position before narrowing. In int64_t milliseconds it cannot
+     * overflow in any span a device runs for, so nothing here protects it. */
+    int64_t position(int64_t now_ms) const;
+
     Sequence sequence_;
-    uint32_t origin_ms_ = 0;    /* playing: the instant playhead 0 sits at */
-    int32_t  frozen_ = 0;       /* not playing: the playhead itself */
+    int64_t  origin_ms_ = 0;    /* playing: the instant position 0 sits at */
+    int64_t  frozen_ = 0;       /* not playing: the position itself */
     bool     playing_ = false;
 };
 

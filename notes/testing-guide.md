@@ -11,7 +11,7 @@ This is a teaching document, not project documentation. It explains what a C++ t
 - **§5** — the cost this repo pays: the suite is compiled once per configuration, and why that drives the choice of framework.
 - **§6** — the one-line translation unit, and the honest limit of what it proves.
 - **§7** — tests that must *not* compile, which no test framework can run, and what `try_compile` does instead.
-- **§8** — tests that pass for the wrong reason: planting bugs to see which ones the suite misses, a bug the host hardware hides, and a test that agrees with itself.
+- **§8** — tests that pass for the wrong reason: planting bugs to see which ones the suite misses, a bug the target hardware hides, and a test that agrees with itself.
 - **§9** — nine exercises.
 - **§10–§11** — the model in a paragraph, and where to go next.
 
@@ -123,29 +123,29 @@ Done to `Sequencer` (§9 Exercise 8), seven mutants give this:
 
 | Planted in `src/sequencer.cpp` | Killed by |
 | --- | --- |
-| `play()` no longer re-bases or caps the playhead it restores | play after a seek near INT32_MAX does not overflow |
 | `play()` loses its guard, so a second `play()` restarts | play while playing and pause while paused change nothing |
-| the finite cap clamps the answer but leaves the origin | a finite sequence left playing for 60 days …; play after a seek near INT32_MAX … |
-| re-basing also applies to negative playheads | a negative playhead plays toward 0 and is left alone until then |
-| `pause()` stores `now - origin` instead of asking `playhead()` | a finite sequence left playing for 60 days …; play while playing … |
+| an endless remainder is not folded up when negative | a negative playhead plays toward 0; seek reads back exactly …; seek to either end …; an endless playhead is its position modulo the loop … |
+| `pause()` stores the narrowed `playhead(now)` instead of `position(now)` | pause keeps the position itself, not the narrowed playhead |
+| the finite clamp loses its lower bound | pause keeps the position itself …; seek to either end …; a finite playhead is its position clamped … |
+| the finite clamp loses its upper bound | seek to either end …; a finite playhead is its position clamped …; a finite sequence left playing for 60 days … |
 | `pause()` gains a guard, `if (!playing_) return;` | nothing |
-| re-basing loses its check for a zero-length loop | nothing, on Apple Silicon |
+| the narrowing loses its check for a zero-length loop | an empty sequence left playing does not divide by zero — on the host |
 
-The five that die are the suite working. The two that survive are the two kinds of survivor worth being able to tell apart.
+Five die on every machine, which is the suite working. The last two are the two kinds of survivor worth being able to tell apart: one survives everywhere, and the other dies on the host and survives on the board.
 
-**An equivalent mutant: the code did not matter.** `pause()` stores `playhead(now)`, and while paused `playhead()` answers the stored value without reading anything else. So pausing twice stores the same value twice, with or without a guard against it, and no test can tell the difference because there is no difference. No new test is the right response. The right response is to understand why — and then, usually, to delete the code that does not matter, with a comment saying why it is not needed, which is what `Sequencer::pause()` has. A survivor is either a gap in the tests or a line that cannot change behaviour; deciding which is the work, and either answer improves something.
+**An equivalent mutant: the code did not matter.** `pause()` stores `position(now)`, and while paused `position()` answers the stored value without reading anything else. So pausing twice stores the same value twice, with or without a guard against it, and no test can tell the difference because there is no difference. No new test is the right response. The right response is to understand why — and then, usually, to delete the code that does not matter, with a comment saying why it is not needed, which is what `Sequencer::pause()` has. A survivor is either a gap in the tests or a line that cannot change behaviour; deciding which is the work, and either answer improves something.
 
-**A mutant hidden by the hardware: the test passed for the wrong reason.** `tests/sequencer.cpp` has a case named for exactly the third survivor — "an empty sequence left playing does not divide by zero" — and with the guard deleted it still passes on an Apple Silicon Mac. The division happens. The test cannot see it.
+**A mutant hidden by the hardware: the test failed for the wrong reason.** `tests/sequencer.cpp` has a case named for exactly the last mutant — "an empty sequence left playing does not divide by zero" — and with the guard deleted it fails on an Apple Silicon Mac. Read the failures, though: every one is a check that `playhead()` answers 0, which it no longer does. The division happens, and the test cannot see it. What it sees is the wrong answer that the division happened to produce on this machine.
 
-Integer division by zero is undefined behaviour in C++, and what actually happens is whatever the processor's divide instruction does:
+Integer division by zero is undefined behaviour in C++, and what actually happens is whatever the machine does:
 
-- **arm64** (Apple Silicon): `UDIV` by zero returns 0, without trapping. The compiler computes `p % loop` as `p - (p / loop) * loop`, which with a zero quotient is `p` — so the mutated code returns the elapsed time, which is exactly the right answer for an empty sequence. Every check passes.
-- **x86-64:** `DIV` by zero raises a divide-error exception, and the process dies with `SIGFPE`. The same test crashes.
-- **Cortex-M3/M4/M7** — this project's target: `UDIV` by zero returns 0 by default, like arm64, unless the `DIV_0_TRP` bit in the Configuration and Control Register is set, in which case it is a usage fault. Zephyr sets it at boot, in `z_arm_fault_init()` (`arch/arm/core/cortex_m/fault.c:1129`), and reports the result as "Division by zero" (`arch/arm/core/cortex_m/fault.c:499`). On the bench board, the mutant would fault the first time an empty sequence played.
+- **arm64** (Apple Silicon): `SDIV` by zero returns 0, without trapping. The compiler computes `p % loop` as `p - (p / loop) * loop`, which with a zero quotient is `p` — so the mutated code returns the elapsed time, and the check that expects 0 fails.
+- **x86-64:** `IDIV` by zero raises a divide-error exception, and the process dies with `SIGFPE`. The same test crashes.
+- **Cortex-M7** — this project's target: a 64-bit remainder is not an instruction there but a call to libgcc's `__aeabi_ldivmod`, which tests for a zero divisor itself, branches to `__aeabi_ldiv0` — a bare `bx lr` in the bare-metal libgcc — and hands back the divisor's own registers as the remainder. That remainder is 0, which is exactly the right answer for an empty sequence, and nothing faults. Zephyr does set `DIV_0_TRP` at boot, in `z_arm_fault_init()` (`arch/arm/core/cortex_m/fault.c:1129`), but that bit traps the hardware `UDIV` and `SDIV` instructions, and no hardware divide runs; nor does v4.4.1 replace `__aeabi_ldiv0` with anything that would notice. On the bench board the mutant would run correctly forever.
 
-Three machines, three behaviours, and the one the tests happened to run on was the most forgiving. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
+Three machines, three behaviours, and the one that matters most is the most forgiving: the board gets the right answer from undefined behaviour, and the host catches the mutant only because arm64's leftover differs from the right answer. Had the test checked only that the segment shows black — which `at()` answers for an empty sequence whatever playhead it is given — it would pass on the host too. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
 
-What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 too (§9 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
+What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 for the reason it is named for (§9 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
 
 **A test that agrees with itself.** The third way to pass for the wrong reason needs no mutant and no second machine to see, only a look at where the expected value comes from. `tests/convert.cpp` has to know, for each of the 256 top bytes a channel can have, what the gamma table should turn it into. The convenient expectation is the library's own answer: read the table, or paste a copy of the function that generates it into the test. Either one passes whatever the generator does, wrong included, because the test now checks that the code equals itself. An expectation is only evidence when it is computed **another way** — an *oracle* that shares nothing with the code but the definition both are meant to meet.
 
@@ -341,21 +341,21 @@ Make each change below to `src/sequencer.cpp` on its own, rebuild, run, and reve
 cmake --build build --target tests_default && ./build/tests_default | grep -E '^TEST CASE|test cases:'
 ```
 
-1. In `Sequencer::play()`, delete `(void)playhead(now_ms);`.
-2. In `Sequencer::play()`, change `if (playing_)` to `if (false)`.
-3. In `Sequencer::playhead()`, delete the line `origin_ms_ = now_ms - static_cast<uint32_t>(finite_cap_ms);`.
-4. In `Sequencer::playhead()`, delete `p < 0 || `.
-5. In `Sequencer::pause()`, replace `playhead(now_ms)` with `static_cast<int32_t>(now_ms - origin_ms_)`.
+1. In `Sequencer::play()`, change `if (playing_)` to `if (false)`.
+2. In `Sequencer::playhead()`, replace `into_loop < 0 ? into_loop + loop : into_loop` with `into_loop`.
+3. In `Sequencer::pause()`, replace `position(now_ms)` with `playhead(now_ms)`.
+4. In `Sequencer::playhead()`, change `p < -finite_limit_ms` to `false`.
+5. In `Sequencer::playhead()`, change `p > finite_limit_ms` to `false`.
 6. In `Sequencer::pause()`, add `if (!playing_) return;` as its first line.
 
 The first five each print the failing case names from the table in §8, then a summary such as:
 
 ```
-TEST CASE:  play after a seek near INT32_MAX does not overflow
-[doctest] test cases:    52 |    51 passed | 1 failed | 0 skipped
+TEST CASE:  play while playing and pause while paused change nothing
+[doctest] test cases:    63 |    62 passed | 1 failed | 0 skipped
 ```
 
-The sixth prints only the summary, with nothing failed. Before reverting it, work out why no test could fail: trace `pause()` twice in a row by hand, and look at what `playhead()` reads while `playing_` is false.
+The sixth prints only the summary, with nothing failed. Before reverting it, work out why no test could fail: trace `pause()` twice in a row by hand, and look at what `position()` reads while `playing_` is false.
 
 **Proves:** a mutant that dies shows a test doing its job, and the case that kills it is the one that documents why the line exists. One that survives is either a missing test or code that cannot matter — and only reading the code says which.
 
@@ -403,7 +403,7 @@ exit 0
 
 The x86-64 build prints nothing and exits with 136, which is 128 + 8, signal 8 being `SIGFPE`; an interactive shell adds its own line naming the floating-point exception, though no floating point is involved. The UBSan build reports the division and then, like arm64, carries on.
 
-Now the library. In `Sequencer::playhead()`, delete `loop == 0 || `, and run the case named for this bug in the ordinary build and in a UBSan one:
+Now the library. In `Sequencer::playhead()`, delete the two lines `if (loop == 0)` and `return 0;`, and run the case named for this bug in the ordinary build and in a UBSan one:
 
 ```sh
 cd "$REPO"
@@ -412,21 +412,51 @@ cmake -S . -B build-ubsan -G Ninja -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-
 cmake --build build-ubsan --target tests_default && ./build-ubsan/tests_default -tc='an empty sequence left*'
 ```
 
-The ordinary build passes on Apple Silicon. The UBSan one:
+The ordinary build fails on Apple Silicon, and the failures say nothing about division:
 
 ```
-src/sequencer.cpp:63:61: runtime error: division by zero
-SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:63:61
+tests/sequencer.cpp:435: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+  values: CHECK( 999 == 0 )
+  logged: elapsed := 999
+```
+
+`999` is the elapsed time: `p - (p / 0) * 0` with arm64's zero quotient. The UBSan build stops at the cause instead:
+
+```
+src/sequencer.cpp:60:37: runtime error: division by zero
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:60:37
 ===============================================================================
-tests/sequencer.cpp:402:
+tests/sequencer.cpp:429:
 TEST CASE:  an empty sequence left playing does not divide by zero
 
-tests/sequencer.cpp:402: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
+tests/sequencer.cpp:429: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
 ```
 
 `-fno-sanitize-recover=all` makes the first report abort the process, which doctest reports as a crash in the case that was running. **Revert it**, rebuild `build-ubsan`, and the case passes there too. `build-ubsan` matches the `build*/` pattern, so it is ignored by git and removed by `scripts/clean.sh`.
 
-**Proves:** the same remainder returns the right answer, kills the process, or is reported, depending only on the machine. A test that passes on the forgiving one proves nothing about the others, and the sanitizer is what makes the test mean the same thing everywhere.
+To see why the board would forgive it, look at the remainder the target actually calls. `p % loop` on two `int64_t` values compiles to a call, and the call's zero-divisor path is in the first few instructions:
+
+```sh
+cd /tmp/stripseq-lab
+arm-none-eabi-ar x "$(arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -print-libgcc-file-name)" _aeabi_ldivmod.o _dvmd_tls.o
+arm-none-eabi-objdump -d _aeabi_ldivmod.o | head -16
+arm-none-eabi-objdump -d _dvmd_tls.o
+```
+
+```
+00000000 <__aeabi_ldivmod>:
+   0:	b97b      	cbnz	r3, 22 <__aeabi_ldivmod+0x22>
+   2:	b972      	cbnz	r2, 22 <__aeabi_ldivmod+0x22>
+   ...
+  1e:	f7ff bffe 	b.w	0 <__aeabi_ldiv0>
+...
+00000000 <__aeabi_idiv0>:
+   0:	4770      	bx	lr
+```
+
+The divisor arrives in `r2:r3` and the remainder leaves in `r2:r3`. With both zero, the function never divides, branches to a handler that returns at once, and leaves `r2:r3` as they came: a remainder of 0. That output is from the Arm GNU Toolchain 15.3; the instructions differ between libgcc builds, but the zero test before any division is the same.
+
+**Proves:** the same remainder returns a wrong answer, kills the process, returns the right answer by accident, or is reported, depending only on the machine. A test that fails on one of them may be failing for a reason it was not written for, and one that would pass on the target proves nothing there; the sanitizer is what makes the test mean the same thing everywhere.
 
 ---
 
@@ -442,6 +472,6 @@ A test framework and a test runner solve different problems, and the seam betwee
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 5** — where the suite becomes an acceptance test: the eleven cookbook recipes compiled unmodified, with property assertions and golden-frame hashes.
-- **[`wrapping-clocks-guide.md`](wrapping-clocks-guide.md)** — the code §8's mutants were planted in: what each guarded line in `Sequencer` is for, and the exercises that break them one at a time.
+- **[`wrapping-clocks-guide.md`](wrapping-clocks-guide.md)** — the code §8's mutants were planted in: what the narrowing and each guard in `Sequencer` are for, and the exercises that break them one at a time.
 - **`docs/IMPLEMENTATION-PLAN.md`, Phase 7** — the sanitizer builds §8 argues for, run over the whole suite.
 - **doctest's own `doctest.cmake`** — the ~200 lines behind §4, and short enough to read once to see that discovery really is just generated `add_test` calls.
