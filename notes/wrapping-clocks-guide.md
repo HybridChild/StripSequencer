@@ -162,7 +162,7 @@ So every function that takes `now_ms` declares a second overload, and deletes it
 
 ```cpp
 template <typename T>
-concept wrapping_tick = std::unsigned_integral<T> && sizeof(T) <= 4;
+concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
 
 void play(int64_t now_ms);
 template <wrapping_tick T> void play(T) = delete;
@@ -171,6 +171,8 @@ template <wrapping_tick T> void play(T) = delete;
 A deleted function still takes part in overload resolution; choosing it is what makes the call an error. For a `uint32_t` argument the template deduces `T = uint32_t` as an exact match, which beats the conversion to `int64_t`, and the call fails to compile, naming the deleted candidate. For an `int64_t` the non-template is the exact match. For an `int` literal like `play(1000)` the constraint fails, so the template is not a candidate at all and the literal converts to `int64_t` as it always did.
 
 Two simpler spellings look right and are not. A plain `void play(uint32_t) = delete;` makes `play(1000)` ambiguous, since `int` converts to `uint32_t` and to `int64_t` with equal rank. And naming `uint32_t` at all misses the point on some target: it is `unsigned int` on the host and `unsigned long` on arm-none-eabi, so the concept asks about the property — unsigned, at most 32 bits — rather than the typedef.
+
+The property is asked with type traits, not with the standard's `std::unsigned_integral`. A concept is a language feature, and `concept` needs no header; what `<concepts>` provides is a set of ready-made ones, and `std::unsigned_integral` is defined from the same two traits, `is_integral` and `is_unsigned`, so the two spellings accept exactly the same types — `char` included, which is unsigned on arm-none-eabi and signed on the host under either. The one thing the standard concepts add is a shared vocabulary for *subsumption*: when two overloads are both constrained, the one whose constraint implies the other's wins, and the compiler decides that by matching the pieces each constraint is built from. Two trait expressions only match when they come from the same written-out definition, so concepts built on `std::integral` can order against each other while ones that spell out `std::is_integral_v` separately cannot. Here the deleted template only ever competes with a plain `int64_t` function, so there is nothing to order, and the library keeps to its three headers.
 
 The guard is tested the way any "this must not compile" is tested when the failure is a substitution failure: a `requires`-expression asks whether the call is well-formed, and a `static_assert` insists on the answer.
 
@@ -479,8 +481,8 @@ c++ -std=c++20 -I"$REPO/include" -DPASS_THE_TICK -fsyntax-only tick.cpp
 tick.cpp:43:9: error: call to deleted member function 'play'
    43 |     seq.play(start);
       |     ~~~~^~~~
-.../include/stripseq/sequencer.h:46:37: note: candidate function [with T = unsigned int] has been explicitly deleted
-   46 |     template <wrapping_tick T> void play(T) = delete;
+.../include/stripseq/sequencer.h:48:37: note: candidate function [with T = unsigned int] has been explicitly deleted
+   48 |     template <wrapping_tick T> void play(T) = delete;
       |                                     ^
 ```
 

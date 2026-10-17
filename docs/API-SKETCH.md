@@ -328,7 +328,7 @@ namespace stripseq {
 // A clock reading narrow enough to wrap while a device runs. Every function that
 // takes now_ms has a deleted overload for these; see "The clock" below.
 template <typename T>
-concept wrapping_tick = std::unsigned_integral<T> && sizeof(T) <= 4;
+concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
 
 class Sequencer {
 public:

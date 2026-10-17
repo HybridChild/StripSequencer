@@ -11,8 +11,8 @@
 #ifndef STRIPSEQ_SEQUENCER_H_
 #define STRIPSEQ_SEQUENCER_H_
 
-#include <concepts>
 #include <cstdint>
+#include <type_traits>
 
 #include "stripseq/sequence.h"
 
@@ -25,9 +25,11 @@ namespace stripseq {
  * keeps the wrap as a 2^32 ms jump backwards. Extend the tick to 64 bits
  * first: under Zephyr that is k_uptime_get() in place of k_uptime_get_32().
  * Spelled as a concept rather than as uint32_t, which is unsigned int on one
- * target and unsigned long on another. */
+ * target and unsigned long on another, and built from traits: the standard's
+ * own std::unsigned_integral is in <concepts>, outside the three headers the
+ * library includes. */
 template <typename T>
-concept wrapping_tick = std::unsigned_integral<T> && sizeof(T) <= 4;
+concept wrapping_tick = std::is_integral_v<T> && std::is_unsigned_v<T> && sizeof(T) <= 4;
 
 class Sequencer {
 public:
