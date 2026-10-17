@@ -86,14 +86,20 @@ if(STRIPSEQ_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequence.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/sequencer.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/segment.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/tests/strip.cpp)
+        ${CMAKE_CURRENT_LIST_DIR}/tests/strip.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/tests/cookbook.cpp)
 
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_variant.cmake)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_compile_fail.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/stripseq_cookbook_check.cmake)
 
     # The tests that must fail to compile, run here at configure time; see the
     # file for why they cannot be test cases.
     stripseq_check_build_const()
+
+    # That the cookbook in the sketch and the one the tests compile are the
+    # same text; see the file for how it compares them.
+    stripseq_add_cookbook_check()
 
     # Five, not four. The cross product of the two behavioural macros is four,
     # and `default` is one of them -- called with no definitions at all, so that
