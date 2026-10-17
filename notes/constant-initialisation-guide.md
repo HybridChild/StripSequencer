@@ -45,8 +45,8 @@ Compiled for a Cortex-M, they could hardly be more different (§9, Exercise 1):
 
 | Declaration | Section | Costs |
 | --- | --- | --- |
-| `constexpr Sequence in_flash` | `.rodata`, 0x70 bytes | 112 bytes of flash, nothing else |
-| `const Sequence at_startup` | `.bss`, 0x70 bytes | 112 bytes of RAM, plus a 4-byte `.init_array` entry and a 16-byte `_GLOBAL__sub_I_…` that calls `make()` and writes the result |
+| `constexpr Sequence in_flash` | `.rodata`, 0x74 bytes | 116 bytes of flash, nothing else |
+| `const Sequence at_startup` | `.bss`, 0x74 bytes | 116 bytes of RAM, plus a 4-byte `.init_array` entry and a 16-byte `_GLOBAL__sub_I_…` that calls `make()` and writes the result |
 
 The `const` one lives in RAM, not flash, because something has to write it at startup and flash cannot be written by an ordinary store. Read the table as a rule: **whether an object is initialised at compile time is decided by its initialiser, not by its qualifiers.** `const` is about mutation; three other keywords are about initialisation, and they promise different things.
 
@@ -144,7 +144,7 @@ For that to compile, `Strip`'s constructor has to be `constexpr`, which is why i
 
 A namespace-scope variable that is `const` — and `constexpr` implies `const` — has **internal linkage** unless it says otherwise. Each translation unit that includes the header gets its own private copy, with its own address.
 
-For a 6-byte `Color` that is usually invisible: the compiler folds the value into the instructions that use it and never emits the object at all. For a 112-byte `Sequence` whose address is taken — `seq.load(kRainbow)` keeps a pointer to it — every file that loads it carries its own 112 bytes of flash, and `&kRainbow` compares unequal across files (§9, Exercise 6).
+For a 6-byte `Color` that is usually invisible: the compiler folds the value into the instructions that use it and never emits the object at all. For a 116-byte `Sequence` whose address is taken — `seq.load(kRainbow)` keeps a pointer to it — every file that loads it carries its own 116 bytes of flash, and `&kRainbow` compares unequal across files (§9, Exercise 6).
 
 C++17's inline variables fix this. `inline` gives the variable external linkage and tells the linker that identical definitions in many object files are the same object: GCC emits it as a weak symbol (`V` in `nm`), and the linker keeps one. That is why the palette in `color.h` is
 
@@ -218,15 +218,15 @@ arm-none-eabi-objdump -h init.o | grep -E 'rodata|bss|init_array|\.data|text.sta
 00000000 r in_flash
 00000000 D use
   1 .data         00000008  ...
-  2 .bss          00000070  ...
+  2 .bss          00000074  ...
   3 .text.startup 00000010  ...
   4 .init_array   00000004  ...
-  5 .rodata       00000070  ...
+  5 .rodata       00000074  ...
 ```
 
 Note `use` as well: an array of addresses is constant-initialised, but it is not `const`, so it lands in `.data` — RAM, filled by the startup code's bulk copy, with no `.init_array` entry of its own.
 
-**Proves:** `const` did not decide where either object went. The `constexpr` one is 112 bytes of flash; the `const` one is 112 bytes of RAM plus an initialiser function and the array entry that calls it.
+**Proves:** `const` did not decide where either object went. The `constexpr` one is 116 bytes of flash; the `const` one is 116 bytes of RAM plus an initialiser function and the array entry that calls it.
 
 ### Exercise 2 — `constinit` turns the silent cost into an error
 

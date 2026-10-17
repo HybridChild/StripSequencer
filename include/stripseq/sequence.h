@@ -88,12 +88,7 @@ public:
      * as hold_forever.
      *
      * Neither can overflow: the builder rejects anything over 2^29 ms. */
-    constexpr uint32_t loop_duration_ms() const {
-        uint32_t sum = 0;
-        for (uint8_t i = 0; i < count_; ++i)
-            sum += steps_[i].duration_ms;
-        return sum;
-    }
+    constexpr uint32_t loop_duration_ms() const { return loop_ms_; }
     constexpr uint32_t total_duration_ms() const {
         return repeats_ == 0 ? hold_forever : loop_duration_ms() * repeats_;
     }
@@ -107,6 +102,11 @@ private:
     Step     steps_[STRIPSEQ_MAX_STEPS] = {};   /* capacity: always allocated in full */
     uint8_t  count_ = 0;                      /* of those, how many are live */
     uint16_t repeats_ = 0;                    /* 0 = endless */
+    /* The sum of the live steps' durations. Stored rather than summed, because
+     * at() needs it for every pixel of every frame and it cannot change once
+     * build() has written it. After count_ and repeats_, which fill four bytes,
+     * so it lands aligned and adds no padding. */
+    uint32_t loop_ms_ = 0;
     Color    start_ = {};                     /* finite only; build() resolves the default */
     Color    landing_ = {};                   /* finite only; build() resolves the default */
 };
@@ -231,6 +231,7 @@ public:
             return Error::ZeroLengthLoop;
 
         out = seq_;
+        out.loop_ms_ = static_cast<uint32_t>(loop);   /* under 2^29, checked above */
         if (seq_.repeats_ != 0) {
             if (!start_set_)
                 out.start_ = colors::black;

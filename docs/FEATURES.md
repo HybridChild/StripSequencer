@@ -133,7 +133,7 @@ The error is sticky: once a call has failed, the rest do nothing and `build()` r
 
 ## Choosing the step capacity
 
-Every sequence is allocated at `STRIPSEQ_MAX_STEPS` steps, eight by default, whether it uses them or not. A step is 12 bytes, or 16 with the white channel, so a sequence is 112 bytes at the default, or 148 with white.
+Every sequence is allocated at `STRIPSEQ_MAX_STEPS` steps, eight by default, whether it uses them or not. A step is 12 bytes, or 16 with the white channel, so a sequence is 116 bytes at the default, or 152 with white.
 
 - **Most animations** fit in eight: blink, breathe, comet and wipe use one or two steps, and the rainbow uses six.
 - **A sequence from `build_const()`** costs flash rather than RAM, so each step of capacity added costs one step's size of flash per constant sequence.

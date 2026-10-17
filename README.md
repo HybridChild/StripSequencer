@@ -114,7 +114,7 @@ On a 32-bit target, at the default capacities:
 
 | Object | RGB | RGBW | Where it lives |
 | --- | --: | --: | --- |
-| `Sequence` | 112 B | 148 B | Flash, when built with `build_const()` |
+| `Sequence` | 116 B | 152 B | Flash, when built with `build_const()` |
 | `Sequencer` | 24 B | 24 B | RAM; it refers to its sequence rather than copying it |
 | `Segment` | 20 B | 20 B | Inside the strip, `STRIPSEQ_MAX_SEGMENTS` of them |
 | `Strip` | 92 B | 92 B | RAM; its segments, and where your buffer is |
@@ -128,10 +128,10 @@ The library's code and constants, linked into an application that calls every pa
 
 | Configuration | Cortex-M0 | Cortex-M4 |
 | --- | --: | --: |
-| RGB, gamma (the default) | 1976 B | 1904 B |
-| RGB, no gamma | 1706 B | 1634 B |
-| RGBW, gamma | 2008 B | 1916 B |
-| RGBW, no gamma | 1738 B | 1646 B |
+| RGB, gamma (the default) | 1882 B | 1786 B |
+| RGB, no gamma | 1612 B | 1516 B |
+| RGBW, gamma | 1934 B | 1852 B |
+| RGBW, no gamma | 1664 B | 1582 B |
 
 Gamma is the 256-byte table, and the white channel costs almost nothing in code. The constants include one empty `Sequence`, which every sequencer refers to until something is loaded. The library has no RAM of its own: all of it is in the objects above.
 
@@ -143,14 +143,14 @@ On top of that come the compiler's run-time helpers: 372 B on a Cortex-M0, for t
 
 | Every pixel… | RGB | RGBW |
 | --- | --: | --: |
-| on a hold | 9,354 cycles (19.5 µs) | 9,115 cycles (19.0 µs) |
-| mid-fade | 13,000 cycles (27.1 µs) | 13,594 cycles (28.3 µs) |
-| in a comet's tail, staggered | 13,671 cycles (28.5 µs) | 14,062 cycles (29.3 µs) |
-| mid-fade in a rainbow spread across the strip | 16,858 cycles (35.1 µs) | 15,821 cycles (33.0 µs) |
-| in the last of eight eased fades | 21,036 cycles (43.8 µs) | 18,703 cycles (39.0 µs) |
-| painted twice, a comet over a rainbow | 29,843 cycles (62.2 µs) | 28,937 cycles (60.3 µs) |
+| on a hold | 7,918 cycles (16.5 µs) | 8,504 cycles (17.7 µs) |
+| mid-fade | 11,603 cycles (24.2 µs) | 12,889 cycles (26.9 µs) |
+| in a comet's tail, staggered | 12,268 cycles (25.6 µs) | 13,356 cycles (27.8 µs) |
+| mid-fade in a rainbow spread across the strip | 13,402 cycles (27.9 µs) | 14,529 cycles (30.3 µs) |
+| in the last of eight eased fades | 16,640 cycles (34.7 µs) | 17,151 cycles (35.7 µs) |
+| painted twice, a comet over a rainbow | 24,994 cycles (52.1 µs) | 26,955 cycles (56.2 µs) |
 
-That is 150 to 350 cycles a pixel for each segment covering it. At 60 frames a second, the most expensive of these is under 0.4% of this core. A core without a divide instruction or caches will take more. [`samples/frame_cost/`](samples/frame_cost/README.md) measures them.
+That is 130 to 290 cycles a pixel for each segment covering it. At 60 frames a second, the most expensive of these is under 0.4% of this core. A core without a divide instruction or caches will take more. [`samples/frame_cost/`](samples/frame_cost/README.md) measures them.
 
 ## Documentation
 
