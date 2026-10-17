@@ -463,7 +463,7 @@ Run the host tests under **UBSan and ASan**. UBSan is the high-value one: signed
 
 Check the no-dynamic-initialisation rule mechanically rather than by reading: `nm` the cross-compiled object files and assert `.init_array` is empty and no `__cxa_guard` symbol appears. Put it in CI; it is the kind of rule that holds until the day someone adds a convenient function-local static.
 
-Measure and publish the footprint — flash and RAM for each of the four behavioural configurations, plus per-frame cycle cost for a 60-pixel strip — in the README. DESIGN.md and the sketch both make size arguments (a `Sequence` at ~116 bytes, a `Segment` at 20, the macro-versus-template trade); those arguments should end up with measured numbers behind them.
+Measure and publish the footprint — flash and RAM for each of the four behavioural configurations, plus per-frame cycle cost for a 60-pixel strip — in the README. DESIGN.md and the sketch both make size arguments (a `Sequence` at about 112 bytes in an RGB build and 148 in RGBW, a `Sequencer` at 24, a `Segment` at 20, the macro-versus-template trade); those arguments should end up with measured numbers behind them.
 
 Then the README: what it is, the Blink recipe, the four macros, how to consume it standalone and as a Zephyr module, and links to the two design documents. Tag `v0.1.0`.
 
