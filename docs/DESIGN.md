@@ -274,7 +274,7 @@ Pixels below the threshold have playheads past the end, so they show the bar col
 
 **Two halves, different animations** — two segments over the same strip covering pixels 0–14 and 15–29, each with its own sequencer.
 
-**Two halves, same animation, mirrored** — two segments sharing one sequencer, the second with a negative `pixel_delay`.
+**Two halves, same animation, converging** — two segments sharing one sequencer, the second with a negative `pixel_delay`, so both halves flow toward the centre. The picture is not a reflection: each segment's index 0 is its own first pixel, so the two pixels k from the centre are `(count − 1) × pixel_delay` apart. A mirror flips the index in a step-1 replacement instead.
 
 **Twinkle** — the only recipe here that replaces a default. An endless sequence that flashes to white over 80 ms and fades back to black over 1900 ms, with the pixel's playhead offset by `hash(i)` instead of `i × pixel_delay`. Each pixel sits at its own fixed point in the same loop, so they flash at unrelated moments.
 

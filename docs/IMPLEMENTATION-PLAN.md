@@ -43,6 +43,7 @@ cmake/
   sources.cmake             # STRIPSEQ_SOURCES / STRIPSEQ_INCLUDE_DIR, shared with the Zephyr module
   stripseq_variant.cmake    # helper that builds one (library, test) pair per configuration
   stripseq_compile_fail.cmake  # configure-time check that build_const() rejects invalid sequences
+  stripseq_cookbook_check.cmake  # CTest step that every cookbook block in the sketch appears in tests/cookbook.cpp
   arm-none-eabi.cmake       # toolchain file for the freestanding cross-compile check
 scripts/                    # build.sh, test.sh, cross-check.sh -- what CI runs, runnable by hand; clean.sh deletes the build trees
 .github/workflows/ci.yml
@@ -346,18 +347,39 @@ The core is two lines: playing gives `static_cast<int32_t>(now_ms - origin_ms_)`
 **Deliverables:**
 
 - `tests/cookbook.cpp` containing all eleven recipes verbatim from the sketch, each with property assertions and a golden-frame hash.
+- `cmake/stripseq_cookbook_check.cmake`, a CTest entry that fails when a cookbook block in the sketch no longer appears in `tests/cookbook.cpp`.
 
 **Implementation notes.**
 
 The recipes go in **unmodified**. If a recipe needs an edit to compile, that is a finding about the sketch, and the sketch gets fixed rather than the recipe — this test's whole value is that it is the documented API and not a convenient variant of it.
 
-Each recipe gets **property assertions** rather than only golden bytes, because a property says what broke while a hash only says that something did. Blink: every pixel identical, alternating red and black on a 500 ms period, hold exactly 500 at the start of a step. Comet: brightness decreasing monotonically back from the head. Rainbow: hue advancing with index, and the seam between the last pixel and the first continuous on a ring. Static gradient: identical buffer at two very different `now` values, and `render` returning `hold_forever`. Wipe: after the last pixel lands, everything green and holding forever, and still green after `drop_finished` is *not* called. Progress bar: exactly the expected number of lit pixels at 0/25/50/100 %, with the boundary pixel part-lit. Twinkle: pixels visibly out of phase, and `set_pixel_delay` returning false while the replacement is installed. Overlay: the breathe underneath resumes at the phase it would have reached, which is the single strongest test of the stateless-lookup claim.
+*The harness supplies only what the fragments leave out.* The recipes are fragments rather than a program: they call a `now()` nobody defines, and Rainbow, Progress bar, Twinkle and both two-halves recipes mix namespace-scope declarations with statements that must sit in a function body. So `cookbook.cpp` holds the setup block once at file scope, as the sketch shows it, a `now()` reading a fake clock, each recipe's declarations at file scope, and each recipe's statements in a function that its test case calls exactly once. Every recipe shares the one `seq` and `strip`, so each test case begins by removing every segment; `load()` already resets the sequencer. The two recipes that drive a sequencer they never load get it loaded by the test, outside the verbatim text: Blink on `seq_a` and Comet on `seq_b` for the different halves, and Comet on `seq` for the converging ones, since a stagger is what shows the direction. No `SUBCASE` may contain a recipe's setup: doctest re-runs the enclosing test case from the top for each subcase, so the segments would be added again, and in `tight` the second `add` would fail at capacity.
 
-A **golden hash** per recipe over a table of timestamps then guards against silent numeric drift in easing or conversion. Golden values are regenerated deliberately and the regeneration diff is reviewed, never blessed automatically.
+*Verbatim is checked, not trusted.* A hand-copied recipe drifts the first time the sketch is edited and the test is not. `stripseq_cookbook_check.cmake` runs in CMake script mode as a single CTest entry rather than one per variant, since it reads text rather than compiled code: it takes every fenced `cpp` block under the sketch's "The cookbook as code", splits each at blank lines, collapses runs of whitespace to one space, and requires every chunk to be a substring of `cookbook.cpp` normalised the same way. Chunking at blank lines is what lets the harness split a recipe's declarations from its statements without failing the check, and normalising whitespace is what lets it indent them. The one block that is not application code, `Strip::drop_finished`'s loop, says so in its first line and is skipped.
+
+Each recipe gets **property assertions** rather than only golden bytes, because a property says what broke while a hash only says that something did. Properties compare frames with each other or with the recipe's own arithmetic rather than with literal bytes, so that they hold in every variant and leave the exact values to the hash.
+
+- **Blink:** every pixel identical, alternating red and black on a 500 ms period, hold exactly 500 at the start of a step.
+- **Breathe:** every pixel identical, black at 0 and 2000 ms, full white at 1000, non-decreasing over the rise and non-increasing over the fall, and a hold of 0 mid-fade. Not symmetric about 1000 ms: the integer `EaseInOut` is not exactly antisymmetric, and the 16-bit rise and fall differ by up to 3 counts at 807 of the 1001 instants, so comparing `t` with `2000 - t` would test a promise nothing makes.
+- **Comet:** brightness decreasing monotonically back from the head.
+- **Rainbow cycle:** each pixel shows what its predecessor showed 100 ms earlier — `frame(t)[i] == frame(t - 100)[i - 1]` — and the seam on a ring obeys the same rule, `frame(t)[0] == frame(t - 100)[29]`. The comparison is exact because `spread(3000, 30)` is exactly 100 ms, and it holds whatever gamma and channel count do to the bytes. Hue therefore falls with index rather than rising: each pixel is behind the one before it on the wheel.
+- **Static gradient:** identical buffer at two very different `now` values, and `render` returning `hold_forever`.
+- **Wipe:** `finished()` false until the last pixel lands, 200 + 29 × 30 ms after the start; after that, everything green and holding forever, and still green while `drop_finished` is not called. Then the recipe's own warning, tested: `drop_finished` returns 1 and the next `render` is black with `hold_forever`.
+- **Progress bar:** no pixel lit at 0 %; seven fully lit and pixel 7 half-way through its fade at 25 %, a playhead of 75; fifteen lit at 50 % and all thirty at 100 %. At 50 % and 100 % the boundary falls exactly between two pixels, so no pixel is part-lit there and a test expecting one would fail on correct code. Part-lit means strictly between black and the full byte; its exact value moves with gamma and is the hash's business.
+- **Two halves, different animations:** each half paints exactly what its segment paints alone on a scratch strip, with nothing crossing pixel 14 | 15, and the hold is the smaller of the two.
+- **Two halves, converging:** the left half's pattern moves one pixel toward the centre every 20 ms, `frame(t + 20)[k + 1] == frame(t)[k]`, and the right half's moves the other way, `frame(t + 20)[15 + j] == frame(t)[16 + j]`.
+- **Twinkle:** pixels out of phase, which can be exact rather than visual — the hash gives the thirty pixels thirty distinct offsets, so no two share a phase — and `set_pixel_delay` returning false while the replacement is installed.
+- **Alert over a background:** the breathe underneath resumes at the phase it would have reached, which is the single strongest test of the stateless-lookup claim, and is checked against the breathe rendered alone on a scratch strip at the same `now`. `drop_finished` removes nothing before the alert's 720 ms and exactly the alert after them; `cancel_alert` removes it early and leaves the breathe painting.
+
+*The fake clock starts a second before the `uint32_t` wrap*, so every recipe's timestamp table crosses it. Phase 3 already proves the wrap is a non-event; starting there makes the whole cookbook prove it again for nothing, and a recipe that disagrees with itself across the wrap is a finding no other test would make.
+
+A **golden hash** per recipe over a table of timestamps then guards against silent numeric drift in easing or conversion. It is FNV-1a over each frame's bytes and the hold `render` returned, in timestamp order, so a drifting hold is caught as surely as a drifting color. `STRIPSEQ_WHITE_CHANNEL` and `STRIPSEQ_GAMMA` both change the bytes, so there are four tables, one per behavioural configuration, chosen by `#if` on the two macros. `tight` uses the default's, which makes it a check in its own right: a capacity has no business reaching the output. Golden values are regenerated deliberately and the regeneration diff is reviewed, never blessed automatically: a test case marked `doctest::skip()` prints the running variant's table as source, run once per behavioural variant with `--no-skip`, and the pasted result is what review sees.
 
 **Exit criteria:**
 
 - All eleven recipes compile unmodified and pass in every variant.
+- The verbatim check passes, and fails when a single token of a sketch recipe is changed without the test.
+- Every recipe matches its golden hash in every variant, and `tight` matches the default's table.
 - Blink is still three lines.
 
 ## Phase 6 — Zephyr integration

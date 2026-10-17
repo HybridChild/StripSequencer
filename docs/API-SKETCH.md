@@ -794,7 +794,7 @@ strip.add(Segment(0,  15, seq_a));
 strip.add(Segment(15, 15, seq_b));
 ```
 
-**Two halves, mirrored** — two segments, one sequencer, opposite delays.
+**Two halves, converging** — two segments, one sequencer, opposite delays, so both halves flow toward the centre.
 
 ```cpp
 Segment left(0, 15, seq);
@@ -804,6 +804,8 @@ right.set_pixel_delay(-20);
 strip.add(left);
 strip.add(right);
 ```
+
+The picture is not a reflection. Each segment counts its index from its own first pixel, so the two pixels k from the centre are 14 × 20 = 280 ms apart, and no pair of delays changes that. A mirror flips the index instead, with a `PlayheadFn` on the right half returning `playhead_ms - (count - 1 - index) * 20`.
 
 **Twinkle** — the only recipe that replaces a default.
 
