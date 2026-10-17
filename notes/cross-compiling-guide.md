@@ -10,7 +10,7 @@ This is a teaching document, not project documentation. It explains what changes
 - **§3** — where compiler flags legitimately live, which is a question this library answers unusually strictly.
 - **§4–§5** — freestanding versus hosted, the narrower floor Zephyr sets, and — more important — the three things compiling does not catch.
 - **§6** — what to reach for instead: `nm` and `objdump`, and the allowlist that turns the first into a check.
-- **§7** — six exercises, all of which break something on purpose.
+- **§7** — seven exercises, all of which break something on purpose.
 - **§8–§9** — the model in a paragraph, and where to go next.
 
 ---
@@ -95,6 +95,10 @@ src/color.cpp:1:10: fatal error: type_traits: No such file or directory
 ```
 
 The ground rule — only `<cstdint>` and `<cstddef>` — is enforced by the build, where `-ffreestanding` alone only enforced the floor beneath it.
+
+Sitting below the standard's floor costs more than library facilities, because a few language features are defined in terms of library types. A defaulted `operator<=>` returns `std::strong_ordering`, which `<compare>` declares; a range-`for` over a braced list deduces a `std::initializer_list`, from `<initializer_list>`. Both headers are on the standard's freestanding list, so `-ffreestanding` lets them through, and neither is among Zephyr's three, so in a Zephyr build the syntax itself is unavailable. The concept machinery splits the same way: `concept` and `requires` are pure language, while `std::unsigned_integral` lives in `<concepts>`. That is why `wrapping_tick` in `include/stripseq/sequencer.h` spells its test out in expressions — `t %= t`, `T(-1) > T(0)`, `sizeof(T) <= 4` — instead of naming a trait.
+
+So "freestanding" is a promise the standard makes about an implementation, and Zephyr's minimal library is not a conforming one: it is a statement of what Zephyr ships, which is smaller. A library meant for Zephyr's default build has to target that set, not the standard's, and the only way to know it does is to compile against exactly that set.
 
 `-fno-exceptions` and `-fno-rtti` are separate switches, and they fail loudly and immediately: `throw` becomes *"exception handling disabled"*, `typeid` becomes *"cannot use 'typeid' with -fno-rtti"*. They are in the check because that is how Zephyr builds C++ by default, so code that quietly relies on either would compile here and fail there.
 
@@ -341,9 +345,59 @@ for d in build-cross build-cross-m0; do echo "== $d"; arm-none-eabi-nm -u $d/CMa
 
 ---
 
+### Exercise 7 — Syntax that needs a header
+
+*Demonstrates §4: a platform below the freestanding floor takes language features with it.*
+
+Add to the end of `src/segment.cpp`:
+
+```cpp
+struct StripseqVersion {
+    uint8_t major, minor;
+    auto operator<=>(const StripseqVersion&) const = default;
+};
+bool stripseq_newer(StripseqVersion a, StripseqVersion b) { return a > b; }
+```
+
+```sh
+./scripts/build.sh && echo "host: fine"
+```
+
+```
+src/segment.cpp:124:5: error: cannot default 'operator<=>' because type 'std::strong_ordering' was not found; include <compare>
+```
+
+The host fails too: no header was written, and `<=>` needs one even where every header exists. Do what the error says and add `#include <compare>` at the top of the file, then run both again:
+
+```sh
+./scripts/build.sh && echo "host: fine"
+./scripts/cross-check.sh
+```
+
+```
+host: fine
+src/segment.cpp:1:10: fatal error: compare: No such file or directory
+```
+
+And under the standard's floor alone:
+
+```sh
+echo '#include <compare>' | arm-none-eabi-g++ -std=c++20 -mcpu=cortex-m0 -mthumb -ffreestanding -x c++ -c - -o /dev/null && echo "freestanding: fine"
+```
+
+```
+freestanding: fine
+```
+
+**Revert it.** In a Zephyr build the comparison is written out — `a.major != b.major ? a.major > b.major : a.minor > b.minor` — the same move `wrapping_tick` makes for its trait.
+
+**Proves:** a defaulted `<=>` is language syntax that depends on a library header. The standard's freestanding floor includes that header and Zephyr's minimal library does not, so the feature is legal C++20, legal freestanding C++20, and unavailable in Zephyr's default build — and only a check that compiles against Zephyr's header set says so.
+
+---
+
 ## 8. The model in one paragraph
 
-Cross-compiling means the machine running the compiler is not the machine running the output, and the entire difficulty is that the build system can no longer execute anything it makes. CMake is told about it by a toolchain file naming the target system and the compilers, plus `CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY`, because its own compiler check would otherwise try to link a full executable and fail for want of a startup file and a linker script. That file is also where target flags belong — via `_INIT` variables, so callers can still override them — which keeps a library from setting flags on behalf of a consumer that legitimately owns them. Compiling the library for the target with `-ffreestanding -fno-exceptions -fno-rtti` is a genuine test, because since GCC 13 the standard headers refuse to be included in freestanding mode and the two `-fno-` flags reject `throw` and `typeid` outright; and a platform can set a lower floor than the standard's, as Zephyr's minimal C++ library does with two headers and `-nostdinc++`, which the check reproduces with a shim. But it is only a test of *legality*: heap allocation, floating point and dynamic initialisation are all legal C++ that compiles clean, so proving they are absent means reading the object files with `nm` and `objdump` instead — undefined symbols for what the code will demand, checked against a short allowlist per object, and `.init_array` for what runs before `main`. What counts as expensive depends on the core, so the check builds for the M0, which divides in software, as well as for the soft-float M4.
+Cross-compiling means the machine running the compiler is not the machine running the output, and the entire difficulty is that the build system can no longer execute anything it makes. CMake is told about it by a toolchain file naming the target system and the compilers, plus `CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY`, because its own compiler check would otherwise try to link a full executable and fail for want of a startup file and a linker script. That file is also where target flags belong — via `_INIT` variables, so callers can still override them — which keeps a library from setting flags on behalf of a consumer that legitimately owns them. Compiling the library for the target with `-ffreestanding -fno-exceptions -fno-rtti` is a genuine test, because since GCC 13 the standard headers refuse to be included in freestanding mode and the two `-fno-` flags reject `throw` and `typeid` outright; and a platform can set a lower floor than the standard's, as Zephyr's minimal C++ library does with three headers and `-nostdinc++`, which the check reproduces with a shim of the two this library allows. Below that floor go not only library facilities but the language features built on them, such as a defaulted `<=>`, so freestanding is the standard's promise, not the platform's. But it is only a test of *legality*: heap allocation, floating point and dynamic initialisation are all legal C++ that compiles clean, so proving they are absent means reading the object files with `nm` and `objdump` instead — undefined symbols for what the code will demand, checked against a short allowlist per object, and `.init_array` for what runs before `main`. What counts as expensive depends on the core, so the check builds for the M0, which divides in software, as well as for the soft-float M4.
 
 ## 9. Where to go next
 
