@@ -35,13 +35,15 @@ Sequence built(const SequenceBuilder& b) {
 
 constexpr int64_t ms_per_day = 24 * 60 * 60 * 1000;
 
-/* The limit a finite sequence's playhead is narrowed to, and the two limits
- * that make it exact: the longest total the builder accepts, and the largest
- * stagger a segment accepts, which is a q8 delay times a pixel index that
- * still fits in an int32_t, shifted down by 8. */
+/* The limit a finite sequence's playhead is narrowed to, and the limits that
+ * make it exact: the longest total the builder accepts, and the largest
+ * stagger a segment accepts either way. A stagger is a q8 delay times a pixel
+ * index within +-INT32_MAX, shifted down by 8, and the shift floors, so a
+ * pixel can look up to 2^23 - 1 ms behind the sequencer and 2^23 ms ahead. */
 constexpr int32_t limit_ms = int32_t{1} << 30;
 constexpr uint32_t longest_total_ms = uint32_t{1} << 29;
-constexpr int32_t largest_stagger_ms = (int32_t{1} << 23) - 1;
+constexpr int32_t largest_lag_ms = (int32_t{1} << 23) - 1;
+constexpr int32_t largest_lead_ms = int32_t{1} << 23;
 
 /* 777 ms a loop, which divides neither a power of two nor a day. */
 constexpr Sequence endless_777 =
@@ -378,10 +380,10 @@ TEST_CASE("a finite sequence left playing for 60 days stays on its landing color
 
 TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
     /* The arithmetic the limit rests on, and the room it leaves. */
-    CHECK(int64_t{limit_ms} - largest_stagger_ms > int64_t{longest_total_ms});
-    CHECK(int64_t{limit_ms} + largest_stagger_ms <= INT32_MAX);
-    CHECK(-int64_t{limit_ms} + largest_stagger_ms < 0);
-    CHECK(-int64_t{limit_ms} - largest_stagger_ms >= INT32_MIN);
+    CHECK(int64_t{limit_ms} - largest_lag_ms > int64_t{longest_total_ms});
+    CHECK(int64_t{limit_ms} + largest_lead_ms <= INT32_MAX);
+    CHECK(-int64_t{limit_ms} + largest_lead_ms < 0);
+    CHECK(-int64_t{limit_ms} - largest_lag_ms >= INT32_MIN);
 
     /* The builder does accept a total that long, and one more is refused. */
     Sequence longest;
@@ -393,12 +395,12 @@ TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
           Error::TooLong);
 
     /* So the most-staggered pixel at either limit shows the color at that end. */
-    CHECK(longest.at(limit_ms - largest_stagger_ms).color == colors::green);
-    CHECK(longest.at(limit_ms - largest_stagger_ms).hold_ms == hold_forever);
-    CHECK(longest.at(-limit_ms + largest_stagger_ms).color == colors::black);
+    CHECK(longest.at(limit_ms - largest_lag_ms).color == colors::green);
+    CHECK(longest.at(limit_ms - largest_lag_ms).hold_ms == hold_forever);
+    CHECK(longest.at(-limit_ms + largest_lead_ms).color == colors::black);
 
     /* And an endless loop of the longest length still leaves room either way. */
-    CHECK(int64_t{longest_total_ms} - 1 + largest_stagger_ms <= INT32_MAX);
+    CHECK(int64_t{longest_total_ms} - 1 + largest_lead_ms <= INT32_MAX);
 }
 
 TEST_CASE("the playhead is continuous where a 32-bit clock would break") {

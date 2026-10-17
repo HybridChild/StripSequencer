@@ -8,9 +8,9 @@ namespace {
 
 /* How far either side of zero a finite sequence's playhead is narrowed to.
  * Exact because the builder refuses a total over 2^29 ms and a segment refuses
- * a stagger of 2^23 ms or more, so the clamped playhead minus any stagger is
- * still past every total, plus any stagger still before the start, and either
- * way still inside int32_t; see docs/API-SKETCH.md, "Sequencer". */
+ * a stagger beyond 2^23 ms either way, so the clamped playhead minus any
+ * stagger is still past every total, plus any stagger still before the start,
+ * and either way still inside int32_t; see docs/API-SKETCH.md, "Sequencer". */
 constexpr int64_t finite_limit_ms = int64_t{1} << 30;
 
 }  // namespace
