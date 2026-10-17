@@ -1,4 +1,4 @@
-/* Color's arithmetic: lerp, rgb8 and hsv.
+/* Color's arithmetic: lerp, rgb8 and hsv, and the division lerp is built on.
  *
  * lerp is the blend every fade performs. Its two invariants are the ones a
  * naive version fails: exact endpoints -- t = 0 gives a, t = 65535 gives b,
@@ -29,6 +29,19 @@ uint16_t mix(uint16_t x, uint16_t y, uint16_t t) {
 }
 
 }  // namespace
+
+/* Every multiple of 65535 up to 65535^2 is a point where the quotient steps,
+ * and the helper is non-decreasing, so landing on each step exactly -- k at
+ * k * 65535, and still k - 1 one below it -- leaves nowhere in between for it
+ * to be wrong. */
+TEST_CASE("div65535 is exact on both sides of every multiple of 65535") {
+    CHECK(detail::div65535(0) == 0);
+    for (uint32_t k = 1; k <= 65535; ++k) {
+        CAPTURE(k);
+        CHECK(detail::div65535(k * 65535 - 1) == k - 1);
+        CHECK(detail::div65535(k * 65535) == k);
+    }
+}
 
 TEST_CASE("lerp is exact at both ends") {
     for (uint16_t x : grid) {

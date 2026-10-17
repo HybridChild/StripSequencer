@@ -19,6 +19,25 @@
 
 namespace stripseq {
 
+/* Not part of the API: helpers a public constexpr function needs, and so a
+ * header must show. Nothing outside the library should name them. */
+namespace detail {
+
+/* x / 65535, floored, without a division: on a Cortex-M0 every `/` is a
+ * library call, and the compiler does not turn this one into a multiply at
+ * -Os. 65535 is 2^16 - 1, so x / 65535 is x / 2^16 times 1 + 2^-16 + 2^-32 +
+ * ..., and the first correction term plus a carry of one is enough: the result
+ * is exact for every x up to 65535^2, the largest a product of two 16-bit
+ * values can be, and the sum stays under 2^32 there. It is non-decreasing in
+ * x, so being exact on both sides of every multiple of 65535 is being exact
+ * everywhere -- 131,070 cases rather than four billion, which is how
+ * tests/color.cpp checks it. */
+constexpr uint32_t div65535(uint32_t x) {
+    return (x + 1 + (x >> 16)) >> 16;
+}
+
+}  // namespace detail
+
 struct Color {
     uint16_t r, g, b;
 #if STRIPSEQ_WHITE_CHANNEL
@@ -98,13 +117,14 @@ struct Color {
      * midpoint is halfway to the eye rather than halfway in light.
      *
      * Each channel is (x * (65535 - t) + y * t) / 65535, in uint32_t -- the
-     * largest the numerator can be is 65535^2, which fits. Exact at both ends
-     * and monotonic in t. Never x + (y - x) * t / 65535: it needs a signed
-     * intermediate, and is easy to get wrong in the direction where y < x. */
+     * largest the numerator can be is 65535^2, which fits, and is exactly the
+     * range detail::div65535 is exact over. Exact at both ends and monotonic in
+     * t. Never x + (y - x) * t / 65535: it needs a signed intermediate, and is
+     * easy to get wrong in the direction where y < x. */
     static constexpr Color lerp(Color a, Color b, uint16_t t) {
         const auto mix = [t](uint16_t x, uint16_t y) {
             return static_cast<uint16_t>(
-                (uint32_t{x} * (65535u - t) + uint32_t{y} * t) / 65535u);
+                detail::div65535(uint32_t{x} * (65535u - t) + uint32_t{y} * t));
         };
 #if STRIPSEQ_WHITE_CHANNEL
         return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.w, b.w)};

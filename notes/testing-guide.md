@@ -141,7 +141,7 @@ Integer division by zero is undefined behaviour in C++, and what actually happen
 
 - **arm64** (Apple Silicon): `SDIV` by zero returns 0, without trapping. The compiler computes `p % loop` as `p - (p / loop) * loop`, which with a zero quotient is `p` — so the mutated code returns the elapsed time, and the check that expects 0 fails.
 - **x86-64:** `IDIV` by zero raises a divide-error exception, and the process dies with `SIGFPE`. The same test crashes.
-- **Cortex-M7** — this project's target: a 64-bit remainder is not an instruction there but a call to libgcc's `__aeabi_ldivmod`, which tests for a zero divisor itself, branches to `__aeabi_ldiv0` — a bare `bx lr` in the bare-metal libgcc — and hands back the divisor's own registers as the remainder. That remainder is 0, which is exactly the right answer for an empty sequence, and nothing faults. Zephyr does set `DIV_0_TRP` at boot, in `z_arm_fault_init()` (`arch/arm/core/cortex_m/fault.c:1129`), but that bit traps the hardware `UDIV` and `SDIV` instructions, and no hardware divide runs; nor does v4.4.1 replace `__aeabi_ldiv0` with anything that would notice. On the bench board the mutant would run correctly forever.
+- **Cortex-M7** — this project's target: a 64-bit remainder is not an instruction there but a call to libgcc's `__aeabi_uldivmod`, which tests for a zero divisor itself, branches to `__aeabi_ldiv0` — a bare `bx lr` in the bare-metal libgcc — and hands back the divisor's own registers as the remainder. That remainder is 0, which is exactly the right answer for an empty sequence, and nothing faults. Zephyr does set `DIV_0_TRP` at boot, in `z_arm_fault_init()` (`arch/arm/core/cortex_m/fault.c:1129`), but that bit traps the hardware `UDIV` and `SDIV` instructions, and no hardware divide runs; nor does v4.4.1 replace `__aeabi_ldiv0` with anything that would notice. On the bench board the mutant would run correctly forever.
 
 Three machines, three behaviours, and the one that matters most is the most forgiving: the board gets the right answer from undefined behaviour, and the host catches the mutant only because arm64's leftover differs from the right answer. Had the test checked only that the segment shows black — which `at()` answers for an empty sequence whatever playhead it is given — it would pass on the host too. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
 
@@ -415,7 +415,7 @@ cmake --build build-ubsan --target tests_default && ./build-ubsan/tests_default 
 The ordinary build fails on Apple Silicon, and the failures say nothing about division:
 
 ```
-tests/sequencer.cpp:435: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+tests/sequencer.cpp:482: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
   values: CHECK( 999 == 0 )
   logged: elapsed := 999
 ```
@@ -423,38 +423,38 @@ tests/sequencer.cpp:435: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NO
 `999` is the elapsed time: `p - (p / 0) * 0` with arm64's zero quotient. The UBSan build stops at the cause instead:
 
 ```
-src/sequencer.cpp:60:37: runtime error: division by zero
-SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:60:37
+src/sequencer.cpp:66:64: runtime error: division by zero
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:66:64
 ===============================================================================
-tests/sequencer.cpp:429:
+tests/sequencer.cpp:476:
 TEST CASE:  an empty sequence left playing does not divide by zero
 
-tests/sequencer.cpp:429: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
+tests/sequencer.cpp:476: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
 ```
 
 `-fno-sanitize-recover=all` makes the first report abort the process, which doctest reports as a crash in the case that was running. **Revert it**, rebuild `build-ubsan`, and the case passes there too. `build-ubsan` matches the `build*/` pattern, so it is ignored by git and removed by `scripts/clean.sh`.
 
-To see why the board would forgive it, look at the remainder the target actually calls. `p % loop` on two `int64_t` values compiles to a call, and the call's zero-divisor path is in the first few instructions:
+To see why the board would forgive it, look at the remainder the target actually calls. The remainder of the position's `uint64_t` magnitude compiles to a call, and the call's zero-divisor path is in the first few instructions:
 
 ```sh
 cd /tmp/stripseq-lab
-arm-none-eabi-ar x "$(arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -print-libgcc-file-name)" _aeabi_ldivmod.o _dvmd_tls.o
-arm-none-eabi-objdump -d _aeabi_ldivmod.o | head -16
+arm-none-eabi-ar x "$(arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -print-libgcc-file-name)" _aeabi_uldivmod.o _dvmd_tls.o
+arm-none-eabi-objdump -d _aeabi_uldivmod.o | head -16
 arm-none-eabi-objdump -d _dvmd_tls.o
 ```
 
 ```
-00000000 <__aeabi_ldivmod>:
-   0:	b97b      	cbnz	r3, 22 <__aeabi_ldivmod+0x22>
-   2:	b972      	cbnz	r2, 22 <__aeabi_ldivmod+0x22>
+00000000 <__aeabi_uldivmod>:
+   0:	b953      	cbnz	r3, 18 <__aeabi_uldivmod+0x18>
+   2:	b94a      	cbnz	r2, 18 <__aeabi_uldivmod+0x18>
    ...
-  1e:	f7ff bffe 	b.w	0 <__aeabi_ldiv0>
+  14:	f7ff bffe 	b.w	0 <__aeabi_ldiv0>
 ...
 00000000 <__aeabi_idiv0>:
    0:	4770      	bx	lr
 ```
 
-The divisor arrives in `r2:r3` and the remainder leaves in `r2:r3`. With both zero, the function never divides, branches to a handler that returns at once, and leaves `r2:r3` as they came: a remainder of 0. That output is from the Arm GNU Toolchain 15.3; the instructions differ between libgcc builds, but the zero test before any division is the same.
+The divisor arrives in `r2:r3` and the remainder leaves in `r2:r3`. With both zero, the function never divides, branches to a handler that returns at once, and leaves `r2:r3` as they came: a remainder of 0. (On the way it sets the quotient to all ones if the dividend is not zero, which nothing here reads.) That output is from the Arm GNU Toolchain 15.3; the instructions differ between libgcc builds, but the zero test before any division is the same.
 
 **Proves:** the same remainder returns a wrong answer, kills the process, returns the right answer by accident, or is reported, depending only on the machine. A test that fails on one of them may be failing for a reason it was not written for, and one that would pass on the target proves nothing there; the sanitizer is what makes the test mean the same thing everywhere.
 

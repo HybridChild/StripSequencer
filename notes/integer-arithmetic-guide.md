@@ -54,6 +54,7 @@ The fold is easy to get almost right, and the interesting thing is which playhea
 | `uint32_t(p) % L` | 295 | 296 | 648 |
 | `L - (-p % L)` | 999 | **1000** | undefined behaviour |
 | `((p % L) + L) % L` | 999 | 0 | 352 |
+| magnitude, then mirror (§3) | 999 | 0 | 352 |
 
 The unsigned cast reinterprets −1 as 2³² − 1 and takes *that* modulo 1000, which is right only when `L` divides 2³²; −1 catches it. The mirror is right at −1 and wrong at −1000, where it returns `L` itself, one past the end of the ring; only a playhead that is an exact negative multiple of the loop catches it. And it negates `p`, which for `INT32_MIN` is §3's problem. A test at −1 alone passes two of the three wrong versions. The boundary set is **−1, −L, and `INT32_MIN`** — and in `tests/sequence.cpp`, `INT32_MIN` is checked to land at 352 with a hold of 148.
 
@@ -68,6 +69,16 @@ return Sample{start_, 0u - static_cast<uint32_t>(playhead_ms)};
 ```
 
 Converting a negative `int32_t` to `uint32_t` is defined as adding 2³², and subtracting that from zero modulo 2³² gives back exactly the magnitude: 250 for −250, and 2,147,483,648 for `INT32_MIN`, which fits comfortably in a `uint32_t`. There is no special case because the arithmetic has no special case. UBSan names this trick in its own diagnostic for the signed version: *"cast to an unsigned type to negate this value to itself"*.
+
+The same trick gives §2's fold a cheaper form, and it is the one the library uses. Take the remainder of the playhead's *magnitude*, in unsigned arithmetic, and mirror it when the playhead was negative:
+
+```cpp
+const uint32_t magnitude = p < 0 ? 0u - static_cast<uint32_t>(p) : static_cast<uint32_t>(p);
+const uint32_t r = magnitude % L;
+local = p < 0 && r != 0 ? L - r : r;
+```
+
+This is §2's mirrored version with both of its faults fixed: the negation happens in unsigned, so `INT32_MIN` is no special case, and a remainder of 0 stays 0 rather than becoming `L`. It agrees with the double fold everywhere, and costs one remainder where that costs two. The bigger difference is the sign. On a Cortex-M0, which has no divide instruction, a signed remainder and an unsigned one are different library calls, and an unsigned one is usually linked already — Zephyr's own clock code needs `__aeabi_uldivmod` — while a signed one may be the only reason its helper is in the image. `Sequence::at()` folds in 32 bits this way, and `Sequencer::playhead()` folds a 64-bit position the same way, in `uint64_t`.
 
 ## 4. Overflow in intermediates
 
@@ -136,6 +147,16 @@ return static_cast<uint16_t>(y < full ? y : full);
 
 `t >> 15` is 0 across the lower half and 1 across the upper, so the remap skips exactly one value in the middle — 32767 maps to 32767, 32768 to 32769 — and never maps two inputs to one output or reverses two. The 64-bit *multiplies* stay, and they are inline on an M4 (§1). The result is one floor of a monotonic function, so it is monotonic; at the top it lands on 65536, which the clamp turns into 65535; and against the exact 65535-based curve it is never more than 2 off, which no eye can see.
 
+Some divisors cannot be rescaled away, because the scale is the data's own. `lerp` divides by 65535 because its two weights, `65535 − t` and `t`, sum to 65535, and the easing curves divide `t²` by 65535 to bring it back to 16 bits. On an M4 that is one `UDIV`. On an M0 it is a call to `__aeabi_uidiv` for every channel of every pixel mid-fade, and the compiler at `-Os` emits exactly that rather than the multiply-by-reciprocal it uses at `-O2`. But 65535 is 2¹⁶ − 1, and dividing by one less than a power of two has a form made of shifts. Since 1/(2¹⁶ − 1) = 2⁻¹⁶ · (1 + 2⁻¹⁶ + 2⁻³² + …), the first correction term and a carry of one are enough:
+
+```cpp
+constexpr uint32_t div65535(uint32_t x) {
+    return (x + 1 + (x >> 16)) >> 16;      // ⌊x / 65535⌋ for every x ≤ 65535²
+}
+```
+
+It is exact over the whole range a product of two 16-bit values can take, and at the top of that range the sum is 4,294,901,760, inside `uint32_t`. The true limit is a little higher — the first wrong answer is at 65535 · 65536, one too low — but 65535² is the bound the callers need, so it is the one in the comment. The library has it once, as `stripseq::detail::div65535` in `color.h`, where `lerp`, being `constexpr` in a public header, can reach it. How one knows "exact for every x" without trying four billion of them is §8.
+
 The progress loop in §4 is the same idea in another form: instead of dividing by a number the hardware cannot handle, scale the problem until it is one it can.
 
 ## 7. Rounding a function you cannot compute
@@ -167,16 +188,19 @@ So the tests state *properties* and check them over the whole domain:
 
 Where the domain is too large to sweep — a signed 32-bit playhead — the tests take the boundary set instead: zero, ±1, each side of every step edge, `-L`, and `INT32_MIN`/`INT32_MAX`. §2 shows why the boundary set has to include the values that look silly.
 
+A boundary set can also be a *proof*, when the function is monotonic. §6's `div65535` takes 4.3 billion inputs, and sweeping them takes seconds rather than milliseconds — affordable once, too slow for a suite that runs on every build. But `⌊x / 65535⌋` is a staircase: constant at `k` from `k · 65535` to `k · 65535 + 65534`, then a step up. And `div65535` never decreases, because each operation in it is non-decreasing in `x`. So if it equals `k` at both the bottom and the top of every stair, it is squeezed to `k` everywhere between. The bottom of stair `k` is `k · 65535`, and one below it is the top of stair `k − 1`, so `tests/color.cpp` checks exactly the two sides of every step, `f(k · 65535 − 1) == k − 1` and `f(k · 65535) == k` for every `k` from 1 to 65535: 131,070 checks, a few milliseconds, and nothing left untried. The monotonicity is what the argument stands on, so it is the claim to be sure of; here it is visible in the expression, and where it is not, test it.
+
 ## 9. The checklist
 
 - **Every product of narrow types starts with a cast** to the width it needs: `uint32_t{x} * t`, never `x * t`.
-- **Every remainder of a signed value is folded**: `((p % L) + L) % L`.
+- **Every remainder of a signed value is folded**: take it of the magnitude, unsigned, and mirror a non-zero one, `p < 0 && r != 0 ? L - r : r` (or `((p % L) + L) % L` where a signed remainder costs nothing).
 - **Every negation of an arbitrary signed value is done in unsigned**: `0u - static_cast<uint32_t>(p)`.
 - **Every intermediate is bounded in writing**: a comment that names the largest value it can take and the type that holds it.
 - **Every check that guards a limit is done in a type that cannot wrap** below the limit's inputs.
 - **Every rounded curve is one floor** of a function that is monotonic over its domain.
 - **Every irrational value is rounded by comparison**, with the root squared away, never by an integer root and a second division.
 - **No 64-bit division on a per-pixel path**: rescale until the divisor is a power of two, and confirm with `nm -u`.
+- **No division by 2ⁿ − 1 where a shift form will do**: `(x + 1 + (x >> n)) >> n`, with the range it is exact over written beside it and tested at both sides of every step.
 - **Every curve is tested over its whole domain**, and every signed input over its boundary set.
 
 ---
@@ -190,7 +214,7 @@ mkdir -p /tmp/stripseq-lab && cd /tmp/stripseq-lab
 REPO=~/path/to/StripSequencer                 # wherever you cloned it
 ```
 
-### Exercise 1 — Three wrong remainders and one right one
+### Exercise 1 — Three wrong remainders and two right ones
 
 *Demonstrates §2–§3.*
 
@@ -203,11 +227,13 @@ REPO=~/path/to/StripSequencer                 # wherever you cloned it
 int main() {
     const int32_t L = 1000;
     for (int32_t p : {-1, -1000, INT32_MIN}) {
-        std::printf("p=%11d  p%%L=%5d  unsigned=%4u  mirrored=%5d  folded=%4d\n",
+        const uint32_t r = (0u - static_cast<uint32_t>(p)) % L;   // p < 0 throughout
+        std::printf("p=%11d  p%%L=%5d  unsigned=%4u  mirrored=%5d  folded=%4d  magnitude=%4u\n",
                     p, p % L,
                     static_cast<uint32_t>(p) % L,
                     L - (-p % L),
-                    ((p % L) + L) % L);
+                    ((p % L) + L) % L,
+                    r != 0 ? L - r : r);
     }
 }
 ```
@@ -217,13 +243,13 @@ c++ -std=c++20 -fsanitize=undefined mod.cpp -o mod && ./mod
 ```
 
 ```
-mod.cpp:12:26: runtime error: negation of -2147483648 cannot be represented in type 'int32_t' (aka 'int'); cast to an unsigned type to negate this value to itself
-p=         -1  p%L=   -1  unsigned= 295  mirrored=  999  folded= 999
-p=      -1000  p%L=    0  unsigned= 296  mirrored= 1000  folded=   0
-p=-2147483648  p%L= -648  unsigned= 648  mirrored= 1648  folded= 352
+mod.cpp:13:26: runtime error: negation of -2147483648 cannot be represented in type 'int32_t' (aka 'int'); cast to an unsigned type to negate this value to itself
+p=         -1  p%L=   -1  unsigned= 295  mirrored=  999  folded= 999  magnitude= 999
+p=      -1000  p%L=    0  unsigned= 296  mirrored= 1000  folded=   0  magnitude=   0
+p=-2147483648  p%L= -648  unsigned= 648  mirrored= 1648  folded= 352  magnitude= 352
 ```
 
-**Proves:** each wrong version is caught by a different playhead, and only the fold is right at all three. UBSan finds the negation, because signed overflow is undefined; it would find nothing wrong with the unsigned column, which is defined and simply wrong.
+**Proves:** each wrong version is caught by a different playhead, and only the two folds are right at all three. The magnitude column is the mirrored one with its two faults removed — negated in unsigned, and a zero remainder left alone — and UBSan has nothing to say about it. UBSan finds the negation, because signed overflow is undefined; it would find nothing wrong with the unsigned column, which is defined and simply wrong.
 
 ### Exercise 2 — The lerp everyone writes first
 
@@ -442,7 +468,7 @@ Then change `rounded` to compute gamma 2.2 the same way — fifth powers of `2n 
 
 ## 11. The model in one paragraph
 
-Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back with `((p % L) + L) % L`, and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. A value that is irrational, like a fractional power, is rounded by asking a comparison rather than computing it: `n + ½ ≤ y` squares into a test on integers, exact as long as the products fit, which is what limits the exponents within reach. Every curve has only 65,536 inputs, so the properties are tested over all of them.
+Without floating point, every value is an integer and every rounding is a floor, and the arithmetic goes wrong in a small number of recurring ways. C++'s remainder takes the sign of the dividend, so a signed position on a ring has to be folded back — most cheaply by taking the remainder of its magnitude, unsigned, and mirroring a non-zero one — and the cases that catch the near-misses are −1, −L and `INT32_MIN`. `INT32_MIN` cannot be negated in `int32_t`, but can be in `uint32_t`, where arithmetic is modular and defined. Narrow types promote to signed `int`, so products start with an explicit unsigned cast; intermediates are sized by writing down their largest value, which is what makes `lerp`'s weighted sum fit in 32 bits and pushes the length check into 64; and because unsigned wrap is defined, no sanitizer will catch a check that wraps — only a test at the boundary it crosses will. Rounding stays monotonic exactly when the result is one floor of a monotonic function, while differences of separately floored terms can step backwards. On a Cortex-M a 64-bit multiply is an instruction and a 64-bit divide is a library call, so a division by an awkward constant is removed by rescaling until the divisor is a power of two, and `nm -u` confirms it is gone. A value that is irrational, like a fractional power, is rounded by asking a comparison rather than computing it: `n + ½ ≤ y` squares into a test on integers, exact as long as the products fit, which is what limits the exponents within reach. Every curve has only 65,536 inputs, so the properties are tested over all of them.
 
 ## 12. Where to go next
 

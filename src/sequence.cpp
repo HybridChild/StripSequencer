@@ -34,10 +34,10 @@ uint16_t progress(uint32_t elapsed, uint32_t duration) {
 uint16_t ease(Transition kind, uint16_t t) {
     switch (kind) {
     case Transition::EaseIn:
-        return static_cast<uint16_t>(uint32_t{t} * t / full);            /* t^2 */
+        return static_cast<uint16_t>(detail::div65535(uint32_t{t} * t));        /* t^2 */
     case Transition::EaseOut: {
         const uint32_t u = full - t;
-        return static_cast<uint16_t>(full - u * u / full);               /* 1 - (1-t)^2 */
+        return static_cast<uint16_t>(full - detail::div65535(u * u));          /* 1 - (1-t)^2 */
     }
     case Transition::EaseInOut: {
         /* Smoothstep, t^2 (3 - 2t). The product needs 64 bits, and dividing it
@@ -76,11 +76,15 @@ Sample Sequence::at(int32_t playhead_ms) const {
     if (repeats_ == 0) {
         /* An endless sequence is a ring. The modulo is the classic trap: in C++
          * `p % loop` is negative for a negative p, which is exactly the case a
-         * staggered pixel produces, so it is folded back into [0, loop). The
-         * builder caps a loop at 2^29 ms, so it fits in int32_t, and refuses
-         * one of 0 ms, so the modulo is defined. */
-        const int32_t ring = static_cast<int32_t>(loop);
-        local = static_cast<uint32_t>(((playhead_ms % ring) + ring) % ring);
+         * staggered pixel produces. So the remainder is taken of the magnitude,
+         * unsigned -- one remainder, not the two of `((p % n) + n) % n` -- and
+         * a negative playhead folded back into [0, loop) by hand. Negated in
+         * uint32_t, so INT32_MIN is no special case. The builder refuses a
+         * loop of 0 ms, so the modulo is defined. */
+        const uint32_t magnitude = playhead_ms < 0 ? 0u - static_cast<uint32_t>(playhead_ms)
+                                                   : static_cast<uint32_t>(playhead_ms);
+        const uint32_t into_loop = magnitude % loop;
+        local = playhead_ms < 0 && into_loop != 0 ? loop - into_loop : into_loop;
     } else {
         /* A finite sequence is a line, and its two ends have colors of their
          * own. Before the start the hold is the time until this pixel starts

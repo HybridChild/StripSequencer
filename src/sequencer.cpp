@@ -52,15 +52,21 @@ int32_t Sequencer::playhead(int64_t now_ms) const {
     const int64_t p = position(now_ms);
 
     if (sequence_->total_duration_ms() == hold_forever) {
-        /* Endless: at() reads modulo the loop anyway, so this is exact. In C++
-         * `p % loop` is negative for a negative p, hence the fold back up. An
+        /* Endless: at() reads modulo the loop anyway, so this is exact. An
          * empty sequence has a loop of zero and nothing to wrap by, and at()
-         * answers black whatever it is asked. */
-        const int64_t loop = sequence_->loop_duration_ms();
+         * answers black whatever it is asked.
+         *
+         * The remainder is taken of p's magnitude, unsigned, and a negative p
+         * folded back up by hand. In C++ `p % loop` takes the sign of p, and a
+         * signed 64-bit remainder is a library call on a Cortex-M that nothing
+         * else links, where the unsigned one is already there for the clock.
+         * Negated in uint64_t, so INT64_MIN is no special case. */
+        const uint32_t loop = sequence_->loop_duration_ms();
         if (loop == 0)
             return 0;
-        const int64_t into_loop = p % loop;
-        return static_cast<int32_t>(into_loop < 0 ? into_loop + loop : into_loop);
+        const uint64_t magnitude = p < 0 ? 0 - static_cast<uint64_t>(p) : static_cast<uint64_t>(p);
+        const auto into_loop = static_cast<uint32_t>(magnitude % loop);
+        return static_cast<int32_t>(p < 0 && into_loop != 0 ? loop - into_loop : into_loop);
     }
 
     /* Finite: clamping the answer is enough, because the difference underneath
