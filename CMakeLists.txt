@@ -49,10 +49,16 @@ target_compile_features(stripseq PUBLIC cxx_std_20)
 # ---------------------------------------------------------------------------
 
 if(PROJECT_IS_TOP_LEVEL)
-    # -Wconversion is deliberately absent. This codebase mixes uint8_t,
-    # uint16_t, int32_t and uint32_t in nearly every expression, and the warning
-    # would demand a cast in most of them.
-    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
+    # -Wconversion because the arithmetic is deliberately narrow -- uint8_t
+    # channels, uint16_t pixel indices, int32_t delays -- and a narrowing the
+    # author did not mean is exactly the bug the golden hashes catch only if a
+    # test happens to reach it. Every intended narrowing is a visible cast.
+    #
+    # -Wsign-conversion spelled out because gcc's -Wconversion leaves signedness
+    # out in C++ while clang's includes it; without it the two compilers in the
+    # matrix would enforce different rules.
+    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow
+        -Wconversion -Wsign-conversion)
 
     target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()

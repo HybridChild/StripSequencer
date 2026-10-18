@@ -220,7 +220,7 @@ TEST_CASE("a segment of one pixel takes any delay that can be stored") {
      * be a replacement's parameter. The millisecond setter still refuses a
      * delay that would not fit in 1/256 ms. */
     Sequencer seq;
-    for (uint16_t count : {0, 1}) {
+    for (uint16_t count = 0; count <= 1; ++count) {
         CAPTURE(count);
         Segment s(0, count, seq);
         CHECK(s.set_pixel_delay_q8(INT32_MAX));

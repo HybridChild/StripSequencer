@@ -355,8 +355,8 @@ TEST_CASE("Comet: brightness falls monotonically back from the head") {
         CAPTURE(head);
         REQUIRE(shows(buffer, head, colors::rgbwhite));
         for (uint16_t step = 1; step < kPixels; ++step) {
-            const uint16_t here = (head + kPixels - step) % kPixels;
-            const uint16_t ahead = (here + 1) % kPixels;
+            const auto here = static_cast<uint16_t>((head + kPixels - step) % kPixels);
+            const auto ahead = static_cast<uint16_t>((here + 1) % kPixels);
             REQUIRE(no_brighter(buffer, here, buffer, ahead));
         }
     }
