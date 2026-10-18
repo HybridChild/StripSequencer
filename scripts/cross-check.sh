@@ -9,9 +9,10 @@
 #
 # It catches host-libc dependencies, a third standard header, accidental heap
 # use through operator new, code that only compiles because the host happens
-# to be 64-bit, and arithmetic the core cannot do in an instruction. Nothing is
-# linked and nothing is run: on a target with no startup file and no linker
-# script, compiling and reading the objects is the whole signal.
+# to be 64-bit, arithmetic the core cannot do in an instruction, and anything
+# initialised at run time rather than constant-initialised. Nothing is linked
+# and nothing is run: on a target with no startup file and no linker script,
+# compiling and reading the objects is the whole signal.
 #
 # Needs CMake 3.24 or later, for --fresh, which is newer than the 3.21 the
 # library asks of a consumer: the script is a developer's tool, not part of
@@ -47,6 +48,29 @@ check_helpers() {
     done
 }
 
+# check_init <build dir> <cpu>: no object initialises anything at run time.
+# The allowlist cannot see either form. A file-scope initialiser that calls
+# nothing, or calls one of the library's own functions, leaves no undefined
+# symbol; only its section in .init_array shows it -- or in .preinit_array or
+# .ctors, which other toolchains emit for the same thing. A function-local
+# static leaves __cxa_guard_acquire undefined only under thread-safe statics,
+# which a consumer may turn off; its guard variable, a _ZGV symbol, is there
+# either way.
+check_init() {
+    local obj
+    for obj in "$1"/CMakeFiles/stripseq.dir/src/*.obj; do
+        while read -r section size; do
+            echo "error: $2: $(basename "$obj") has a $((16#$size))-byte $section, code that runs before main" >&2
+            status=1
+        done < <(arm-none-eabi-objdump -h "$obj" |
+                 awk '$2 ~ /^\.(init_array|preinit_array|ctors)/ && $3 !~ /^0+$/ { print $2, $3 }')
+        for sym in $(arm-none-eabi-nm "$obj" | awk '$NF ~ /^_ZGV/ { print $NF }'); do
+            echo "error: $2: $(basename "$obj") has a $(arm-none-eabi-c++filt "$sym"), a static initialised on first use" >&2
+            status=1
+        done
+    done
+}
+
 # build <build dir> <cpu>. --fresh because the toolchain's flags are cache
 # defaults, read on the first configure only: a tree configured before a flag
 # changed would otherwise keep checking without it.
@@ -61,6 +85,7 @@ build() {
     echo "== $2"
     arm-none-eabi-size "$REPO/$1"/CMakeFiles/stripseq.dir/src/*.obj
     check_helpers "$REPO/$1" "$2"
+    check_init "$REPO/$1" "$2"
 }
 
 build "$BUILD_DIR" cortex-m4

@@ -9,7 +9,7 @@ This is a teaching document, not project documentation. It explains what changes
 - **§1–§2** — what CMake means by cross-compiling, and the first thing that breaks when you try it.
 - **§3** — where compiler flags legitimately live, which is a question this library answers unusually strictly.
 - **§4–§5** — freestanding versus hosted, the narrower floor Zephyr sets, and — more important — the three things compiling does not catch.
-- **§6** — what to reach for instead: `nm` and `objdump`, and the allowlist that turns the first into a check.
+- **§6** — what to reach for instead: `nm` and `objdump`, and the two checks the script builds on them.
 - **§7** — seven exercises, all of which break something on purpose.
 - **§8–§9** — the model in a paragraph, and where to go next.
 
@@ -138,7 +138,9 @@ Section headers say what will execute before your code does:
 arm-none-eabi-objdump -h some.o | grep init_array
 ```
 
-An `.init_array` section of non-zero size means something runs before `main`. Across this library's five object files there is no such section at all, which is the mechanical form of the "no dynamic initialisation at file scope" rule. The allowlist does not see it — an initialiser that calls one of the library's own functions leaves nothing undefined — so only the section headers show it.
+An `.init_array` section of non-zero size means something runs before `main`. Across this library's five object files there is no such section at all, which is the mechanical form of the "no dynamic initialisation at file scope" rule. The allowlist does not see it — an initialiser that calls one of the library's own functions, or calls nothing at all, leaves nothing undefined — so the check reads the section headers as well, and fails on any such section by size, object and core.
+
+It reads the symbol table for one more thing, a **guard variable**, which the compiler names `_ZGV` followed by the static's mangled name. The `U __cxa_guard_acquire` above is a function-local static only under thread-safe statics, and `-fno-threadsafe-statics` turns those off — Zephyr offers it as a compiler property an application can opt into. The calls then disappear, and with them the allowlist's evidence, but the guard variable and the first-use test it backs remain. Looking for the variable catches the static whichever way it was compiled.
 
 The general lesson is worth carrying to other projects: **compiling for the target proves the code is legal there; reading the object files proves it is affordable there.** They are different questions and they need different tools.
 
@@ -234,9 +236,10 @@ int stripseq_next() { static int x = stripseq_counter(); return x; }
 error: cortex-m4: sequence.cpp.obj calls stripseq_counter(), which is not on the allowlist
 error: cortex-m4: sequence.cpp.obj calls __cxa_guard_acquire, which is not on the allowlist
 error: cortex-m4: sequence.cpp.obj calls __cxa_guard_release, which is not on the allowlist
+error: cortex-m4: sequence.cpp.obj has a guard variable for stripseq_next()::x, a static initialised on first use
 ```
 
-and the same three for `cortex-m0`. `stripseq_counter()` is there only because the exercise declares it without defining it; the guard calls are the static's. The object holds the rest:
+and the same four for `cortex-m0`. `stripseq_counter()` is there only because the exercise declares it without defining it; the guard calls and the guard variable are the static's. The object holds the rest:
 
 ```sh
 arm-none-eabi-nm -C build-cross/CMakeFiles/stripseq.dir/src/sequence.cpp.obj
@@ -260,19 +263,29 @@ arm-none-eabi-nm -C build-cross/CMakeFiles/stripseq.dir/src/sequence.cpp.obj
 Add to `src/strip.cpp`:
 
 ```cpp
-int stripseq_seed();
-int stripseq_value = stripseq_seed();
+volatile int stripseq_source = 7;
+int stripseq_value = stripseq_source;
 ```
+
+The `volatile` is what makes the initialiser dynamic: without it the compiler reads the 7 through, and `stripseq_value` is constant-initialised to it.
 
 ```sh
 ./scripts/cross-check.sh
+```
+
+```
+error: cortex-m4: strip.cpp.obj has a 4-byte .init_array, code that runs before main
+error: cortex-m0: strip.cpp.obj has a 4-byte .init_array, code that runs before main
+```
+
+Nothing on the allowlist fired: the initialiser reads a variable and calls nothing, so the object leaves no symbol undefined. The section is the evidence:
+
+```sh
 arm-none-eabi-objdump -h build-cross/CMakeFiles/stripseq.dir/src/strip.cpp.obj | grep -E 'init_array|text.startup'
 ```
 
-The check fails, naming `stripseq_seed()` — but only because the exercise leaves it undefined. Had the initialiser been one of the library's own functions, the allowlist would have passed it. The section is the evidence:
-
 ```
-  3 .text.startup 00000010  ...
+  3 .text.startup 00000014  ...
   4 .init_array   00000004  ...
 ```
 
@@ -286,7 +299,7 @@ arm-none-eabi-objdump -h build-cross/CMakeFiles/stripseq.dir/src/*.obj | grep -c
 0
 ```
 
-**Proves:** "nothing runs before `main`" is a property you can measure in one command, and the four-byte section is exactly what the library's own objects never contain.
+**Proves:** "nothing runs before `main`" is a property you can measure in one command, and one the undefined symbols cannot speak to. The four-byte section is exactly what the library's own objects never contain, and the check fails the moment one does.
 
 ### Exercise 5 — Break the toolchain file's compiler check
 
@@ -397,7 +410,7 @@ freestanding: fine
 
 ## 8. The model in one paragraph
 
-Cross-compiling means the machine running the compiler is not the machine running the output, and the entire difficulty is that the build system can no longer execute anything it makes. CMake is told about it by a toolchain file naming the target system and the compilers, plus `CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY`, because its own compiler check would otherwise try to link a full executable and fail for want of a startup file and a linker script. That file is also where target flags belong — via `_INIT` variables, so callers can still override them — which keeps a library from setting flags on behalf of a consumer that legitimately owns them. Compiling the library for the target with `-ffreestanding -fno-exceptions -fno-rtti` is a genuine test, because since GCC 13 the standard headers refuse to be included in freestanding mode and the two `-fno-` flags reject `throw` and `typeid` outright; and a platform can set a lower floor than the standard's, as Zephyr's minimal C++ library does with three headers and `-nostdinc++`, which the check reproduces with a shim of the two this library allows. Below that floor go not only library facilities but the language features built on them, such as a defaulted `<=>`, so freestanding is the standard's promise, not the platform's. But it is only a test of *legality*: heap allocation, floating point and dynamic initialisation are all legal C++ that compiles clean, so proving they are absent means reading the object files with `nm` and `objdump` instead — undefined symbols for what the code will demand, checked against a short allowlist per object, and `.init_array` for what runs before `main`. What counts as expensive depends on the core, so the check builds for the M0, which divides in software, as well as for the soft-float M4.
+Cross-compiling means the machine running the compiler is not the machine running the output, and the entire difficulty is that the build system can no longer execute anything it makes. CMake is told about it by a toolchain file naming the target system and the compilers, plus `CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY`, because its own compiler check would otherwise try to link a full executable and fail for want of a startup file and a linker script. That file is also where target flags belong — via `_INIT` variables, so callers can still override them — which keeps a library from setting flags on behalf of a consumer that legitimately owns them. Compiling the library for the target with `-ffreestanding -fno-exceptions -fno-rtti` is a genuine test, because since GCC 13 the standard headers refuse to be included in freestanding mode and the two `-fno-` flags reject `throw` and `typeid` outright; and a platform can set a lower floor than the standard's, as Zephyr's minimal C++ library does with three headers and `-nostdinc++`, which the check reproduces with a shim of the two this library allows. Below that floor go not only library facilities but the language features built on them, such as a defaulted `<=>`, so freestanding is the standard's promise, not the platform's. But it is only a test of *legality*: heap allocation, floating point and dynamic initialisation are all legal C++ that compiles clean, so proving they are absent means reading the object files with `nm` and `objdump` instead — undefined symbols for what the code will demand, checked against a short allowlist per object, and `.init_array` and guard variables for what is initialised at run time. What counts as expensive depends on the core, so the check builds for the M0, which divides in software, as well as for the soft-float M4.
 
 ## 9. Where to go next
 

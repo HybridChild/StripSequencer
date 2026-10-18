@@ -106,8 +106,9 @@ jobs:
 
       # The library only: no tests, no link. Compiling for a Cortex-M4 and a
       # Cortex-M0 with no hosted libc and Zephyr's two C++ headers, then checking
-      # each object's undefined symbols against an allowlist, is the signal --
-      # see cmake/arm-none-eabi.cmake and the script.
+      # each object's undefined symbols against an allowlist and its sections
+      # and symbols for run-time initialisation, is the signal -- see
+      # cmake/arm-none-eabi.cmake and the script.
       - name: Cross-compile the library
         run: ./scripts/cross-check.sh
 
