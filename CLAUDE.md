@@ -37,13 +37,9 @@ These hold for every change.
 
 ## The guides in `notes/`
 
-The split mirrors the reference project: `docs/` and the code record what *this* project decided, while **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example — see [`../ClimateNode/notes/README.md`](../ClimateNode/notes/README.md) for the model. A guide should be readable by someone who has never seen this project.
+`docs/` and the code record what *this* project decided; **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example. A guide should be readable by someone who has never seen this project. When a change touches something a guide explains, update the guide in the same change.
 
 The guides follow a shared skeleton, and an edit keeps it: an opening roadmap, numbered concept sections each building on the last, a synthesis where there is one, a **lab** of numbered exercises with commands, expected output and a **Proves:** line, then the model in one paragraph and where to go next. Cross-reference by `§` within a guide and by name across them. Cite this repo by function name, and Zephyr by `file:line` against v4.4.1. Keep `notes/README.md` current as the index — reading order, dependencies, and what each guide assumes.
-
-## One reference repository, for one thing only
-
-**[`../ClimateNode/`](../ClimateNode/) — a reference for the Zephyr sample in `samples/strip_demo/`, and nothing else.** Useful for how a freestanding Zephyr app is laid out against the shared workspace at `~/zephyr-workspace` (v4.4.1): the `scripts/` wrappers, the heavily justified `prj.conf`, the `notes/` guides paired with `docs/` references. It is a Zephyr application; this is a standalone library, so do **not** carry over its testing approach — the core is pure arithmetic and is tested on the host, not with Ztest on qemu.
 
 ## Bench hardware
 
