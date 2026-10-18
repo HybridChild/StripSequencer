@@ -171,8 +171,7 @@ static void frame(struct k_work*) {
 /* ---- Stage changes ------------------------------------------------------ */
 
 static void enter_stage(size_t next) {
-    for (uint8_t i = strip.segment_count(); i > 0; --i)
-        strip.remove(i - 1);
+    strip.clear();
 
     stage = next;
     frames = 0;

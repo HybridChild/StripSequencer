@@ -55,6 +55,12 @@ public:
                                      false if full or s runs past the strip */
     bool remove(uint8_t at);      /* false if at >= count */
 
+    /* Removes every segment, which is how an application switching from one
+     * animation to the next starts from an empty list. Only the list: the
+     * brightness and the buffer are the strip's, not an animation's, and stay
+     * as they are. */
+    void clear();
+
     /* remove shifts every entry after `at`, so an index is a position and never
      * a handle: one held across a removal may now name a different segment, and
      * a Segment& returned earlier may now refer to one. Re-find the segment you

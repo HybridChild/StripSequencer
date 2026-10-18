@@ -187,8 +187,7 @@ int main() {
     printk("| --- | --: | --: | --: | --: | --: |\n");
 
     for (const Scenario& s : kScenarios) {
-        while (strip.segment_count() > 0)
-            strip.remove(0);
+        strip.clear();
         const int64_t at = s.setup();
 
         const uint32_t first = render_cycles(at) - overhead;

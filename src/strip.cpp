@@ -31,6 +31,14 @@ bool Strip::remove(uint8_t at) {
     return true;
 }
 
+/* Each slot is reset as remove() resets the one it vacates, so a slot past the
+ * count never holds a stale segment. */
+void Strip::clear() {
+    for (uint8_t i = 0; i < count_; ++i)
+        segments_[i] = Segment();
+    count_ = 0;
+}
+
 uint8_t Strip::segment_count() const { return count_; }
 
 Segment& Strip::segment(uint8_t at) { return segments_[at]; }

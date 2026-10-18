@@ -630,8 +630,7 @@ static void tick(struct k_work*) {
 
 static void enter(size_t next) {
     k_work_cancel_delayable(&tick_work);
-    for (uint8_t i = strip.segment_count(); i > 0; --i)
-        strip.remove(i - 1);
+    strip.clear();
 
     current = next;
     printk("%u/%u: %s\n", static_cast<unsigned>(current + 1),

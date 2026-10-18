@@ -84,6 +84,34 @@ TEST_CASE("add appends up to capacity, and remove shifts the rest down") {
         CHECK(strip.segment(i).drives(seqs[i + 1]));
 }
 
+TEST_CASE("clear empties a full list, keeps the brightness, and frees every slot") {
+    uint8_t buffer[kBytes];
+    Strip strip(buffer);
+    Sequencer seqs[STRIPSEQ_MAX_SEGMENTS];
+    for (Sequencer& s : seqs) {
+        s.load(red);
+        s.seek(0);
+    }
+
+    for (uint8_t i = 0; i < STRIPSEQ_MAX_SEGMENTS; ++i)
+        REQUIRE(strip.add(Segment(0, kPixels, seqs[i])));
+    strip.set_brightness(100);
+    strip.clear();
+
+    CHECK(strip.segment_count() == 0);
+    CHECK(strip.brightness() == 100);
+    CHECK(strip.render(0) == hold_forever);
+    for (uint16_t i = 0; i < kPixels; ++i)
+        CHECK(shows(buffer, i, colors::black));
+
+    for (uint8_t i = 0; i < STRIPSEQ_MAX_SEGMENTS; ++i)
+        CHECK(strip.add(Segment(0, kPixels, seqs[i])));
+
+    Strip empty(buffer);
+    empty.clear();   /* nothing to remove is not an error */
+    CHECK(empty.segment_count() == 0);
+}
+
 TEST_CASE("add refuses a segment that runs past the end of the strip") {
     uint8_t buffer[kBytes];
     Strip strip(buffer);

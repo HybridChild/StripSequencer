@@ -68,8 +68,7 @@ static int64_t now() { return clock_ms; }
 /* Every test case starts here: an empty strip, and the clock at its origin.
  * load() resets a sequencer, so nothing else carries over between recipes. */
 static void begin() {
-    while (strip.segment_count() > 0)
-        strip.remove(0);
+    strip.clear();
     clock_ms = kOrigin;
 }
 

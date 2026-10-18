@@ -86,6 +86,8 @@ extern "C" [[noreturn]] void _start() {
             sequencer.pause(clock_ms);
             sequencer.seek(input);
             strip.remove(0);
+        } else {
+            strip.clear();
         }
     }
 }

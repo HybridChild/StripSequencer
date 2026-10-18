@@ -332,7 +332,7 @@ constinit static Strip strip(buffer);
 
 ### Adding and removing
 
-`add(segment)` copies the segment onto the end of the list, and returns `false` if the list is full or the segment runs past the end of the strip. `remove(i)` takes out entry `i` and shifts the later ones down. Up to `STRIPSEQ_MAX_SEGMENTS` segments, four by default, fit on one strip.
+`add(segment)` copies the segment onto the end of the list, and returns `false` if the list is full or the segment runs past the end of the strip. `remove(i)` takes out entry `i` and shifts the later ones down, and `clear()` takes out every entry, which is how an application switching animations starts the next one from an empty list; the brightness stays as it was. Up to `STRIPSEQ_MAX_SEGMENTS` segments, four by default, fit on one strip.
 
 The list is paint order. Later segments paint over earlier ones wherever they overlap, opaquely, so the usual arrangement is a background across the whole strip first and smaller or temporary segments after it. The [alert recipe](COOKBOOK.md#the-recipes) paints three red flashes over a running breathe, and when the flashes are removed the breathe is still there, exactly where it would have been.
 
