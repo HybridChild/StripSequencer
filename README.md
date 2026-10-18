@@ -36,7 +36,7 @@ It is a standalone CMake library with no knowledge of any operating system, and 
 include(FetchContent)
 FetchContent_Declare(StripSequencer
     GIT_REPOSITORY https://github.com/HybridChild/StripSequencer.git
-    GIT_TAG        main)
+    GIT_TAG        v0.1.0)
 FetchContent_MakeAvailable(StripSequencer)
 
 target_link_libraries(app PRIVATE StripSequencer::stripseq)
@@ -52,7 +52,7 @@ Add the repository to your `west.yml`:
 # under manifest: projects:
 - name: stripseq
   url: https://github.com/HybridChild/StripSequencer
-  revision: main
+  revision: v0.1.0
   path: modules/lib/stripseq
 ```
 
