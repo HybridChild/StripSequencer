@@ -30,11 +30,16 @@ jobs:
       # No doctest package is installed on the runner, so this exercises the
       # FetchContent fallback in CMakeLists.txt -- the path a developer with
       # doctest installed never takes.
+      #
+      # Warnings are errors here and only here: a warning in a green build
+      # scrolls past unread, but one mid-edit at a desk should not stop the
+      # build. CMAKE_COMPILE_WARNING_AS_ERROR is CMake's own switch for this,
+      # so it reaches every target without the project naming a flag.
       - name: Configure
         env:
           CC: ${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }}
           CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
-        run: cmake -S . -B build -G Ninja
+        run: cmake -S . -B build -G Ninja -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
 
       - name: Build
         run: cmake --build build
