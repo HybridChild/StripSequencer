@@ -12,6 +12,10 @@ scripts/console.sh                             # names each animation as it star
 
 `--rgb` builds and flashes the RGB configuration, as for strip_demo. The board is the bench's, and its overlay is strip_demo's, included rather than copied, so the hardware is described in one place. Any other board needs what strip_demo's [On other hardware](../strip_demo/README.md#on-other-hardware) lists.
 
+## Where the code lives
+
+[`src/main.cpp`](src/main.cpp) is the Zephyr half: the device, the button, the frame loop and the tick. What each animation draws is in [`src/animations.cpp`](src/animations.cpp), one `show` function per row of the table below, and it reaches the strip only through the `Canvas` that main.cpp hands it, so the seam between the two is [`src/animation.h`](src/animation.h) and nothing else. The twinkle's and the flame's step 2s are in [`src/twinkle.cpp`](src/twinkle.cpp) and [`src/flame.cpp`](src/flame.cpp), which include nothing but the library.
+
 ## The animations
 
 The button advances, and the last wraps round to the first. Split animations put the extra pixel of an odd strip in the right half.

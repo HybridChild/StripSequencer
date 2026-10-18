@@ -7,4 +7,9 @@ list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(showcase)
 
-target_sources(app PRIVATE src/main.cpp)
+target_sources(app PRIVATE
+    src/main.cpp
+    src/animations.cpp
+    src/flame.cpp
+    src/twinkle.cpp
+)
