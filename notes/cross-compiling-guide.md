@@ -148,7 +148,7 @@ The general lesson is worth carrying to other projects: **compiling for the targ
 
 ## 7. Exercises
 
-Six, all on the host, no board. Every one of them edits a file on purpose; each says what to revert.
+Seven, all on the host, no board. Every one of them edits a file on purpose; each says what to revert.
 
 ```sh
 ./scripts/cross-check.sh          # configures build-cross and build-cross-m0, compiles and checks the library
@@ -349,10 +349,9 @@ for d in build-cross build-cross-m0; do echo "== $d"; arm-none-eabi-nm -u $d/CMa
 == build-cross
 == build-cross-m0
          U __aeabi_idivmod
-         U __aeabi_uidiv
 ```
 
-**Revert it.** `__aeabi_uidiv` is the library's own and on the allowlist; `__aeabi_idivmod` is the planted line.
+**Revert it.** The M4 object asks for nothing, because its divide is an instruction; the M0 one asks for `__aeabi_idivmod`, which is the planted line. Unplanted, `segment.cpp` calls no helper on either core, so that is the only one there.
 
 **Proves:** the same line is a divide instruction on the M4 and a library call on the M0, so a check that builds only for the M4 passes it. A signed remainder in particular is a helper nothing else in the library links — which is why [`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §3 takes remainders of the unsigned magnitude.
 
@@ -377,7 +376,7 @@ bool stripseq_newer(StripseqVersion a, StripseqVersion b) { return a > b; }
 ```
 
 ```
-src/segment.cpp:124:5: error: cannot default 'operator<=>' because type 'std::strong_ordering' was not found; include <compare>
+src/segment.cpp:139:5: error: cannot default 'operator<=>' because type 'std::strong_ordering' was not found; include <compare>
 ```
 
 The host fails too: no header was written, and `<=>` needs one even where every header exists. Do what the error says and add `#include <compare>` at the top of the file, then run both again:

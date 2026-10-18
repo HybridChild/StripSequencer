@@ -78,8 +78,8 @@ This repo goes one step further and puts its warnings behind `PROJECT_IS_TOP_LEV
 
 ```cmake
 if(PROJECT_IS_TOP_LEVEL)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
+    set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow
+        -Wconversion -Wsign-conversion)
     target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()
 ```
@@ -106,7 +106,7 @@ struct Color {
 
 The compiler cannot: it sees one consistent world per translation unit, and each of them *is* internally consistent. The linker cannot either, and the reason is specific. C++ name mangling encodes a function's *signature* — its name, its parameter types, its class — but nothing about the layout of those types. `Color::rgb(uint16_t, uint16_t, uint16_t)` mangles to the same string whether or not the class carries a fourth member, so the reference and the definition match and the link succeeds.
 
-You can watch this directly. The `default` and `rgbw` builds of this library disagree about the size of nearly every type in it, and export **identical** symbol lists — 24 names, byte-for-byte the same (§8, Exercise 2).
+You can watch this directly. The `default` and `rgbw` builds of this library disagree about the size of nearly every type in it, and export **identical** symbol lists — 36 names, byte-for-byte the same (§8, Exercise 2).
 
 What you get is a program in which one half writes eight-byte colors into an array the other half indexes by six, and the symptom is corruption somewhere unrelated to the mistake. That is why the one-word fix — `PUBLIC` rather than `PRIVATE` — is worth an entire guide:
 
@@ -185,16 +185,16 @@ ninja -C build -t commands stripseq_default | grep -c 'DSTRIPSEQ_'
 
 ```sh
 for v in default rgbw; do
-  nm -C build/libstripseq_$v.a | grep ' T ' | sed 's/^[0-9a-f]* //' | sort > /tmp/sym_$v.txt
+  nm -C build/libstripseq_$v.a | grep ' T ' | sed 's/^[0-9a-f]* //' | sort -u > /tmp/sym_$v.txt
 done
 diff /tmp/sym_default.txt /tmp/sym_rgbw.txt && echo "identical: $(wc -l < /tmp/sym_rgbw.txt) symbols"
 ```
 
 ```
-identical:       24 symbols
+identical:       36 symbols
 ```
 
-Two libraries that disagree about the size of `Color`, `Step`, `Sample`, `Sequence` and `Segment` export exactly the same 24 names.
+Two libraries that disagree about the size of `Color`, `Step`, `Sample`, `Sequence` and `Segment` export exactly the same 36 names. The `-u` folds the names that appear more than once: a constructor is emitted twice under one demangled name, and an inline function used by several objects is defined in each of them.
 
 **Proves:** there is no link-time check to fall back on. If the definitions do not reach both sides, nothing downstream will tell you — which is the entire justification for §7.
 
@@ -232,7 +232,17 @@ cmake --build build --target tests_rgbw && ./build/tests_rgbw -tc='color and ste
 [doctest] Status: SUCCESS!
 ```
 
-`color and step layout follow the white-channel setting` passes — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. Now run the whole binary, without `-tc`. Cases that pass a `Sequence` across the boundary fail with values that are not colors at all, such as `rgb(1, 0, 9208) == rgb(0, 0, 0)` for an empty sequence that should be black: `Sequence::at()` was compiled reading one layout and the test wrote another. That is the bug from §6, showing up far from its cause and looking like an arithmetic error in the sequence code. Nothing in the failure points at the build system. **Revert both changes** and rebuild.
+`color and step layout follow the white-channel setting` passes — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. Now run a case that passes a `Sequence` across the boundary:
+
+```sh
+./build/tests_rgbw -tc='endless steps*'
+```
+
+```
+values: CHECK( rgb(0, 0, 10) == rgb(65535, 0, 0) )
+```
+
+A sequence the test built as red comes back as a color nobody wrote: `Sequence::at()` was compiled reading one layout and the test wrote another. That is the bug from §6, showing up far from its cause and looking like an arithmetic error in the sequence code. Nothing in the failure points at the build system. Do not run the whole binary: some cases never finish, which is the same bug looking like a hang. **Revert both changes** and rebuild.
 
 **Proves:** a test that derives its expectation from the same macros it is checking cannot fail. Self-consistency is not verification.
 
@@ -247,5 +257,5 @@ A CMake build is a graph of targets, and most of what a target carries is aimed 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — the direct sequel: given that a layout-changing macro cannot be shared, what does a build that supports several of them look like? It is where the `stripseq_add_variant` helper quoted above is explained end to end.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — the same graph, extended to targets you did not write: imported targets, `INTERFACE` libraries, and where `doctest::doctest` comes from.
 - **[`cross-compiling-guide.md`](cross-compiling-guide.md) §3** — the other half of §4's rule: if the library sets no flags, who does?
-- **`cmake/stripseq_variant.cmake` and the root `CMakeLists.txt`** — thirty lines each, and after this guide they should read as prose.
+- **`cmake/stripseq_variant.cmake` and the root `CMakeLists.txt`** — two short files, and after this guide they should read as prose.
 - **CMake's own documentation on [`cmake-buildsystem(7)`](https://cmake.org/cmake/help/latest/manual/cmake-buildsystem.7.html)** — the reference half of §3, with the full list of properties that carry usage requirements.

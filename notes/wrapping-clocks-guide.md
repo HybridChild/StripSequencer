@@ -134,8 +134,8 @@ This library widens. Moving the origin works, but its reasoning touches every en
 A wide position is exact, but the code that consumes it works in `int32_t`. Each pixel staggers the sequencer's playhead by its own offset, and that per-pixel arithmetic is the hot loop, which is no place for 64-bit operations. So `Sequencer::playhead()` hands out the position *narrowed*, into a range that any accepted stagger can be added to or taken from:
 
 ```cpp
-if (sequence_.total_duration_ms() == hold_forever) {
-    const uint32_t loop = sequence_.loop_duration_ms();
+if (sequence_->total_duration_ms() == hold_forever) {
+    const uint32_t loop = sequence_->loop_duration_ms();
     if (loop == 0)
         return 0;
     const uint64_t magnitude = p < 0 ? 0 - static_cast<uint64_t>(p) : static_cast<uint64_t>(p);
@@ -362,27 +362,27 @@ cd "$REPO" && cmake --build build --target tests_default && ./build/tests_defaul
 ```
 TEST CASE:  a finite sequence left playing for 60 days stays on its landing color
 
-tests/sequencer.cpp:373: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
+tests/sequencer.cpp:446: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
   values: CHECK( rgb(0, 0, 0) == rgb(0, 65535, 0) )
   logged: day := 25
 
-tests/sequencer.cpp:374: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
+tests/sequencer.cpp:447: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
   values: CHECK( 1073741824 == 4294967295 )
   logged: day := 25
 
-tests/sequencer.cpp:373: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
+tests/sequencer.cpp:446: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
   values: CHECK( rgb(0, 0, 0) == rgb(0, 65535, 0) )
   logged: day := 49
 
-tests/sequencer.cpp:374: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
+tests/sequencer.cpp:447: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
   values: CHECK( 61367096 == 4294967295 )
   logged: day := 49
 
-tests/sequencer.cpp:376: ERROR: CHECK( seq.playhead(777777 + 60 * ms_per_day) == limit_ms ) is NOT correct!
+tests/sequencer.cpp:449: ERROR: CHECK( seq.playhead(777777 + 60 * ms_per_day) == limit_ms ) is NOT correct!
   values: CHECK( 889032704 == 1073741824 )
 ```
 
-Day 24 is still green and day 25 is black, its start color, holding for 2³⁰ ms: the clamp's floor, since the position underneath is now a large negative number. Day 49 is black too, 61 million ms from starting again, and day 50 is green: §3's "wipe again at 49.7", to the day. Run the whole suite and five other cases fail with it, among them the table of §8. **Revert it.**
+Day 24 is still green and day 25 is black, its start color, holding for 2³⁰ ms: the clamp's floor, since the position underneath is now a large negative number. Day 49 is black too, 61 million ms from starting again, and day 50 is green: §3's "wipe again at 49.7", to the day. Run the whole suite and six other cases fail with it, among them the table of §8. **Revert it.**
 
 **Proves:** a clamp on the answer protects nothing once the value it tests has already wrapped. The same clamp is exact when the difference underneath is computed in a type that cannot overflow.
 
@@ -399,13 +399,13 @@ cmake --build build --target tests_default && ./build/tests_default -tc='play wh
 ```
 TEST CASE:  play while playing and pause while paused change nothing
 
-tests/sequencer.cpp:254: ERROR: CHECK( seq.playhead(1700) == 700 ) is NOT correct!
+tests/sequencer.cpp:300: ERROR: CHECK( seq.playhead(1700) == 700 ) is NOT correct!
   values: CHECK( 0 == 700 )
 
-tests/sequencer.cpp:255: ERROR: CHECK( seq.playhead(2000) == 1000 ) is NOT correct!
+tests/sequencer.cpp:301: ERROR: CHECK( seq.playhead(2000) == 1000 ) is NOT correct!
   values: CHECK( 300 == 1000 )
 
-tests/sequencer.cpp:258: FATAL ERROR: REQUIRE( seq.playhead(2500) == 1500 ) is NOT correct!
+tests/sequencer.cpp:304: FATAL ERROR: REQUIRE( seq.playhead(2500) == 1500 ) is NOT correct!
   values: REQUIRE( 800 == 1500 )
 ```
 
@@ -485,8 +485,8 @@ c++ -std=c++20 -I"$REPO/include" -DPASS_THE_TICK -fsyntax-only tick.cpp
 tick.cpp:43:9: error: call to deleted member function 'play'
    43 |     seq.play(start);
       |     ~~~~^~~~
-.../include/stripseq/sequencer.h:57:37: note: candidate function [with T = unsigned int] has been explicitly deleted
-   57 |     template <wrapping_tick T> void play(T) = delete;
+.../include/stripseq/sequencer.h:79:37: note: candidate function [with T = unsigned int] has been explicitly deleted
+   79 |     template <wrapping_tick T> void play(T) = delete;
       |                                     ^
 ```
 

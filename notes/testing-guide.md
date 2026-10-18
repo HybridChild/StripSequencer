@@ -146,7 +146,7 @@ Integer division by zero is undefined behaviour in C++, and what actually happen
 
 Three machines, three behaviours, and the one that runs the tests is the most forgiving: the host carries on with a wrong answer, and catches the mutant only because that answer is not 0. It is not 0 everywhere it is asked, either — 2⁴⁰ ms has a low word of 0, and that check passes. Had the test checked only that the segment shows black — which `at()` answers for an empty sequence whatever playhead it is given — it would pass on the host, and the board would fault. A passing test proves the code behaved on that machine; for code with undefined behaviour in it, that is not the same as correct, and a test cannot be written to tell them apart on the machine that forgives it.
 
-What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 for the reason it is named for (§10 Exercise 9). The general lesson is the reason the plan runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
+What can tell them apart is a build that turns undefined behaviour into a failure on every machine. UBSan (`-fsanitize=undefined`) instruments each division, signed operation and shift with a check of the operation's preconditions, so with it the same case fails on arm64 for the reason it is named for (§10 Exercise 9). The general lesson is the reason CI runs the host suite under sanitizers at all: **the host is one particular machine, and the sanitizer is the closest thing to running on all of them.**
 
 **A test that agrees with itself.** The third way to pass for the wrong reason needs no mutant and no second machine to see, only a look at where the expected value comes from. `tests/convert.cpp` has to know, for each of the 256 top bytes a channel can have, what the gamma table should turn it into. The convenient expectation is the library's own answer: read the table, or paste a copy of the function that generates it into the test. Either one passes whatever the generator does, wrong included, because the test now checks that the code equals itself. An expectation is only evidence when it is computed **another way** — an *oracle* that shares nothing with the code but the definition both are meant to meet.
 
@@ -189,7 +189,7 @@ Twelve, all on the host.
 ctest --test-dir build -N -R '^rgbw:'
 ```
 
-The binary lists its cases by their real names and knows nothing about CTest. CTest lists the same number of *tests*, each named `rgbw:` plus a case's name, and knows nothing about doctest — only that many command lines it can run. The last line of each listing is the count; they match, and `ctest -N` with no filter shows five times as many.
+The binary lists its cases by their real names and knows nothing about CTest. CTest lists the same number of *tests*, each named `rgbw:` plus a case's name, and knows nothing about doctest — only that many command lines it can run. The last line of each listing is the count; they match, and `ctest -N` with no filter shows about five times as many, one set per variant.
 
 **Proves:** the framework collects and runs cases; the runner runs processes. Discovery is the translation between them, and neither side depends on the other's existence.
 
@@ -249,7 +249,7 @@ cmake --build build --target tests_default
 ```
 
 ```
-include/stripseq/color.h:26:5: error: unknown type name 'uint16_t'
+include/stripseq/color.h:39:11: error: unknown type name 'uint32_t'
 ```
 
 **Revert it.** Then try the weaker version of the same mistake: delete `#include "stripseq/config.h"` from `sequence.h` instead. Everything still compiles — `sequence.h` includes `color.h`, which includes `config.h` — and the umbrella TU is happy. **Revert that too.**
@@ -311,7 +311,7 @@ cmake --build build && ./scripts/test.sh
 ```
 
 ```
-100% tests passed out of 185
+100% tests passed out of …
 ```
 
 No reconfigure, no probe, and every test green. **Revert both files** and build again; the check reports that `build_const()` refuses every invalid sequence.
@@ -371,7 +371,7 @@ The first five each print the failing case names from the table in §8, then a s
 
 ```
 TEST CASE:  play while playing and pause while paused change nothing
-[doctest] test cases:    111 |    110 passed | 1 failed | 1 skipped
+[doctest] test cases:    118 |    117 passed | 1 failed | 1 skipped
 ```
 
 The sixth prints only the summary, with nothing failed. Before reverting it, work out why no test could fail: trace `pause()` twice in a row by hand, and look at what `position()` reads while `playing_` is false.
@@ -434,21 +434,25 @@ cmake --build build-ubsan --target tests_default && ./build-ubsan/tests_default 
 The ordinary build fails on Apple Silicon, and the failures say nothing about division:
 
 ```
-tests/sequencer.cpp:508: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+tests/sequencer.cpp:511: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+  values: CHECK( 1 == 0 )
+  logged: elapsed := 1
+
+tests/sequencer.cpp:511: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
   values: CHECK( 999 == 0 )
   logged: elapsed := 999
 ```
 
-`999` is the low 32 bits of the elapsed time, as §8 works out, and so are the other failures; 2⁴⁰ ms is missing from them because its low word is 0. The UBSan build stops at the cause instead:
+`1` and `999` are the low 32 bits of the elapsed time, as §8 works out, and so are the other failures; 2⁴⁰ ms is missing from them because its low word is 0. The UBSan build stops at the cause instead:
 
 ```
-src/sequencer.cpp:35:49: runtime error: division by zero
-SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:35:49
+src/sequencer.cpp:41:49: runtime error: division by zero
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:41:49
 ===============================================================================
-tests/sequencer.cpp:502:
+tests/sequencer.cpp:505:
 TEST CASE:  an empty sequence left playing does not divide by zero
 
-tests/sequencer.cpp:502: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
+tests/sequencer.cpp:505: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
 ```
 
 `-fno-sanitize-recover=all` makes the first report abort the process, which doctest reports as a crash in the case that was running. **Revert it**, rebuild `build-ubsan`, and the case passes there too. `build-ubsan` matches the `build*/` pattern, so it is ignored by git and removed by `scripts/clean.sh`.
@@ -461,8 +465,8 @@ arm-none-eabi-objdump -d -C "$(find build-zephyr -name sequencer.cpp.obj)" | gre
 ```
 
 ```
-  46:	fbb1 f4f0 	udiv	r4, r1, r0
-  4a:	fb00 1114 	mls	r1, r0, r4, r1
+  30:	fbb1 f4f0 	udiv	r4, r1, r0
+  34:	fb00 1114 	mls	r1, r0, r4, r1
 ```
 
 `udiv` divides the position's high word in `r1` by the loop in `r0`, and `mls` multiplies the quotient back and subtracts it, leaving the remainder: on a Cortex-M7 the whole `%` is these two instructions, with no call to any library. The guard is back in place by now, which changes nothing here, since it only decides whether this code is reached. With it deleted, `r0` is 0 for an empty sequence, and this `udiv` is the instruction `DIV_0_TRP` traps; the report `usage_fault()` prints begins `***** USAGE FAULT *****` and then `Division by zero` (`fault.c:496` and `:501`).
@@ -569,7 +573,7 @@ A test framework and a test runner solve different problems, and the seam betwee
 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
-- **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, and that a `constinit` strip links against the library.
+- **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, that a knob a variant leaves unset has `config.h`'s documented default, and that a `constinit` strip links against the library.
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`tests/cookbook.cpp`** — where the suite becomes an acceptance test: the eleven cookbook recipes, each with property assertions and a golden-frame hash.

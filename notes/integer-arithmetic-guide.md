@@ -402,13 +402,13 @@ cd "$REPO" && cmake --build build --target tests_default && ./build/tests_defaul
 
 ```
 TEST CASE:  TooLong: totals that overflow uint32_t are still too long
-tests/sequence.cpp:480: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32768)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:501: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32768)) == Error::TooLong ) is NOT correct!
   values: CHECK( 0 == 7 )
-tests/sequence.cpp:482: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32769)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:503: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32769)) == Error::TooLong ) is NOT correct!
   values: CHECK( 0 == 7 )
-tests/sequence.cpp:485: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 31).hold(colors::red, 1u << 31)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:506: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 31).hold(colors::red, 1u << 31)) == Error::TooLong ) is NOT correct!
   values: CHECK( 8 == 7 )
-[doctest] test cases:  3 | 2 passed | 1 failed | 34 skipped
+[doctest] test cases:  3 | 2 passed | 1 failed | 116 skipped
 ```
 
 **Revert it.** The values are `Error` enumerators: 7 is `TooLong`, 0 is `None` — a sequence of 2³² ms *accepted* — and 8 is `ZeroLengthLoop`. That last one is worth a second look: two steps of 2³¹ ms wrapped to an endless loop of 0 ms, and a different check caught it for the wrong reason. The other two `TooLong` cases, which never leave 32 bits, still pass.

@@ -59,7 +59,7 @@ Inside the library a channel is sixteen bits; on the wire it is eight. The extra
 
 They are for **arithmetic**, not output. A fade that runs for a minute computes a color every frame, each a blend of two others, and in a ColorFn a blend of blends. At eight bits every one of those rounds to a whole level, the errors accumulate, and a slow fade moves in visible stairs. At sixteen the rounding happens 256 times finer, and only once at the end does the value meet the wire's resolution. `Color::rgb8()` scales by 257 rather than shifting by eight so that 255 widens to exactly 65535 — the "exact at both ends" argument from [`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §5, applied to widening.
 
-So the conversion spends the extra bits by design. The gamma table is indexed by the **top byte** of the channel, and that does cost something, which is worth stating exactly. The 256 indices reach 173 distinct emitted bytes (§3). A table indexed by all sixteen bits would reach all 256: the 83 it skips are 17 at the dark end and 66 in the bright half, where the curve is steep and one written level spans two or three emitted bytes — 250, 253, 255 at the very top. What those bytes would add is steps finer than one written level, and a written level is already an even 1/255 to the eye, so the table caps the strip at 256 even-looking levels rather than at 256 emitted bytes. Reaching the rest would take a 64 KB table, or interpolation between entries for every channel of every pixel. `encode()` in `src/color.cpp` is the whole of the cheap version: shift, then look up.
+So the conversion spends the extra bits by design. The gamma table is indexed by the **top byte** of the channel, and that does cost something, which is worth stating exactly. The 256 indices reach 173 distinct emitted bytes (§3). A table indexed by all sixteen bits would reach all 256: the 83 it skips are 17 at the dark end and 66 in the bright half, where the curve is steep and one written level spans two or three emitted bytes — 250, 253, 255 at the very top. What those bytes would add is steps finer than one written level, and a written level is already an even 1/255 to the eye, so the table caps the strip at 256 even-looking levels rather than at 256 emitted bytes. Reaching the rest would take a 64 KB table, or interpolation between entries for every channel of every pixel. `convert()` and `encode()` in `src/color.cpp` are the whole of the cheap version: shift, then look up.
 
 ## 5. Where the brightness knob goes
 
@@ -116,7 +116,7 @@ From a color to the eye, in order:
 | Write a color | `Color::rgb()`, `hsv()`, a palette | written, even to the eye | 16 bits a channel, so arithmetic stays fine-grained (§4) |
 | Blend | `Color::lerp()`, every fade | written | midpoints look halfway (§6) |
 | Brightness | `to_bytes()` | written | even knob; coarse at the dim end (§5) |
-| Drop eight bits | `encode()` | written, 8-bit | spends the precision kept for arithmetic (§4) |
+| Drop eight bits | `convert()` | written, 8-bit | spends the precision kept for arithmetic (§4) |
 | Gamma | the table | written → emitted | undoes the eye's power law (§3) |
 | The wire | the driver | emitted | the byte becomes a duty cycle (§1) |
 | The eye | — | perceived | roughly the cube root of the light (§2) |
@@ -287,7 +287,7 @@ cmake --build build --target tests_default
 It does not build. The `static_assert` at the end of `tests/color.cpp` evaluates `hsv(0x8000, …)` at compile time, and cyan is no longer exact:
 
 ```
-tests/color.cpp:160:15: error: static assertion failed due to requirement 'Color::hsv(32768, 255, 255).b == 65535'
+tests/color.cpp:192:15: error: static assertion failed due to requirement 'Color::hsv(32768, 255, 255).b == 65535'
 ```
 
 Comment that `static_assert` out, build again, and run the `hsv` cases:
@@ -298,15 +298,15 @@ cmake --build build --target tests_default && ./build/tests_default -tc='hsv*'
 
 ```
 TEST CASE:  hsv is continuous at the sextant boundaries
-tests/color.cpp:120: ERROR: CHECK( worst <= bound ) is NOT correct!
+tests/color.cpp:152: ERROR: CHECK( worst <= bound ) is NOT correct!
   values: CHECK( 15 <= 7 )
   logged: sat := 255
           val := 255
 …
 TEST CASE:  hsv lands on the primaries at the sextant starts it can reach exactly
-tests/color.cpp:145: ERROR: CHECK( Color::hsv(0x8000, 255, 255) == Color::rgb(0, 65535, 65535) ) is NOT correct!
+tests/color.cpp:177: ERROR: CHECK( Color::hsv(0x8000, 255, 255) == Color::rgb(0, 65535, 65535) ) is NOT correct!
   values: CHECK( rgb(0, 65535, 65532) == rgb(0, 65535, 65535) )
-[doctest] test cases:     4 |     2 passed | 2 failed | 58 skipped
+[doctest] test cases:     4 |     2 passed | 2 failed | 115 skipped
 ```
 
 **Revert both edits.** Six sextants of 10923 hues are 65538 hues, two more than exist, so the last sextant is cut short and blue is still at 15 when the wheel wraps back to red: a jump of 15 where the sweep allows 7, once per revolution of a rainbow. Away from the seams every color is within a few steps of where it should be.
@@ -324,7 +324,7 @@ cmake --build build --target tests_default && ./build/tests_default -tc='to_byte
 ```
 
 ```
-[doctest] test cases:    5 |    2 passed |   3 failed | 57 skipped
+[doctest] test cases:    5 |    2 passed |   3 failed | 114 skipped
 [doctest] assertions: 1821 | 1040 passed | 781 failed |
 ```
 
@@ -387,7 +387,7 @@ An addressable LED emits light in proportion to its byte, because the byte is a 
 
 ## 11. Where to go next
 
-- **`src/color.cpp`** — `make_gamma_table()`, `encode()` and `to_bytes()`: §3–§5 in about forty lines.
+- **`src/color.cpp`** — `make_gamma_table()`, `encode()`, `convert()` and `to_bytes()`: §3–§5 in about forty lines.
 - **`include/stripseq/color.h`** — `Color::hsv()`, §7 as written, and `Color::lerp()`, whose comment says which space it blends in.
 - **`tests/color.cpp` and `tests/convert.cpp`** — the sweep behind §7's bound, and the double-precision oracle behind Exercise 5.
 - **[`integer-arithmetic-guide.md`](integer-arithmetic-guide.md) §7** — how the table is rounded exactly with no floating point, and why the exponent is limited to what fits in 64 bits.

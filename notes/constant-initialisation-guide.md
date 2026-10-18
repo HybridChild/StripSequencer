@@ -92,7 +92,7 @@ consteval Sequence build_const() const {
 On the valid path the compiler never reaches a call, so the evaluation succeeds. On an invalid path it reaches exactly one, and the diagnostic names it:
 
 ```
-sequence.h:262:46: error: call to non-'constexpr' function 'void stripseq::invalid_sequence::sequence_has_a_zero_duration_fade()'
+sequence.h:306:46: error: call to non-'constexpr' function 'void stripseq::invalid_sequence::sequence_has_a_zero_duration_fade()'
 ```
 
 Three details carry most of the weight.
@@ -264,7 +264,7 @@ xcxx -c readback.cpp
 
 ```
 readback.cpp:6:40: error: non-constant condition for static assertion
-include/stripseq/sequence.h:94:33: error: the value of 'blink' is not usable in a constant expression
+include/stripseq/sequence.h:131:58: error: the value of 'blink' is not usable in a constant expression
 readback.cpp:5:26: note: 'blink' was not declared 'constexpr'
 ```
 
@@ -289,7 +289,7 @@ xcxx -c invalid.cpp
 ```
 
 ```
-include/stripseq/sequence.h:262:46: error: call to non-'constexpr' function 'void stripseq::invalid_sequence::sequence_has_a_zero_duration_fade()'
+include/stripseq/sequence.h:306:46: error: call to non-'constexpr' function 'void stripseq::invalid_sequence::sequence_has_a_zero_duration_fade()'
 ```
 
 Change the `0` to `500` and it compiles. Then try each of the other mistakes — no steps, `.repeat(0)`, `.landing_color(…)` on an endless sequence — and read which function each one names.

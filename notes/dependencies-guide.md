@@ -103,7 +103,7 @@ The CI runners have no doctest installed, which means **CI exercises the fallbac
 
 `find_package(doctest 2.5)` does not mean "exactly 2.5", and CMake does not decide what it means. The package ships a second file, `doctestConfigVersion.cmake`, whose job is to answer one question: *given that you have 2.5.3 and they asked for 2.5, is that acceptable?* It sets `PACKAGE_VERSION_COMPATIBLE` and CMake obeys.
 
-doctest's is generated with the "any newer version is fine" policy, so 2.5.3 satisfies a request for 2.5 or for 2.4, and fails a request for 2.6. The practical consequence for the hybrid above is neat: asking for a version the machine does not have is not an error, it is simply `doctest_FOUND` staying false — and the fetch branch takes over.
+doctest's is generated with the "same major version" policy: any version at least the one requested, provided the major number matches. So 2.5.3 satisfies a request for 2.5 or for 2.4, and fails a request for 2.6 — or for 1.0, where "any newer version" would have said yes. The practical consequence for the hybrid above is neat: asking for a version the machine does not have is not an error, it is simply `doctest_FOUND` staying false — and the fetch branch takes over.
 
 ---
 
@@ -142,7 +142,7 @@ grep -A4 'add_library' /opt/homebrew/lib/cmake/doctest/doctestTargets.cmake
 ```sh
 rm -rf /tmp/fc && cmake -S . -B /tmp/fc -G Ninja -DCMAKE_DISABLE_FIND_PACKAGE_doctest=ON
 ls /tmp/fc/_deps
-cmake --build /tmp/fc >/dev/null && ctest --test-dir /tmp/fc -j | tail -2
+cmake --build /tmp/fc >/dev/null && ctest --test-dir /tmp/fc -j | grep 'tests passed'
 ```
 
 ```
@@ -182,6 +182,7 @@ rm -rf /tmp/old && cmake -S . -B /tmp/old -G Ninja -DCMAKE_DISABLE_FIND_PACKAGE_
 ```
 CMake Error at /tmp/old/_deps/doctest-src/CMakeLists.txt:1 (cmake_minimum_required):
   Compatibility with CMake < 3.5 has been removed from CMake.
+  ...
   Or, add -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to try configuring anyway.
 ```
 
@@ -199,6 +200,6 @@ A CMake build acquires outside code in one of three ways — installed and found
 
 - **[`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §2–§3** — what an imported target's `INTERFACE_*` properties are, in the general form.
 - **[`testing-guide.md`](testing-guide.md) §4** — what the helper script from §2 does once you have it.
-- **The root `CMakeLists.txt`, the `STRIPSEQ_BUILD_TESTS` block** — fifteen lines containing every idea in this guide.
-- **`/opt/homebrew/lib/cmake/doctest/`** (or wherever your package manager puts it) — four short files: the config, the version file, the targets, and the helper. Reading them once removes most of the mystery from `find_package` permanently.
-- **CMake's [`cmake-packages(7)`](https://cmake.org/cmake/help/latest/manual/cmake-packages.7.html)** — the reference half, including how to *ship* a config package when this library eventually installs itself.
+- **The root `CMakeLists.txt`, the top of the `STRIPSEQ_BUILD_TESTS` block** — the lines before `enable_testing()`, which contain every idea in this guide.
+- **`/opt/homebrew/lib/cmake/doctest/`** (or wherever your package manager puts it) — five short files: the config, the version file, the targets, and the two helper scripts, `doctest.cmake` and the `doctestAddTests.cmake` it runs after each link. Reading them once removes most of the mystery from `find_package` permanently.
+- **CMake's [`cmake-packages(7)`](https://cmake.org/cmake/help/latest/manual/cmake-packages.7.html)** — the reference half, including how to *ship* a config package.
