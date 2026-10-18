@@ -32,9 +32,14 @@ if [[ ! -d "$BUILD_DIR" ]]; then
     exit 1
 fi
 
-# An unmatched glob stays literal, so test the first entry for existence.
-PORTS=(/dev/cu.usbmodem*)
-if [[ -z "${STLINK_SERIAL:-}" && -e "${PORTS[0]}" ]] && (( ${#PORTS[@]} > 1 )); then
+# One serial port per attached ST-LINK: /dev/cu.usbmodem* on macOS, and on Linux
+# the link udev names after the probe under /dev/serial/by-id -- not
+# /dev/ttyACM*, which every CDC-ACM device shares. nullglob, so the pattern for
+# the other system adds nothing rather than itself.
+shopt -s nullglob
+PORTS=(/dev/cu.usbmodem* /dev/serial/by-id/usb-STMicroelectronics_*[Ss][Tt][Ll][Ii][Nn][Kk]*)
+shopt -u nullglob
+if [[ -z "${STLINK_SERIAL:-}" ]] && (( ${#PORTS[@]} > 1 )); then
     echo "More than one ST-LINK is attached; set STLINK_SERIAL= to choose one." >&2
     exit 2
 fi

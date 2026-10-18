@@ -1,0 +1,6 @@
+# LF in every checkout, whatever core.autocrlf says. A checkout made by Git for
+# Windows and built under WSL would otherwise hand bash scripts ending in CRLF,
+# which fail as "bash\r: No such file or directory", and the cookbook check
+# would compare docs/COOKBOOK.md against tests/cookbook.cpp across a line-ending
+# difference neither file has in the repository.
+* text=auto eol=lf
