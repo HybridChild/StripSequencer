@@ -91,3 +91,66 @@ function(stripseq_check_build_const)
 
     message(STATUS "build_const() refuses every invalid sequence it was shown")
 endfunction()
+
+# The same shape for config.h's capacity check, which a variant cannot reach
+# either: every variant has to build. Each case defines one capacity; the ends
+# of the range must compile, and a value past either end must fail with the
+# #error that names the macro.
+#
+#   stripseq_check_config_range()     # once, from the tests block
+
+function(stripseq_check_config_range)
+    set(_probe ${_stripseq_compile_fail_dir}/../tests/compile_fail/config_range.cpp)
+
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        ${_probe}
+        ${STRIPSEQ_INCLUDE_DIR}/stripseq/config.h)
+
+    set(_cases
+        "STRIPSEQ_MAX_STEPS=1:"
+        "STRIPSEQ_MAX_STEPS=255:"
+        "STRIPSEQ_MAX_STEPS=0:STRIPSEQ_MAX_STEPS must be 1..255"
+        "STRIPSEQ_MAX_STEPS=256:STRIPSEQ_MAX_STEPS must be 1..255"
+        "STRIPSEQ_MAX_SEGMENTS=1:"
+        "STRIPSEQ_MAX_SEGMENTS=255:"
+        "STRIPSEQ_MAX_SEGMENTS=0:STRIPSEQ_MAX_SEGMENTS must be 1..255"
+        "STRIPSEQ_MAX_SEGMENTS=256:STRIPSEQ_MAX_SEGMENTS must be 1..255")
+
+    set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+    foreach(_case IN LISTS _cases)
+        string(REPLACE ":" ";" _case "${_case}")
+        list(GET _case 0 _define)
+        list(LENGTH _case _len)
+        set(_expect "")
+        if(_len GREATER 1)
+            list(GET _case 1 _expect)
+        endif()
+
+        string(MAKE_C_IDENTIFIER "${_define}" _dir)
+        try_compile(_ok
+            ${CMAKE_CURRENT_BINARY_DIR}/compile_fail/${_dir}
+            ${_probe}
+            CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${STRIPSEQ_INCLUDE_DIR}"
+            COMPILE_DEFINITIONS -D${_define}
+            CXX_STANDARD 20
+            CXX_STANDARD_REQUIRED ON
+            CXX_EXTENSIONS OFF
+            OUTPUT_VARIABLE _output)
+
+        if(_expect STREQUAL "")
+            if(NOT _ok)
+                message(FATAL_ERROR
+                    "config.h refused ${_define}, which is in range:\n${_output}")
+            endif()
+        elseif(_ok)
+            message(FATAL_ERROR "config.h accepted ${_define}, which is out of range.")
+        elseif(NOT _output MATCHES "${_expect}")
+            message(FATAL_ERROR
+                "config.h probe ${_define} failed to compile, but not with "
+                "\"${_expect}\":\n${_output}")
+        endif()
+    endforeach()
+
+    message(STATUS "config.h refuses every capacity outside 1..255")
+endfunction()

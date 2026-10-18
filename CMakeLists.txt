@@ -111,6 +111,7 @@ if(STRIPSEQ_BUILD_TESTS)
     # The tests that must fail to compile, run here at configure time; see the
     # file for why they cannot be test cases.
     stripseq_check_build_const()
+    stripseq_check_config_range()
 
     # That the cookbook in docs/COOKBOOK.md and the one the tests compile are
     # the same text; see the file for how it compares them.

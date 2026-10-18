@@ -104,7 +104,7 @@ Everything above tests what code does when it runs. Some promises are about what
 - **`static_assert`** asserts that a constant expression is true. The failure being tested *is* the expression not being a constant, which is a compile error, not a `false`.
 - **A `requires`-expression** looks like the answer and is not. It checks that an expression is well-formed, and `SequenceBuilder{}.fade_to(colors::red, 0).build_const()` is perfectly well-formed: it fails only when evaluated, and a `requires`-expression never evaluates. Both Clang and GCC report it as satisfied.
 
-So the test has to be a whole compiler run, observed from outside — and the thing that runs compilers is the build system. CMake's `try_compile` compiles a source file at configure time and reports two things: whether it compiled, and everything the compiler printed. `cmake/stripseq_compile_fail.cmake` uses it on one probe file, `tests/compile_fail/build_const.cpp`, which selects one sequence per case with `#if STRIPSEQ_PROBE == n`, and compiles it nine times.
+So the test has to be a whole compiler run, observed from outside — and the thing that runs compilers is the build system. CMake's `try_compile` compiles a source file at configure time and reports two things: whether it compiled, and everything the compiler printed. `cmake/stripseq_compile_fail.cmake` uses it on one probe file, `tests/compile_fail/build_const.cpp`, which selects one sequence per case with `#if STRIPSEQ_PROBE == n`, and compiles it nine times. A second function in the same file applies the same pattern to `config.h`'s capacity range: its probe, `tests/compile_fail/config_range.cpp`, only includes `config.h`, and each case defines one capacity on the command line — the two ends of the range must compile, and a value just past either end must fail with the `#error` that names the macro. No variant can reach that check, because every variant has to build.
 
 Four decisions in that file are the general lessons.
 
@@ -587,7 +587,7 @@ A test framework and a test runner solve different problems, and the seam betwee
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
 - **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, that a knob a variant leaves unset has `config.h`'s documented default, and that a `constinit` strip links against the library.
-- **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases.
+- **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases, then the same pattern once more for `config.h`'s capacity range.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`tests/cookbook.cpp`** — where the suite becomes an acceptance test: the eleven cookbook recipes, each with property assertions and a golden-frame hash.
 - **`tests/fuzz.cpp`** — §9 in full: the generator, the model, every property, and the seeded loop that drives them.
