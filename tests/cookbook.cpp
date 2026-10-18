@@ -265,10 +265,18 @@ static constexpr Sequence kAlert = SequenceBuilder{}
     .repeat(3)
     .build_const();
 
+static bool alert_showing() {
+    for (uint8_t i = 0; i < strip.segment_count(); ++i)
+        if (strip.segment(i).drives(alert_seq))
+            return true;
+    return false;
+}
+
 void raise_alert() {
-    alert_seq.load(kAlert);
+    alert_seq.load(kAlert);                             // from the top, showing or not
     alert_seq.play(now());
-    strip.add(Segment(0, kPixels, alert_seq));      // added last, so painted on top
+    if (!alert_showing())
+        strip.add(Segment(0, kPixels, alert_seq));      // added last, so painted on top
 }
 
 /* The recipe's one line in the frame loop. */
@@ -633,6 +641,28 @@ TEST_CASE("Alert over a background: cancel_alert removes it early and leaves the
     render_at(400 + 300);
     render_breathe_alone(alone);
     CHECK(same_bytes(buffer, alone, kBytes));
+}
+
+TEST_CASE("Alert over a background: raising it again restarts it rather than stacking") {
+    begin();
+    start_background();
+    render_at(400);
+    raise_alert();
+
+    clock_ms = kOrigin + 400 + 300;
+    raise_alert();
+    CHECK(strip.segment_count() == 2);
+
+    /* Restarted at 700, so it runs a full 720 ms from there, well past where
+     * the first raise would have ended. */
+    clock_ms = kOrigin + 700 + 719;
+    alert_frame();
+    CHECK(strip.segment_count() == 2);
+
+    clock_ms = kOrigin + 700 + 720;
+    alert_frame();
+    REQUIRE(strip.segment_count() == 1);
+    CHECK(strip.segment(0).drives(breathe_seq));
 }
 
 /* ------------------------------------------------------------------------ */

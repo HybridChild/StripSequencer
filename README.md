@@ -46,7 +46,17 @@ target_link_libraries(app PRIVATE StripSequencer::stripseq)
 
 ### Or as a Zephyr module
 
-Add the repository to your `west.yml`, or point `ZEPHYR_EXTRA_MODULES` at a checkout as [`samples/strip_demo/CMakeLists.txt`](samples/strip_demo/CMakeLists.txt) does, then in `prj.conf`:
+Add the repository to your `west.yml`:
+
+```yaml
+# under manifest: projects:
+- name: stripseq
+  url: https://github.com/HybridChild/StripSequencer
+  revision: main
+  path: modules/lib/stripseq
+```
+
+or point `ZEPHYR_EXTRA_MODULES` at a checkout as [`samples/strip_demo/CMakeLists.txt`](samples/strip_demo/CMakeLists.txt) does. Then in `prj.conf`:
 
 ```ini
 CONFIG_CPP=y
@@ -54,7 +64,7 @@ CONFIG_STD_CPP20=y
 CONFIG_STRIPSEQ=y
 ```
 
-Zephyr's default minimal C++ library is enough: the core includes only `<cstdint>` and `<cstddef>`. The module also carries `<stripseq/zephyr/led_strip.h>`, which hands a rendered frame to a `led_strip` driver in the order its devicetree `color-mapping` names; the [cookbook](docs/COOKBOOK.md#on-zephyr) shows the frame loop around it.
+Zephyr's default minimal C++ library is enough: the core includes only `<cstdint>` and `<cstddef>`. The module also carries `<stripseq/zephyr/led_strip.h>`, which needs `CONFIG_LED_STRIP=y` and hands a rendered frame to a `led_strip` driver in the order its devicetree `color-mapping` names; the [cookbook](docs/COOKBOOK.md#on-zephyr) shows the frame loop around it.
 
 ### Blink
 
@@ -75,20 +85,22 @@ static constexpr Sequence kBlink =
 
 int main() {
     seq.load(kBlink);
-    seq.play(millis());                     // your 64-bit millisecond clock
+    seq.play(now());                        // your 64-bit millisecond clock
     strip.add(Segment(0, kPixels, seq));    // every pixel, no stagger
 
     for (;;) {
-        const uint32_t hold = strip.render(millis());
-        send_to_strip(buffer, sizeof buffer);   // your driver, in R, G, B order
+        const uint32_t hold = strip.render(now());
+        send_to_strip(buffer, sizeof buffer);   // your driver, reordering R, G, B for the chip
 
         if (hold == hold_forever)
-            wait_for_event();                   // nothing will change again
+            wait_for_event();                   // nothing will change until your code changes it
         else
             sleep_ms(hold != 0 ? hold : 16);    // 0 means mid-fade: frame rate
     }
 }
 ```
+
+The hold `render()` returns assumes nothing else changes in the meantime. After a control call such as `play()` or `add()`, render again rather than waiting out the hold, so a loop that sleeps on it needs a way to be woken.
 
 Give the segment a `pixel_delay` and the same sequence travels down the strip instead of flashing all at once. The [cookbook](docs/COOKBOOK.md#the-recipes) has ten more recipes, and the Zephyr frame loop, with `k_work_reschedule()` in place of the sleep, is [at the end of it](docs/COOKBOOK.md#on-zephyr).
 
@@ -136,7 +148,7 @@ The library's code and constants, linked into an application that calls every pa
 
 Gamma is the 256-byte table, and the white channel costs almost nothing in code. The constants include one empty `Sequence`, which every sequencer refers to until something is loaded. The library has no RAM of its own: all of it is in the objects above.
 
-On top of that come the compiler's run-time helpers: 372 B on a Cortex-M0, for the 32-bit division it has no instruction for and the builder's 64-bit duration check, and none at all on a Cortex-M4. Nothing in the library divides in 64 bits. Building a sequence at run time adds about 300 B where `SequenceBuilder` is used; `build_const()` adds nothing. [`tools/footprint/`](tools/footprint/README.md) produces these figures, symbol by symbol.
+On top of that come the compiler's run-time helpers: 372 B on a Cortex-M0, for the 32-bit division it has no instruction for and the builder's 64-bit duration check, and none at all on a Cortex-M4. The compiler also emits `memcpy` and `memset` for copying and clearing structures, 34 B on a Cortex-M0 and 44 B on a Cortex-M4 from newlib-nano. Nothing in the library divides in 64 bits. Building a sequence at run time adds about 300 B where `SequenceBuilder` is used; `build_const()` adds nothing. [`tools/footprint/`](tools/footprint/README.md) produces these figures, symbol by symbol.
 
 ### Time per frame
 
@@ -170,11 +182,11 @@ scripts/build.sh                   # configure and build into ./build
 scripts/test.sh                    # run every test in every variant
 CXX=g++-16 scripts/build.sh build-gcc && scripts/test.sh build-gcc
 scripts/cross-check.sh             # freestanding Cortex-M4 and M0 builds
-scripts/sample-build.sh            # the Zephyr sample; --rgb for the RGB path
+scripts/sample-build.sh            # strip_demo under Zephyr; SAMPLE= for another, --rgb for RGB
 tools/footprint/footprint.sh       # flash and object sizes, Cortex-M0 and M4
 ```
 
-The host suite builds the whole library five times, once per configuration that changes compiled behaviour plus one at tight capacities, and runs every test in each. The cross-check compiles the library for bare-metal Cortex-M with only the two headers Zephyr's minimal C++ library provides, and fails if an object calls a run-time helper outside a short allowlist: a soft-float routine, `operator new`, anything from libc, or a division the design does not account for. It also fails on anything initialised at run time: an `.init_array` entry or a static's guard variable. CI runs the host suite on gcc and clang, the cross-check, and the Zephyr sample in both channel configurations.
+The host suite builds the whole library five times, once per configuration that changes compiled behaviour plus one at tight capacities, and runs every test in each. The cross-check compiles the library for bare-metal Cortex-M with only the two headers Zephyr's minimal C++ library provides, and fails if an object calls a run-time helper outside a short allowlist: a soft-float routine, `operator new`, anything from libc beyond the compiler's own `memcpy` and `memset`, or a division the design does not account for. It also fails on anything initialised at run time: an `.init_array` entry or a static's guard variable. CI runs the host suite on gcc and clang, plain and under ASan and UBSan, the cross-check, strip_demo in both channel configurations, and frame_cost and the showcase in the bench's.
 
 ## Licence
 

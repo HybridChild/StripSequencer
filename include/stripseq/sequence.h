@@ -115,7 +115,7 @@ class SequenceBuilder;
 
 class Sequence {
 public:
-    constexpr Sequence() = default;          /* empty; valid to hold, not to render */
+    constexpr Sequence() = default;          /* empty: black, held forever, like no_sequence */
 
     /* The one question a sequence answers. The playhead is signed and unbounded:
      * negative means before the timeline, large means past the end. Durations

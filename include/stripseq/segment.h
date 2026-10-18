@@ -118,7 +118,8 @@ public:
      * whatever an installed OffsetFn documents. Each setter returns false for
      * a delay whose product with count - 1 would overflow the default's
      * stagger, checked whatever is installed, so restoring the default never
-     * inherits a delay it cannot use. */
+     * inherits a delay it cannot use. Not [[nodiscard]], for the reason
+     * Strip::add() gives. */
     bool set_pixel_delay(int32_t ms);            /* milliseconds */
     bool set_pixel_delay_q8(int32_t ms_q8);      /* 1/256 ms, which is how it is stored */
 
@@ -173,9 +174,9 @@ private:
 
     /* Steps 1 and 2 for one pixel, with the hold the lookup or ColorFn
      * reported. paint and finished() both go through it, so what a segment
-     * paints and whether it has finished cannot disagree. paint then holds a
-     * sequencer that is not playing forever, which is why finished() asks
-     * here rather than paint. */
+     * paints and whether it has finished cannot disagree. When the sequencer
+     * is not playing, paint then reports hold_forever whatever the pixels
+     * said, which is why finished() asks here rather than paint. */
     Sample sample(int32_t playhead_ms, uint16_t index) const;
 
     uint16_t   first_ = 0;

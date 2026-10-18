@@ -189,7 +189,7 @@ There is no state machine to get wrong, and so no call that can fail: playing or
 | To | Call |
 | --- | --- |
 | Start from the top | `seek(0)`, then `play(now())` |
-| Stop | `seek(0)` |
+| Stop, showing the first frame | `seek(0)` |
 | Resume | `play(now())` |
 | Restart a different sequence | `load(other)`, then `play(now())` |
 | Unload | `load(no_sequence)` |
@@ -290,18 +290,22 @@ s.set_offset_fn(mirrored);
 using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
 ```
 
-It receives the pixel's own playhead, after the offset, and returns a `Sample`: the color, and how long it holds. A meter's color scale, green at one end and red at the other, needs no playhead at all:
+It receives the pixel's own playhead, after the offset, and returns a `Sample`: the color, and how long it holds. A coloured [progress bar](COOKBOOK.md#the-recipes) uses both: the playhead says how lit a pixel is, across the bar's 10 ms stagger, and the index picks its color, green at one end and red at the other:
 
 ```cpp
-static Sample meter_scale(int32_t /*playhead_ms*/, uint16_t index, uint16_t count) {
+static Sample meter_scale(int32_t playhead_ms, uint16_t index, uint16_t count) {
+    const int32_t lit = playhead_ms < 0 ? 0 : playhead_ms > 10 ? 10 : playhead_ms;
     const auto t = static_cast<uint16_t>(index * 65535u / (count > 1 ? count - 1u : 1u));
-    return {Color::lerp(colors::green, colors::red, t), hold_forever};
+    const Color c = Color::lerp(colors::green, colors::red, t);
+    return {Color::lerp(colors::black, c, static_cast<uint16_t>(lit * 65535 / 10)), hold_forever};
 }
 
-s.set_color_fn(meter_scale);
+s.set_color_fn(meter_scale);   // on the progress bar's segment
 ```
 
-The hold is a contract rather than a hint. The strip will not render again before the smallest hold expires, so a function that changes every frame returns 0, one that holds a color for a while says how long, and one that never changes again returns `hold_forever`. Report it honestly and a segment driven by your function sleeps exactly as long as one driven by a step list.
+`hold_forever` is true here only because the bar's sequencer is never played: the bar moves when the application seeks, which is a control call.
+
+The hold is a contract rather than a hint. A caller that sleeps on the answer will not render again before the smallest hold expires, so a function that changes every frame returns 0, one that holds a color for a while says how long, and one that never changes again returns `hold_forever`. Report it honestly and a segment driven by your function sleeps exactly as long as one driven by a step list.
 
 A playhead can be negative, or past the end of whatever the function has in mind, since each pixel's playhead is the sequencer's less its offset.
 
@@ -315,6 +319,8 @@ s.set_color_fn(flame);   // a function of index and time, nothing stored
 strip.add(s);
 ```
 
+Both functions are pure: the only state they receive is their arguments. A replacement configured beyond `pixel_delay` — a hash seeded per device, say — is not expressible; see [deferred](DESIGN.md#deferred).
+
 ### Helpers for replacements
 
 Three pieces of the library's own arithmetic are public because a replacement keeps needing them, and the obvious version of each is subtly wrong:
@@ -326,8 +332,6 @@ uint16_t eased = ease(Transition::EaseInOut, t);       // the curve a fade follo
 ```
 
 `hash` is the only randomness a replacement has, since neither step may keep state: hash the index for a fixed scatter, or the index and a slot of time for something that changes. Its bits are all equally mixed, so `hash(i) % span` scatters evenly — which a multiplicative hash such as `i * 2654435761` reduced the same way does not, and a twinkle built on one fires as a chase. `lerp` and `ease` are exact at both ends, monotonic, and free of the 32-bit division a Cortex-M0 makes a library call of; `ease` is exactly what `at()` applies, so a value eased by hand moves like a fade.
-
-Both functions are pure: the only state they receive is their arguments. A replacement configured beyond `pixel_delay` — a hash seeded per device, say — is not expressible; see [deferred](DESIGN.md#deferred).
 
 ## The strip and its segment list
 
@@ -368,6 +372,8 @@ for (uint8_t i = strip.segment_count(); i > 0; --i)
 strip.segment(0) = Segment(0, kPixels / 2, seq);
 ```
 
+The new segment starts from the defaults, so a stagger or a replacement the old one had is set on the new one again before it is assigned.
+
 A segment holds no animation state, so replacing one costs nothing and the animation underneath does not flinch. An assigned segment that runs past the end of the strip is clipped when painted, since a reference cannot refuse it the way `add()` does. The index must be below `segment_count()` and is not checked: a slot past the count is never painted, so assigning to it changes nothing.
 
 ## Rendering and the hold
@@ -378,9 +384,9 @@ A segment holds no animation state, so replacing one costs nothing and the anima
 | --- | --- | --- |
 | `0` | Something is mid-fade. | Render again at your frame rate. |
 | *n* | Nothing changes for exactly *n* ms. | Sleep *n* ms. |
-| `hold_forever` | Nothing on this strip will change again. | Don't reschedule until a control call changes something. |
+| `hold_forever` | Nothing will change until your code changes something. | Don't reschedule until a control call changes something. |
 
-The answer is the smallest hold across every pixel of every segment, worked out from the same lookups that painted them, so it is exact rather than estimated. A blink reports the time to its next edge, a wipe the time until its next pixel starts moving, a paused gradient `hold_forever`. A device holding a steady status color wakes when the color is due to change, not sixty times a second.
+The answer is the smallest hold across every pixel of every segment, worked out from the same lookups that painted them, so it is exact rather than estimated. A blink reports the time to its next edge, a wipe whose pixels fade one after another the time until the next starts moving, a paused gradient `hold_forever`. A device holding a steady status color wakes when the color is due to change, not sixty times a second.
 
 Rendering is a pure function of the segments and `now`: nothing carries over between frames, and two calls with the same `now` produce the same buffer. Control calls change what the next render shows without the clock moving, so after one, render again rather than waiting out the previous hold.
 

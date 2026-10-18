@@ -70,9 +70,9 @@ void Segment::set_offset_fn(OffsetFn fn) { where_ = fn; }
 void Segment::set_color_fn(ColorFn fn) { what_ = fn; }
 
 bool Segment::finished(int64_t now_ms) const {
-    /* Asked before any pixel, because paint holds a sequencer that is not
-     * playing forever and finished() must not mistake that for landing. A
-     * segment with no sequencer is not playing anything. */
+    /* Asked before any pixel. When the sequencer is not playing, paint reports
+     * hold_forever, and finished() must not mistake that stillness for
+     * landing. A segment with no sequencer is not playing anything. */
     if (sequencer_ == nullptr || !sequencer_->playing() ||
         sequencer_->sequence().total_duration_ms() == hold_forever)
         return false;

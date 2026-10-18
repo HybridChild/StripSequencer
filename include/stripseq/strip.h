@@ -50,9 +50,14 @@ public:
 
     /* Position in the list is paint order: index 0 is painted first and later
      * entries overwrite it wherever they overlap. Segments are only appended,
-     * so a background goes in first and overlays after it. */
-    bool add(const Segment& s);   /* on top of everything already present;
-                                     false if full or s runs past the strip */
+     * so a background goes in first and overlays after it.
+     *
+     * add() puts s on top of everything already present, and returns false if
+     * the list is full or s runs past the strip. It is not [[nodiscard]]: where
+     * the strip's length and the segment's are fixed when the code is written,
+     * a refusal is a mistake the first render shows rather than a condition to
+     * handle, so placing a segment is a plain statement. */
+    bool add(const Segment& s);
     bool remove(uint8_t at);      /* false if at >= count */
 
     /* Removes every segment, which is how an application switching from one

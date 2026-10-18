@@ -27,7 +27,8 @@
  *   re-trigger           load() again, which resets the playhead
  *
  * Every operation is total, which leaves SequenceBuilder::build() as the only
- * place in the library that reports an error.
+ * place in the library that reports an Error. Elsewhere a refusal is a false
+ * from a strip or segment call that changes nothing.
  */
 
 #ifndef STRIPSEQ_SEQUENCER_H_
@@ -45,14 +46,20 @@ namespace stripseq {
  * converts silently -- -Wconversion stays quiet, since no value is lost -- and
  * keeps the wrap as a 2^32 ms jump backwards. Extend the tick to 64 bits
  * first: under Zephyr that is k_uptime_get() in place of k_uptime_get_32().
- * Spelled as a concept rather than as uint32_t, which is unsigned int on one
- * target and unsigned long on another, and asked of the type directly. An
- * integer type is one with %=, which no enum, pointer or floating-point type
- * has, and an unsigned one is one in which -1 converts to its largest value.
- * Neither <type_traits> nor <concepts> is among the two headers the library
- * includes, and Zephyr's minimal C++ library ships neither. The %= test comes
- * first because it has to: for a pointer, T(-1) is not a constant expression,
- * and that is a hard error rather than an unsatisfied constraint. */
+ *
+ * A concept rather than an overload on uint32_t, for two reasons. uint32_t is
+ * unsigned int on one target and unsigned long on another, so an overload on
+ * either spelling lets a 32-bit tick of the other through. And as a plain
+ * overload it would make play(1000) ambiguous; the concept never matches an
+ * int, so a literal still reaches the int64_t overload.
+ *
+ * The concept tests the type by hand, because neither <type_traits> nor
+ * <concepts> is among the two headers the library includes, and Zephyr's
+ * minimal C++ library ships neither. An integer type is one with %=, which no
+ * enum, pointer or floating-point type has; an unsigned one is one in which -1
+ * converts to its largest value. The %= test comes first because it has to:
+ * for a pointer, T(-1) is not a constant expression, and that is a hard error
+ * rather than an unsatisfied constraint. */
 template <typename T>
 concept wrapping_tick = requires(T t) { t %= t; } && T(-1) > T(0) && sizeof(T) <= 4;
 
