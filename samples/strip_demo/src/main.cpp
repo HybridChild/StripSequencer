@@ -44,9 +44,10 @@ static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios)
  * means "come back at the frame rate", and this is the frame rate. */
 static constexpr uint32_t kFramePeriodMs = 16;
 
-/* Bring-up proves wiring, timing and code paths, not light output. A quarter
- * keeps eleven pixels at full white well inside what a USB-powered bench
- * supplies, and is applied in the library's linear space, before gamma. */
+/* Bring-up proves wiring, timing and code paths, not light output. Brightness
+ * is applied in the space colors are written in, before gamma, so 64 of 255
+ * is about 3% of full light, which keeps eleven pixels at full white well
+ * inside what a USB-powered bench supplies. */
 static constexpr uint8_t kBrightness = 64;
 
 /* ---- The stages --------------------------------------------------------- */

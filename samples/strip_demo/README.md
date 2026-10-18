@@ -33,7 +33,7 @@ The user button advances. Each stage names itself on the console when it starts,
 
 Solid red and the white die are seeked rather than played, so they are static too and also print `1 frames` when left. The stages wrap, so pressing again after the gradient starts over at red.
 
-The sample runs at a quarter of full brightness. The stages prove wiring, timing and code paths, not light output, and eleven RGBW pixels at full white draw more than a USB-powered bench should be asked for.
+The sample runs at a brightness of 64 of 255. Brightness is applied before gamma, so that is about 3% of the light. The stages prove wiring, timing and code paths, not light output, and eleven RGBW pixels at full white draw more than a USB-powered bench should be asked for.
 
 ## On other hardware
 

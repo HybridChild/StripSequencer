@@ -9,6 +9,25 @@
 # Strip::bytes_per_pixel, the second changes the output conversion and whether a
 # table is linked -- so no single compiled artifact represents both settings and
 # the whole library is built once per combination.
+
+# One translation unit per public header, holding that header's #include and
+# nothing else, compiled in every variant by stripseq_add_variant() below. The
+# umbrella header cannot show that each header stands on its own: it includes
+# them in one order, so a header leaning on a sibling that happens to come
+# before it still compiles there. Here nothing comes before it.
+#
+# Globbed rather than listed, unlike the sources in cmake/sources.cmake: the
+# point is that a new header is covered without anyone remembering to add it,
+# and CONFIGURE_DEPENDS re-runs the glob when one appears.
+file(GLOB STRIPSEQ_PUBLIC_HEADERS CONFIGURE_DEPENDS ${STRIPSEQ_INCLUDE_DIR}/stripseq/*.h)
+set(STRIPSEQ_HEADER_TUS "")
+foreach(header IN LISTS STRIPSEQ_PUBLIC_HEADERS)
+    get_filename_component(stem ${header} NAME_WE)
+    set(tu ${PROJECT_BINARY_DIR}/header_alone/${stem}.cpp)
+    file(CONFIGURE OUTPUT ${tu} CONTENT "#include <stripseq/${stem}.h>\n")
+    list(APPEND STRIPSEQ_HEADER_TUS ${tu})
+endforeach()
+
 function(stripseq_add_variant name)
     set(lib stripseq_${name})
     set(exe tests_${name})
@@ -49,4 +68,15 @@ function(stripseq_add_variant name)
     target_compile_definitions(${exe} PRIVATE ${expect})
 
     doctest_discover_tests(${exe} TEST_PREFIX "${name}:")
+
+    # The headers one at a time, against this variant's definitions. An object
+    # library rather than more sources in ${exe}, so that
+    # `cmake --build build --target headers_${name}` asks this one question.
+    # Nothing links it: compiling is the whole test.
+    set(headers headers_${name})
+    add_library(${headers} OBJECT ${STRIPSEQ_HEADER_TUS})
+    target_include_directories(${headers} PRIVATE ${STRIPSEQ_INCLUDE_DIR})
+    target_compile_features(${headers} PRIVATE cxx_std_20)
+    target_compile_definitions(${headers} PRIVATE ${ARGN})
+    target_compile_options(${headers} PRIVATE ${STRIPSEQ_WARNINGS})
 endfunction()

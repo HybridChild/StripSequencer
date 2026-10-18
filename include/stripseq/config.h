@@ -45,11 +45,24 @@
 #define STRIPSEQ_CONFIG_H_
 
 #ifndef STRIPSEQ_MAX_STEPS
-#define STRIPSEQ_MAX_STEPS 8        /* steps a sequence can hold; sets sequencer size */
+#define STRIPSEQ_MAX_STEPS 8        /* steps a sequence can hold; sets sequence size */
 #endif
 
 #ifndef STRIPSEQ_MAX_SEGMENTS
 #define STRIPSEQ_MAX_SEGMENTS 4     /* segments a strip can hold; sets strip size */
+#endif
+
+/* Both capacities are counted in uint8_t -- Sequence::count_, Strip::count_
+ * and every segment index -- so past 255 a count wraps before it reaches the
+ * capacity, and the builder or the strip goes on writing from the first slot.
+ * Zero would be an array of nothing. zephyr/Kconfig states the same range;
+ * this is the check for a build that defines the macros itself. */
+#if STRIPSEQ_MAX_STEPS < 1 || STRIPSEQ_MAX_STEPS > 255
+#error "STRIPSEQ_MAX_STEPS must be 1..255: a sequence counts its steps in a uint8_t"
+#endif
+
+#if STRIPSEQ_MAX_SEGMENTS < 1 || STRIPSEQ_MAX_SEGMENTS > 255
+#error "STRIPSEQ_MAX_SEGMENTS must be 1..255: a strip counts its segments in a uint8_t"
 #endif
 
 #ifndef STRIPSEQ_WHITE_CHANNEL

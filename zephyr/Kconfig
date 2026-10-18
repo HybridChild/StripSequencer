@@ -22,7 +22,8 @@ config STRIPSEQ_MAX_STEPS
 	default 8
 	range 1 255
 	help
-	  Sets the size of every Sequence, and so of every Sequencer.
+	  Sets the size of every Sequence. A Sequencer only refers to the
+	  sequence it plays, so its size does not depend on this.
 
 config STRIPSEQ_MAX_SEGMENTS
 	int "Segments a strip can hold"

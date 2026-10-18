@@ -75,7 +75,11 @@ public:
      *
      * The assignment is not checked against the strip's length the way add()
      * is, because a reference cannot refuse. A segment assigned here that runs
-     * past the end is clipped when painted instead of being rejected. */
+     * past the end is clipped when painted instead of being rejected.
+     *
+     * `at` must be below segment_count(), and is not checked. A slot past the
+     * count is never painted, so assigning to one changes nothing on the strip;
+     * past STRIPSEQ_MAX_SEGMENTS it is outside the array altogether. */
     Segment& segment(uint8_t at);
     const Segment& segment(uint8_t at) const;
 

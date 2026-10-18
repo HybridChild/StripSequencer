@@ -79,8 +79,8 @@ static constexpr Sequence kProgress = SequenceBuilder{}
     .build_const();
 
 /* The breathe bottoms out lit rather than dark. Gamma acts after the sequence,
- * so the floor is high in linear terms: at gamma 2.5, 144 leaves the chip at
- * about a quarter of full blue. At kBrightness the fade crosses 9 output
+ * so a floor that is high as written is low in light: at gamma 2.5, 144 leaves
+ * the chip at about a quarter of full blue. At kBrightness the fade crosses 9 output
  * levels, one every ten frames or so. */
 static constexpr Color kDimBlue = Color::rgb8(0, 0, 144);
 static constexpr Sequence kBackground = SequenceBuilder{}

@@ -9,7 +9,7 @@ This is a teaching document, not project documentation. It explains what a C++ t
 - **§1–§2** — what a framework provides, and the one mechanism behind `TEST_CASE`.
 - **§3–§4** — CTest as a separate layer, and what `doctest_discover_tests` generates on your behalf.
 - **§5** — the cost this repo pays: the suite is compiled once per configuration, and why that drives the choice of framework.
-- **§6** — the one-line translation unit, and the honest limit of what it proves.
+- **§6** — one translation unit per header, and the honest limit of what it proves.
 - **§7** — tests that must *not* compile, which no test framework can run, and what `try_compile` does instead.
 - **§8** — tests that pass for the wrong reason: planting bugs to see which ones the suite misses, a bug the target hardware hides, and a test that agrees with itself.
 - **§9** — tests nobody wrote by hand: properties instead of expected values, a generator aimed at the code's decisions, and a failure that replays from one number.
@@ -88,13 +88,13 @@ The tests include the library's headers. The headers are what `STRIPSEQ_WHITE_CH
 
 So the cost is inherent: five configurations means five compiles of every test file. It cannot be shared, only made cheap — and that is what drives the framework choice. A header-only framework with no separate build and a fast-compiling header is worth more here than a feature-rich one, because its compile time is multiplied by the number of variants and paid on every incremental build. This is a specific instance of a general point: **the right tool depends on the shape of the build, not only on the tool's features.**
 
-## 6. The one-line translation unit, and what it does not prove
+## 6. One header per translation unit, and what it does not prove
 
-`tests/umbrella_only.cpp` is a single `#include <stripseq/stripseq.h>` and nothing else. It exists because a header that silently depends on something else having been included first is a real and common bug: it works everywhere in your project and breaks in the first consumer who includes it on a clean page.
+`cmake/stripseq_variant.cmake` writes one source file per public header into the build directory — `header_alone/strip.cpp` is the single line `#include <stripseq/strip.h>` — and compiles them all, in every configuration, as an object library named `headers_<variant>` that nothing links. Compiling is the whole test. It exists because a header that silently depends on something else having been included first is a real and common bug: it works everywhere in your project and breaks in the first consumer who includes it on a clean page.
 
-Be precise about what it establishes, though. It proves the **umbrella** header is self-sufficient — that a consumer who includes only `stripseq/stripseq.h` gets a working set, in all five configurations. It does *not* prove each individual header stands alone: `sequence.h` could rely on `color.h` having been pulled in first, and the umbrella would still compile because it includes both. Proving the stronger property needs one such TU per header, generated or written out.
+Why one per header, rather than one TU holding the umbrella. That single TU would prove the **umbrella** is self-sufficient — that a consumer who includes only `stripseq/stripseq.h` gets a working set — but not that each header is. The umbrella includes them in one fixed order, so `strip.h` could rely on `segment.h` having come first and the umbrella would still compile. Only a TU in which nothing precedes the header can tell. The umbrella is one of the headers, so it gets its own TU too. The list is globbed rather than written out, so a new header is checked without anyone remembering to add it.
 
-That is a deliberate stopping point rather than an oversight — but it is the kind of stopping point worth writing down, because "we have a header self-containment test" invites people to assume the stronger claim.
+Be precise about what it still does not establish. It catches a header that uses something *nothing it includes* provides. It cannot catch one that gets what it uses only *through* another include: if `sequence.h` dropped its own `#include "stripseq/config.h"`, it would still compile alone, because `color.h` includes `config.h`. That is a fragility rather than a bug today — it breaks only when `color.h` changes — and catching it means checking that every name a header uses comes from a header it includes directly. That is what include-what-you-use does, and it is a tool, not a test. Worth writing down, because "we have a header self-containment test" invites people to assume the stronger claim.
 
 ## 7. Tests that must not compile
 
@@ -242,19 +242,32 @@ The test numbers depend on how many cases the suite holds, and the order on `-j`
 
 *Demonstrates §6.*
 
-Delete `#include <cstdint>` from the top of `include/stripseq/color.h`.
+Delete `#include "stripseq/segment.h"` from `include/stripseq/strip.h`. The umbrella on its own still compiles, because it includes `segment.h` before `strip.h`:
 
 ```sh
-cmake --build build --target tests_default
+echo '#include <stripseq/stripseq.h>' | c++ -std=c++20 -Iinclude -fsyntax-only -x c++ - && echo ok
 ```
 
 ```
-include/stripseq/color.h:39:11: error: unknown type name 'uint32_t'
+ok
 ```
 
-**Revert it.** Then try the weaker version of the same mistake: delete `#include "stripseq/config.h"` from `sequence.h` instead. Everything still compiles — `sequence.h` includes `color.h`, which includes `config.h` — and the umbrella TU is happy. **Revert that too.**
+Now ask the per-header check:
 
-**Proves:** §6's limit exactly. The umbrella catches a header that depends on nothing having been included; it cannot catch one that depends on a *sibling* having been included first, because it includes the sibling too.
+```sh
+cmake --build build --target headers_default
+```
+
+```
+FAILED: CMakeFiles/headers_default.dir/header_alone/strip.cpp.o
+include/stripseq/strip.h:53:20: error: unknown type name 'Segment'
+```
+
+A full build would have failed here too, from a second direction: `src/strip.cpp` includes its own header first, which makes every library source a check of that one header. The generated TUs cover the headers no source puts first — `color.h`, `config.h` and the umbrella — and do not depend on that convention holding.
+
+**Revert it.** Then try the weaker version of the same mistake: delete `#include "stripseq/config.h"` from `sequence.h` instead. Everything still compiles, `headers_default` included — `sequence.h` includes `color.h`, which includes `config.h`. **Revert that too.**
+
+**Proves:** §6's line exactly. A TU per header catches a header that depends on a *sibling* having been included first; nothing in the build catches one that depends on what its own includes happen to include.
 
 ### Exercise 5 — A probe that fails for the wrong reason
 

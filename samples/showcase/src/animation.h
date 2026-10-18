@@ -34,7 +34,7 @@ struct Canvas {
 };
 
 /* Eleven RGBW pixels at full white draw more than a USB-powered bench should
- * be asked for. Applied in the library's linear space, before gamma, so 74 is
+ * be asked for. Applied in the space colors are written in, before gamma, so 74 is
  * about 5% of full light and leaves a channel 12 output levels from dark to
  * full: enough for a fade to read as smooth, where 64 leaves eight and a slow
  * fade climbs them as a visible staircase. */

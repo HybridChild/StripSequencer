@@ -90,7 +90,6 @@ if(STRIPSEQ_BUILD_TESTS)
     # which must never see the tests.
     set(STRIPSEQ_TEST_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/tests/doctest_main.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/tests/umbrella_only.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/layout.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/color.cpp
         ${CMAKE_CURRENT_LIST_DIR}/tests/convert.cpp

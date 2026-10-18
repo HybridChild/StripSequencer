@@ -8,9 +8,9 @@
  *
  *   #include <stripseq/stripseq.h>
  *
- * Each header below also stands on its own -- it includes what it uses -- and
- * tests/umbrella_only.cpp is the translation unit that proves it, in every
- * build variant.
+ * Each header below also stands on its own -- it includes what it uses. The
+ * build proves it in every variant by compiling each one, this one included,
+ * as the only line of a translation unit; see cmake/stripseq_variant.cmake.
  */
 
 #ifndef STRIPSEQ_STRIPSEQ_H_

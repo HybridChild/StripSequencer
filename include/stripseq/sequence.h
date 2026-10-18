@@ -67,12 +67,14 @@ struct Step {
     uint32_t   duration_ms;
 };
 
-/* Field order above is load-bearing, not stylistic. `duration_ms` follows the
- * one-byte `transition` so that it lands in the padding trailing `color`.
- * Putting the duration first -- the order that reads more naturally -- costs
- * four bytes per step in an RGB build, multiplied by STRIPSEQ_MAX_STEPS in every
- * sequencer. An RGBW build is 16 either way, since the eight-byte color leaves
- * the duration already aligned; only RGB is sensitive, and RGB is the default. */
+/* Field order above is load-bearing in one respect: the one-byte `transition`
+ * sits beside the six-byte `color`, so the two share one eight-byte span and
+ * `duration_ms`, before them or after, needs no padding. Never put the
+ * duration between them: each is then padded out to its own four-byte
+ * boundary, 16 bytes rather than 12 in an RGB build, four more per step,
+ * multiplied by STRIPSEQ_MAX_STEPS in every sequence. An RGBW build is 16 in
+ * every order, since the eight-byte color already ends aligned; only RGB is
+ * sensitive, and RGB is the default. */
 static_assert(sizeof(Step) == (STRIPSEQ_WHITE_CHANNEL ? 16 : 12),
               "Step has picked up padding -- check field order.");
 

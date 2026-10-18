@@ -52,8 +52,8 @@
 		/*
 		 * The order the chip expects on the wire. The RGB path hands this
 		 * to the driver; led_strip_update_channels() consults it nowhere,
-		 * so on the RGBW path the samples' adapter reads it to build its
-		 * own permute.
+		 * so on the RGBW path the Zephyr module's adapter reads it to
+		 * build its own permute.
 		 */
 		color-mapping = <LED_COLOR_ID_GREEN
 				 LED_COLOR_ID_RED

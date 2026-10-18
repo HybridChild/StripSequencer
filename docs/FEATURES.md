@@ -368,7 +368,7 @@ for (uint8_t i = strip.segment_count(); i > 0; --i)
 strip.segment(0) = Segment(0, kPixels / 2, seq);
 ```
 
-A segment holds no animation state, so replacing one costs nothing and the animation underneath does not flinch. An assigned segment that runs past the end of the strip is clipped when painted, since a reference cannot refuse it the way `add()` does.
+A segment holds no animation state, so replacing one costs nothing and the animation underneath does not flinch. An assigned segment that runs past the end of the strip is clipped when painted, since a reference cannot refuse it the way `add()` does. The index must be below `segment_count()` and is not checked: a slot past the count is never painted, so assigning to it changes nothing.
 
 ## Rendering and the hold
 
