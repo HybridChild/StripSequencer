@@ -319,8 +319,7 @@ static int32_t scatter(uint16_t index, uint16_t /*count*/, int32_t span_q8) {
     const int32_t span = span_q8 >> 8;
     if (span <= 0)
         return 0;
-    const uint32_t h = index * 2654435761u;      // Knuth's multiplicative hash
-    return static_cast<int32_t>(h % static_cast<uint32_t>(span));
+    return static_cast<int32_t>(hash(index) % static_cast<uint32_t>(span));
 }
 
 static constexpr Sequence kTwinkle = SequenceBuilder{}

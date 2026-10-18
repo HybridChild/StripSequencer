@@ -228,8 +228,7 @@ static int32_t scatter(uint16_t index, uint16_t /*count*/, int32_t span_q8) {
     const int32_t span = span_q8 >> 8;
     if (span <= 0)
         return 0;
-    const uint32_t h = index * 2654435761u;      // Knuth's multiplicative hash
-    return static_cast<int32_t>(h % static_cast<uint32_t>(span));
+    return static_cast<int32_t>(hash(index) % static_cast<uint32_t>(span));
 }
 
 static constexpr Sequence kTwinkle = SequenceBuilder{}
@@ -551,6 +550,21 @@ TEST_CASE("Twinkle: thirty distinct phases, all inside the span") {
             CHECK(offsets[i] != offsets[j]);
     }
 
+    /* Distinct is not enough: a multiplicative hash reduced by % gives thirty
+     * distinct offsets whose neighbours sit one of only two distances apart,
+     * and the strip fires as a chase. Unrelated phases make nearly every
+     * neighbour's distance its own. */
+    int32_t steps[kPixels - 1];
+    int distinct_steps = 0;
+    for (uint16_t i = 0; i + 1 < kPixels; ++i) {
+        steps[i] = (offsets[i + 1] - offsets[i] + 1980) % 1980;
+        bool seen = false;
+        for (uint16_t j = 0; j < i; ++j)
+            seen = seen || steps[j] == steps[i];
+        distinct_steps += seen ? 0 : 1;
+    }
+    CHECK(distinct_steps >= 25);
+
     /* And the strip paints them: pixel 0's offset is 0, so pixel i shows now
      * what pixel 0 showed offsets[i] ms ago. */
     REQUIRE(offsets[0] == 0);
@@ -728,7 +742,7 @@ constexpr uint32_t kGolden[] = {
     0x485069ECu,  /* Progress bar */
     0x2BE780C7u,  /* Two halves, different */
     0x7953B45Au,  /* Two halves, converging */
-    0x00CA2899u,  /* Twinkle */
+    0x49A0F6BFu,  /* Twinkle */
     0xF6536567u,  /* Alert over a background */
 };
 #elif STRIPSEQ_WHITE_CHANNEL && STRIPSEQ_GAMMA
@@ -742,7 +756,7 @@ constexpr uint32_t kGolden[] = {
     0x9F3FF124u,  /* Progress bar */
     0xEFD09AE5u,  /* Two halves, different */
     0x7ACADF9Cu,  /* Two halves, converging */
-    0x15CCDEC5u,  /* Twinkle */
+    0x9BFC22C7u,  /* Twinkle */
     0xF2C98435u,  /* Alert over a background */
 };
 #elif !STRIPSEQ_WHITE_CHANNEL && !STRIPSEQ_GAMMA
@@ -756,7 +770,7 @@ constexpr uint32_t kGolden[] = {
     0x0332DF3Eu,  /* Progress bar */
     0xC995E008u,  /* Two halves, different */
     0xB5B317B9u,  /* Two halves, converging */
-    0x8F60A24Du,  /* Twinkle */
+    0x2793422Fu,  /* Twinkle */
     0x5C3AADB3u,  /* Alert over a background */
 };
 #else
@@ -770,7 +784,7 @@ constexpr uint32_t kGolden[] = {
     0xE7D20464u,  /* Progress bar */
     0x914DF1D2u,  /* Two halves, different */
     0x1FCC2F21u,  /* Two halves, converging */
-    0x5F2B7C0Fu,  /* Twinkle */
+    0xE57C8741u,  /* Twinkle */
     0x2CD651F5u,  /* Alert over a background */
 };
 #endif
