@@ -1,0 +1,24 @@
+{
+  // clangd is the IntelliSense engine here: it reads the compile database
+  // scripts/ide-index.sh merges from the build trees (see settings.json), so it
+  // sees exactly the flags the build uses. cpptools would parse the same files
+  // a second time with its own guess at the flags, and the two report
+  // conflicting diagnostics -- hence flagged as unwanted rather than merely
+  // left out.
+  //
+  // The DeviceTree and Kconfig extensions check the samples' overlays and
+  // prj.conf files against the board and the module's Kconfig; settings.json
+  // says how they are pointed at the Zephyr workspace.
+  //
+  // CodeLLDB drives the "Debug a host test" launch configuration; lldb is the
+  // debugger Apple's toolchain ships, so it needs nothing else installed.
+  "recommendations": [
+    "llvm-vs-code-extensions.vscode-clangd",
+    "trond-snekvik.devicetree",
+    "trond-snekvik.kconfig-lang",
+    "vadimcn.vscode-lldb"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.cpptools"
+  ]
+}

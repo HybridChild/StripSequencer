@@ -1,0 +1,18 @@
+# clangd config for both halves of the repo: the host tree, compiled by the host
+# clang, and the samples, compiled by the Zephyr SDK's arm-zephyr-eabi-g++.
+# .vscode/settings.json points clangd at the database scripts/ide-index.sh
+# merges from the two, and authorises it to run the cross-compiler to learn its
+# target and system include paths.
+#
+# clangd's own engine is clang, so the GCC-only codegen flags in the Zephyr
+# commands would each be an "unknown argument" error. They shape code
+# generation only, so dropping them changes nothing clangd analyses. The host
+# commands carry none of them, which is why this needs no path condition.
+CompileFlags:
+  Remove:
+    - -mfp16-format=*
+    - -mtp=*
+    - -fno-reorder-functions
+    - -fno-defer-pop
+    - -fno-printf-return-value
+    - --param=*

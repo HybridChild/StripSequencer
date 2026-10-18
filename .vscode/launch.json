@@ -1,0 +1,33 @@
+{
+  // One test binary per variant, from the Debug tree "host: build (debug)"
+  // writes -- ./build has no debug information. The filter goes to doctest's
+  // --test-case, which takes wildcards: "*" runs every case, "*gamma*" those
+  // whose name mentions gamma.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug a host test",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build-debug/tests_${input:variant}",
+      "args": ["--test-case=${input:testCase}"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "host: build (debug)"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "variant",
+      "type": "pickString",
+      "description": "Which variant's test binary",
+      "options": ["default", "rgbw", "nogamma", "rgbw_nogamma", "tight"],
+      "default": "rgbw"
+    },
+    {
+      "id": "testCase",
+      "type": "promptString",
+      "description": "doctest --test-case filter",
+      "default": "*"
+    }
+  ]
+}

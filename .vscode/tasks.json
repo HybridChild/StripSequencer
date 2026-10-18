@@ -1,0 +1,161 @@
+{
+  // Every task is a thin call to a script in scripts/, which is where each
+  // command's reasons live; nothing here should know more than how to invoke
+  // one. Build with Cmd-Shift-B, test with the "Run Test Task" command.
+  //
+  // $gcc reads clang's diagnostics as well as gcc's -- the two share the
+  // file:line:col: severity: message format. CMake hands the compiler absolute
+  // source paths, so autoDetect resolves every location as written.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "host: build",
+      "type": "shell",
+      "command": "scripts/build.sh",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "host: test",
+      "type": "shell",
+      "command": "scripts/test.sh",
+      "dependsOn": "host: build",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      // The second compiler in the matrix. /usr/bin/g++ is Apple clang, so
+      // homebrew's GCC is named outright, as scripts/build.sh explains.
+      "label": "host: build (gcc)",
+      "type": "shell",
+      "command": "scripts/build.sh build-gcc",
+      "options": { "env": { "CXX": "g++-16" } },
+      "group": "build",
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "host: test (gcc)",
+      "type": "shell",
+      "command": "scripts/test.sh build-gcc",
+      "dependsOn": "host: build (gcc)",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      // ./build carries no debug information -- it is configured with no build
+      // type -- so the debugger gets a tree of its own rather than changing the
+      // one clangd and the tests read.
+      "label": "host: build (debug)",
+      "type": "shell",
+      "command": "scripts/build.sh build-debug -DCMAKE_BUILD_TYPE=Debug",
+      "group": "build",
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "cross-check",
+      "type": "shell",
+      "command": "scripts/cross-check.sh",
+      "group": "test",
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "sample: build",
+      "type": "shell",
+      "command": "scripts/sample-build.sh ${input:sampleBuildFlags}",
+      "options": { "env": { "SAMPLE": "${input:sample}" } },
+      "group": "build",
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "sample: flash",
+      "type": "shell",
+      "command": "scripts/sample-flash.sh ${input:sampleFlashFlags}",
+      "options": { "env": { "SAMPLE": "${input:sample}" } },
+      "problemMatcher": []
+    },
+    {
+      // A dedicated panel, because screen needs a real terminal to read keys
+      // from: quit with Ctrl-A then K, as scripts/console.sh says.
+      "label": "sample: console",
+      "type": "shell",
+      "command": "scripts/console.sh",
+      "presentation": { "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    },
+    {
+      // Not run by any build task, for the reasons scripts/ide-index.sh gives.
+      "label": "ide: index",
+      "type": "shell",
+      "command": "scripts/ide-index.sh",
+      "problemMatcher": []
+    },
+    {
+      // CLAUDE.md's "every change ends green", as one task: both compilers'
+      // five variants, the cross-check for both cores, and the Zephyr builds --
+      // strip_demo in both channel configurations, frame_cost in the bench's.
+      "label": "everything green",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "host: test",
+        "host: test (gcc)",
+        "cross-check",
+        "green: strip_demo",
+        "green: strip_demo --rgb",
+        "green: frame_cost"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "green: strip_demo",
+      "type": "shell",
+      "command": "scripts/sample-build.sh",
+      "hide": true,
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "green: strip_demo --rgb",
+      "type": "shell",
+      "command": "scripts/sample-build.sh --rgb",
+      "hide": true,
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    },
+    {
+      "label": "green: frame_cost",
+      "type": "shell",
+      "command": "scripts/sample-build.sh",
+      "options": { "env": { "SAMPLE": "frame_cost" } },
+      "hide": true,
+      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sample",
+      "type": "pickString",
+      "description": "Which sample",
+      "options": ["strip_demo", "frame_cost", "showcase"],
+      "default": "strip_demo"
+    },
+    {
+      // Substituted into the command line rather than passed in "args", so the
+      // shell splits "--rgb -p" into two words and an empty pick into none --
+      // as an argument it would reach the script as one word, or an empty one.
+      //
+      // Empty is the bench's RGBW; --rgb is the white channel off; -p is a
+      // pristine build after a devicetree or Kconfig edit.
+      "id": "sampleBuildFlags",
+      "type": "pickString",
+      "description": "Flags for scripts/sample-build.sh",
+      "options": ["", "--rgb", "-p", "--rgb -p"],
+      "default": ""
+    },
+    {
+      // The flash script takes only --rgb: which build tree to write.
+      "id": "sampleFlashFlags",
+      "type": "pickString",
+      "description": "Flags for scripts/sample-flash.sh",
+      "options": ["", "--rgb"],
+      "default": ""
+    }
+  ]
+}
