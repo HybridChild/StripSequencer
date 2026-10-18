@@ -302,7 +302,7 @@ Whether the fourth channel exists at all is a build-time choice, alongside the t
 
 On Zephyr the white channel reaches the hardware through `led_strip_update_channels()` rather than `led_strip_update_rgb()`, which is RGB-shaped by definition.
 
-**The pixel buffer is written in neutral channel order.** Red, green, blue, and white if the build has it — packed, three or four bytes per pixel with no padding, since the buffer is the one thing in the design that scales with strip length. Chips do not agree on that order: WS2812 wants green first, and other parts differ again. Rearranging it is left entirely outside the library.
+**The pixel buffer is written in neutral channel order.** Red, green, blue, and white if the build has it — packed, three or four bytes per pixel with no padding, since the buffer is the one thing in the design that scales with strip length. Chips do not agree on that order: WS2812 wants green first, and other parts differ again. Rearranging it is left entirely outside the core; on Zephyr the module's `led_strip` adapter does it.
 
 Channel order is the last transform in the pipeline and the only one carrying no color meaning. Brightness and gamma are real color math and belong inside. Shuffling bytes within a pixel is not — it cannot be subtly wrong, and nothing downstream of it depends on anything but the bytes themselves. That makes it the natural seam: color above it, wiring below. Taking the order as a parameter instead would also put the first hardware-shaped concept inside a core that has so far kept all of them out.
 
@@ -321,7 +321,7 @@ Written down so scope creep has to argue its case.
 - No playlists, scene management, or sequences that chain into other sequences.
 - No endless sequence that holds a start color until each pixel first reaches it. Negative playheads [wrap](#what-happens-off-the-ends) on an endless sequence, and the static gradient, Twinkle and `seek` all depend on that.
 - No per-pixel state of any kind inside the library.
-- No transport and no channel ordering: getting pixels to the hardware, in whatever order the chip wants them, belongs to the platform driver.
+- No transport and no channel ordering in the core: getting pixels to the hardware, in whatever order the chip wants them, belongs to the platform. The Zephyr module is the platform side, and it carries one thin piece of it, the hand-off to a `led_strip` driver in `<stripseq/zephyr/led_strip.h>`, because every Zephyr application would otherwise derive the same permute from the same devicetree property. It stops at the hand-off: the frame loop, the workqueue and the frame rate stay the application's, and nothing in `include/` or `src/` knows the adapter exists.
 - No color-space policy — white is carried, never derived.
 - No output wider than 8 bits per channel: the 16-bit model exists for blending, and the buffer holds what common addressable chips take.
 - No "here is the buffer, draw whatever you like" hook. Effects beyond the built-in vocabulary are reached by replacing one of the [two steps](#two-places-to-plug-in) in the render loop instead, which keeps every other part of the machinery working.

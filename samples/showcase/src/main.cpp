@@ -12,7 +12,7 @@
  * step 1, a playhead driven from outside, segments painted over each other, a
  * whole fire drawn by a step 2.
  *
- * The frame loop and ../common/strip_adapter.h are strip_demo's, plus one
+ * The frame loop and the module's led_strip adapter are strip_demo's, plus one
  * thing it never needs: a tick, for the animations that change on their own
  * schedule rather than the sequencer's -- the wipe changing direction, the
  * progress value moving, the alert firing. Everything runs on the system workqueue, which serialises the work
@@ -27,7 +27,7 @@
 
 #include <stripseq/stripseq.h>
 
-#include "strip_adapter.h"
+#include <stripseq/zephyr/led_strip.h>
 
 using namespace stripseq;
 
@@ -45,7 +45,8 @@ static Sequencer seq;
 static Sequencer seq_b;
 constinit static Strip strip(buffer);
 
-static const struct device* const strip_dev = DEVICE_DT_GET(STRIP_NODE);
+/* The device, and on RGBW the channel order its color-mapping names. */
+static constexpr zephyr::LedStrip strip_out = STRIPSEQ_LED_STRIP_DT_GET(STRIP_NODE);
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 
 /* A hold of 0 means "come back at the frame rate", and this is the frame rate. */
@@ -601,7 +602,7 @@ static void frame(struct k_work*) {
         strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
 
-    const int err = send_frame(strip_dev, buffer, kPixels);
+    const int err = zephyr::update(strip_out, buffer);
     if (err)
         printk("strip update failed: %d\n", err);
 
@@ -663,8 +664,8 @@ static void on_button(const struct device*, struct gpio_callback*, uint32_t) {
 }
 
 int main() {
-    if (!device_is_ready(strip_dev)) {
-        printk("LED strip %s is not ready\n", strip_dev->name);
+    if (!device_is_ready(strip_out.dev)) {
+        printk("LED strip %s is not ready\n", strip_out.dev->name);
         return 0;
     }
     if (!gpio_is_ready_dt(&button) || gpio_pin_configure_dt(&button, GPIO_INPUT) ||

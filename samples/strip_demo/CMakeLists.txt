@@ -9,7 +9,3 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(strip_demo)
 
 target_sources(app PRIVATE src/main.cpp)
-
-# The adapter between the library's buffer and the led_strip driver, shared
-# with the other samples that drive the strip.
-target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common)

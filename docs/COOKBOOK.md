@@ -399,26 +399,24 @@ It is the same backwards loop for the same reason, and it removes every segment 
 
 ## On Zephyr
 
-The platform side is not part of the library. This is its shape, and it is where the neutral buffer layout pays off; [`samples/strip_demo/src/main.cpp`](../samples/strip_demo/src/main.cpp) is a complete one, and [`samples/common/strip_adapter.h`](../samples/common/strip_adapter.h) holds its permute, built from the devicetree's `color-mapping`.
+The platform side is not part of the core. The Zephyr module carries the one piece of it every application would otherwise rewrite, the hand-off to a `led_strip` driver, in [`<stripseq/zephyr/led_strip.h>`](../zephyr/include/stripseq/zephyr/led_strip.h); the frame loop around it is yours, and this is its shape. [`samples/strip_demo/src/main.cpp`](../samples/strip_demo/src/main.cpp) is a complete one.
 
 ```cpp
-const struct device* dev = DEVICE_DT_GET(DT_ALIAS(led_strip));
+#include <stripseq/zephyr/led_strip.h>
+
+// The device, and on RGBW the channel order its color-mapping names.
+static constexpr stripseq::zephyr::LedStrip out =
+    STRIPSEQ_LED_STRIP_DT_GET(DT_ALIAS(led_strip));
 
 void frame_work(struct k_work* work) {
     const int64_t now = k_uptime_get();       // sampled once for the whole frame
     strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
-
-#if STRIPSEQ_WHITE_CHANNEL
-    permute_in_place(buffer, kPixels);           // into the chip's channel order
-    led_strip_update_channels(dev, buffer, sizeof(buffer));
-#else
-    led_strip_update_rgb(dev, (struct led_rgb*)buffer, kPixels);
-#endif
+    stripseq::zephyr::update(out, buffer);    // into the chip's order, and out
 
     if (hold != hold_forever)
         k_work_reschedule(&frame_work_item, K_MSEC(hold ? hold : 16));
 }
 ```
 
-The RGB path casts the buffer straight through, because neutral order is exactly what `led_strip_update_rgb()` wants and the driver applies `color-mapping` itself. That cast is only valid while `CONFIG_LED_STRIP_RGB_SCRATCH` is off, which the sample checks at compile time. The RGBW path has no such luck, and not by a small margin: `struct led_rgb` carries no fourth channel, so `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero and `led_strip_update_rgb()` cannot light the white die at all. `led_strip_update_channels()` is therefore the only option rather than the tidier one, and it takes a raw array already in the chip's own order, consulting `color-mapping` nowhere — so `permute_in_place` is the adapter's own: a within-pixel byte shuffle needing no second buffer.
+The RGB path casts the buffer straight through, because neutral order is exactly what `led_strip_update_rgb()` wants and the driver applies `color-mapping` itself. That cast is only valid while `CONFIG_LED_STRIP_RGB_SCRATCH` is off, which the header checks at compile time. The RGBW path has no such luck, and not by a small margin: `struct led_rgb` carries no fourth channel, so `ws2812_i2s.c` resolves `LED_COLOR_ID_WHITE` to a hard zero and `led_strip_update_rgb()` cannot light the white die at all. `led_strip_update_channels()` is therefore the only option rather than the tidier one, and it takes a raw array already in the chip's own order, consulting `color-mapping` nowhere — so the permute is the adapter's own: a within-pixel byte shuffle needing no second buffer, worked out at compile time from the node's `color-mapping`, which must name red, green, blue and white once each or the build fails.

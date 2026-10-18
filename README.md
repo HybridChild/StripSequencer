@@ -54,7 +54,7 @@ CONFIG_STD_CPP20=y
 CONFIG_STRIPSEQ=y
 ```
 
-Zephyr's default minimal C++ library is enough: the core includes only `<cstdint>` and `<cstddef>`.
+Zephyr's default minimal C++ library is enough: the core includes only `<cstdint>` and `<cstddef>`. The module also carries `<stripseq/zephyr/led_strip.h>`, which hands a rendered frame to a `led_strip` driver in the order its devicetree `color-mapping` names; the [cookbook](docs/COOKBOOK.md#on-zephyr) shows the frame loop around it.
 
 ### Blink
 

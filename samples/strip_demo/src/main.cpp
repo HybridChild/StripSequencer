@@ -8,10 +8,10 @@
  * through the stages described in this sample's README.md.
  *
  * The library never touches hardware or reads a clock, so everything platform-
- * shaped is here or in ../common/strip_adapter.h: the frame loop on a
- * k_work_delayable, k_uptime_get() sampled once per frame, the hold turned
- * into a reschedule, and, in the adapter, the channel permute and the strip
- * update. The user button advances to the next stage.
+ * shaped is here or in the Zephyr module's <stripseq/zephyr/led_strip.h>: the
+ * frame loop on a k_work_delayable, k_uptime_get() sampled once per frame, the
+ * hold turned into a reschedule, and, in the module, the channel permute and
+ * the strip update. The user button advances to the next stage.
  *
  * Both work items run on the system workqueue, which serialises them: a stage
  * change can never land halfway through a render, so nothing here locks.
@@ -24,7 +24,7 @@
 
 #include <stripseq/stripseq.h>
 
-#include "strip_adapter.h"
+#include <stripseq/zephyr/led_strip.h>
 
 using namespace stripseq;
 
@@ -36,7 +36,8 @@ static uint8_t   buffer[kPixels * Strip::bytes_per_pixel];
 static Sequencer seq;
 constinit static Strip strip(buffer);
 
-static const struct device* const strip_dev = DEVICE_DT_GET(STRIP_NODE);
+/* The device, and on RGBW the channel order its color-mapping names. */
+static constexpr zephyr::LedStrip strip_out = STRIPSEQ_LED_STRIP_DT_GET(STRIP_NODE);
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 
 /* A frame with nothing animating still costs a full transfer, so a hold of 0
@@ -157,7 +158,7 @@ static void frame(struct k_work*) {
     strip.drop_finished(now);
     const uint32_t hold = strip.render(now);
 
-    const int err = send_frame(strip_dev, buffer, kPixels);
+    const int err = zephyr::update(strip_out, buffer);
     if (err)
         printk("strip update failed: %d\n", err);
     ++frames;
@@ -209,8 +210,8 @@ static void on_button(const struct device*, struct gpio_callback*, uint32_t) {
 }
 
 int main() {
-    if (!device_is_ready(strip_dev)) {
-        printk("LED strip %s is not ready\n", strip_dev->name);
+    if (!device_is_ready(strip_out.dev)) {
+        printk("LED strip %s is not ready\n", strip_out.dev->name);
         return 0;
     }
     if (!gpio_is_ready_dt(&button) || gpio_pin_configure_dt(&button, GPIO_INPUT) ||

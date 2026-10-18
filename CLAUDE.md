@@ -49,4 +49,4 @@ The guides follow a shared skeleton, and an edit keeps it: an opening roadmap, n
 
 ## Bench hardware
 
-A Nucleo-H753ZI driving an 11-pixel RGBW strip over I2S3 on PD6, via `worldsemi,ws2812-i2s`. The one fact that reaches into everything host-side: the board runs `STRIPSEQ_WHITE_CHANNEL=1`, which is **not** the library default, so RGBW is a first-class entry in the host test matrix rather than a variant. What has been verified against the driver source is recorded where it applies — the overlay, `prj.conf`, `zephyr/Kconfig` and the sample's adapter — so check there before re-deriving it.
+A Nucleo-H753ZI driving an 11-pixel RGBW strip over I2S3 on PD6, via `worldsemi,ws2812-i2s`. The one fact that reaches into everything host-side: the board runs `STRIPSEQ_WHITE_CHANNEL=1`, which is **not** the library default, so RGBW is a first-class entry in the host test matrix rather than a variant. What has been verified against the driver source is recorded where it applies — the overlay, `prj.conf`, `zephyr/Kconfig` and the module's `led_strip` adapter — so check there before re-deriving it.

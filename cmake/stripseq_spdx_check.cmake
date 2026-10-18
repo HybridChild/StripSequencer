@@ -6,8 +6,9 @@
 #
 # The files are the ones that leave: include/ and src/, which are what an
 # application compiles into its image and the headers it may vendor one at a
-# time, and samples/, whose adapter and main.cpp are the code most likely to be
-# lifted wholesale into someone's own board. The rest -- tests, build files,
+# time, zephyr/, whose led_strip adapter a Zephyr application compiles in the
+# same way, and samples/, whose main.cpp is the code most likely to be lifted
+# wholesale into someone's own board. The rest -- tests, build files,
 # scripts, CI -- only ever travels with the repository, and LICENSE beside it.
 #
 # The file has two halves, as stripseq_cookbook_check.cmake does. Included from
@@ -28,7 +29,7 @@ if(CMAKE_SCRIPT_MODE_FILE)
     file(REAL_PATH "${ROOT}" ROOT)
 
     set(_globs)
-    foreach(_dir include src samples)
+    foreach(_dir include src zephyr samples)
         foreach(_ext h cpp overlay)
             list(APPEND _globs ${ROOT}/${_dir}/*.${_ext})
         endforeach()
