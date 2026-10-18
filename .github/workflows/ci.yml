@@ -22,7 +22,7 @@ jobs:
       matrix:
         compiler: [gcc, clang]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
@@ -61,7 +61,7 @@ jobs:
       matrix:
         compiler: [gcc, clang]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
@@ -104,7 +104,7 @@ jobs:
     name: freestanding cross-compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-arm-none-eabi
@@ -129,9 +129,9 @@ jobs:
       # ~/.cmake, which a cache restore does not bring back.
       ZEPHYR_SDK_INSTALL_DIR: ${{ github.workspace }}/../zephyr-sdk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -146,7 +146,7 @@ jobs:
       # download.
       - name: Cache the workspace and SDK
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.ZEPHYR_WORKSPACE }}
