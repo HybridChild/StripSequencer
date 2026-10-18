@@ -10,7 +10,7 @@ An OS-agnostic C++20 library for animating WS2812-style LED strips: a **standalo
 
 **Ask rather than pick an interpretation and carry on.** That covers ambiguity in the design, a case it does not cover, and anything that looks wrong — including a recorded decision that turns out not to survive contact with a change. Say what is unclear, give the concrete options and what each costs, and recommend one.
 
-Asking is cheap here and guessing is not. This is a learning project, so an unexamined assumption does not just risk being wrong — it skips the part that was the point. It also hardens fast: it becomes code, then precedent, then something later work quietly builds on.
+Asking is cheap here and guessing is not. An unexamined assumption does not just risk being wrong; it hardens fast, becoming code, then precedent, then something later work quietly builds on.
 
 This is not licence to stop at every fork. Do everything that does not depend on the answer first, then ask once, with the question narrowed to what actually blocks.
 
@@ -35,11 +35,9 @@ These hold for every change.
 - **Only `<cstdint>` and `<cstddef>`.** They are what Zephyr's default minimal C++ library provides, so a third header is a library that does not build there. Where a `min` is wanted, write it. `scripts/cross-check.sh` enforces this, along with an allowlist of the run-time helpers each object may call.
 - **Every change ends green**: all five variants (`default`, `rgbw`, `nogamma`, `rgbw_nogamma`, `tight`) on gcc and clang, the cross-check for both cores, and the Zephyr builds of the samples: strip_demo in both channel configurations, frame_cost in the bench's.
 
-## The learning goal, and the guides in `notes/`
+## The guides in `notes/`
 
-**This project is a vehicle for learning C++, CMake, and more Zephyr** — the way `../ClimateNode/` was a vehicle for Zephyr, MQTT and Protobuf. Where a choice trades a shortcut against understanding one of those three, prefer the one that teaches.
-
-That learning is written down in `notes/`. The split mirrors the reference project: `docs/` and the code record what *this* project decided, while **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example — see [`../ClimateNode/notes/README.md`](../ClimateNode/notes/README.md) for the model. A guide should be readable by someone who has never seen this project.
+The split mirrors the reference project: `docs/` and the code record what *this* project decided, while **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example — see [`../ClimateNode/notes/README.md`](../ClimateNode/notes/README.md) for the model. A guide should be readable by someone who has never seen this project.
 
 The guides follow a shared skeleton, and an edit keeps it: an opening roadmap, numbered concept sections each building on the last, a synthesis where there is one, a **lab** of numbered exercises with commands, expected output and a **Proves:** line, then the model in one paragraph and where to go next. Cross-reference by `§` within a guide and by name across them. Cite this repo by function name, and Zephyr by `file:line` against v4.4.1. Keep `notes/README.md` current as the index — reading order, dependencies, and what each guide assumes.
 
