@@ -27,6 +27,40 @@ namespace stripseq {
 
 enum class Transition : uint8_t { Step, Linear, EaseIn, EaseOut, EaseInOut };
 
+/* The curve a fade follows, on a 0..65535 parameter in and out: what at()
+ * applies to how far through a step the playhead is, before it blends. Public
+ * because a ColorFn that eases between values of its own wants the same
+ * curves. A Step is not a curve -- at() never eases one -- and here, like
+ * Linear, returns t unchanged.
+ *
+ * Each is exact at both ends and monotonic, because each is the floor of a
+ * monotonic function -- a curve that topped out at 65534 would leave a one-LSB
+ * step at every transition boundary, a visible tick in a slow breathe. */
+constexpr uint16_t ease(Transition kind, uint16_t t) {
+    switch (kind) {
+    case Transition::EaseIn:
+        return static_cast<uint16_t>(detail::div65535(uint32_t{t} * t));        /* t^2 */
+    case Transition::EaseOut: {
+        const uint32_t u = 65535u - t;
+        return static_cast<uint16_t>(65535u - detail::div65535(u * u));        /* 1 - (1-t)^2 */
+    }
+    case Transition::EaseInOut: {
+        /* EaseIn on the first half and EaseOut on the second, each at double
+         * speed: 2t^2, then 1 - 2(1-t)^2. Both products stay inside
+         * div65535's range, and the halves meet at 32766 and 32769 either
+         * side of the middle, so the whole is monotonic and point-symmetric. */
+        if (t < 32768)
+            return static_cast<uint16_t>(detail::div65535(2 * uint32_t{t} * t));
+        const uint32_t u = 65535u - t;
+        return static_cast<uint16_t>(65535u - detail::div65535(2 * u * u));
+    }
+    case Transition::Step:
+    case Transition::Linear:
+        break;
+    }
+    return t;
+}
+
 struct Step {
     Color      color;        /* the color arrived at by the end of this step */
     Transition transition;   /* how it is approached from the previous color */

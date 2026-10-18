@@ -480,7 +480,7 @@ Without floating point, every value is an integer and every rounding is a floor,
 
 ## 12. Where to go next
 
-- **`src/sequence.cpp`** — `progress()`, `ease()` and `Sequence::at()`, about a hundred lines in which every section of this guide appears once, with the bound or the argument written beside it.
+- **`src/sequence.cpp`** — `progress()` and `Sequence::at()`, with `ease()` beside `Transition` in `include/stripseq/sequence.h`: about a hundred lines in which every section of this guide appears once, with the bound or the argument written beside it.
 - **`include/stripseq/color.h`** — `Color::lerp()`, and `Color::rgb8()`'s ×257, the same "exact at both ends" argument applied to widening 8 bits to 16.
 - **`tests/color.cpp` and `tests/sequence.cpp`** — §8's sweeps and boundary sets, as written.
 - **`src/color.cpp`** — `convert()`, §6's rescaled knob in one line, and `make_gamma_table()`, §7 in twenty lines, and **[`gamma-and-color-guide.md`](gamma-and-color-guide.md)** for why the table exists and why its exponent is a choice about the eye.

@@ -43,6 +43,14 @@ constexpr uint32_t div65535(uint32_t x) {
 
 }  // namespace detail
 
+/* One channel of Color::lerp, for a ColorFn blending something that is not a
+ * color: a level, a heat, a height. t: 0 = a, 65535 = b. Exact at both ends
+ * and monotonic in t, for the reasons Color::lerp gives. */
+constexpr uint16_t lerp(uint16_t a, uint16_t b, uint16_t t) {
+    return static_cast<uint16_t>(
+        detail::div65535(uint32_t{a} * (65535u - t) + uint32_t{b} * t));
+}
+
 struct Color {
     uint16_t r, g, b;
 #if STRIPSEQ_WHITE_CHANNEL
@@ -125,16 +133,17 @@ struct Color {
      * largest the numerator can be is 65535^2, which fits, and is exactly the
      * range detail::div65535 is exact over. Exact at both ends and monotonic in
      * t. Never x + (y - x) * t / 65535: it needs a signed intermediate, and is
-     * easy to get wrong in the direction where y < x. */
+     * easy to get wrong in the direction where y < x.
+     *
+     * The channel blend is the free stripseq::lerp above, qualified because
+     * this member hides it. */
     static constexpr Color lerp(Color a, Color b, uint16_t t) {
-        const auto mix = [t](uint16_t x, uint16_t y) {
-            return static_cast<uint16_t>(
-                detail::div65535(uint32_t{x} * (65535u - t) + uint32_t{y} * t));
-        };
 #if STRIPSEQ_WHITE_CHANNEL
-        return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.w, b.w)};
+        return Color{stripseq::lerp(a.r, b.r, t), stripseq::lerp(a.g, b.g, t),
+                     stripseq::lerp(a.b, b.b, t), stripseq::lerp(a.w, b.w, t)};
 #else
-        return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b)};
+        return Color{stripseq::lerp(a.r, b.r, t), stripseq::lerp(a.g, b.g, t),
+                     stripseq::lerp(a.b, b.b, t)};
 #endif
     }
 };

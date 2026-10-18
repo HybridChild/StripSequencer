@@ -305,6 +305,18 @@ The hold is a contract rather than a hint. The strip will not render again befor
 
 A playhead can be negative, or past the end of whatever the function has in mind, since each pixel's playhead is the sequencer's less its offset.
 
+### Helpers for replacements
+
+Three pieces of the library's own arithmetic are public because a replacement keeps needing them, and the obvious version of each is subtly wrong:
+
+```cpp
+uint32_t h = hash(index);                              // pseudo-random, from the pixel alone
+uint16_t level = lerp(dim, bright, t);                 // Color::lerp for one 16-bit value
+uint16_t eased = ease(Transition::EaseInOut, t);       // the curve a fade follows
+```
+
+`hash` is the only randomness a replacement has, since neither step may keep state: hash the index for a fixed scatter, or the index and a slot of time for something that changes. Its bits are all equally mixed, so `hash(i) % span` scatters evenly — which a multiplicative hash such as `i * 2654435761` reduced the same way does not, and a twinkle built on one fires as a chase. `lerp` and `ease` are exact at both ends, monotonic, and free of the 32-bit division a Cortex-M0 makes a library call of; `ease` is exactly what `at()` applies, so a value eased by hand moves like a fade.
+
 Both functions are pure: the only state they receive is their arguments. A replacement configured beyond `pixel_delay` — a hash seeded per device, say — is not expressible; see [deferred](DESIGN.md#deferred).
 
 ## The strip and its segment list

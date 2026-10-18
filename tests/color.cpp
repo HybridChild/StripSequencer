@@ -87,6 +87,25 @@ TEST_CASE("lerp blends every channel independently, w included") {
 static_assert(Color::lerp(colors::black, colors::red, 65535).r == 65535);
 static_assert(Color::lerp(colors::black, colors::red, 0).r == 0);
 
+/* The free lerp is the channel blend Color::lerp is made of, so the checks
+ * above cover its arithmetic; this pins that the two stay one function. */
+TEST_CASE("the free lerp is Color::lerp's channel blend") {
+    for (uint16_t x : grid) {
+        for (uint16_t y : grid) {
+            CAPTURE(x);
+            CAPTURE(y);
+            bool same = true;
+            for (uint32_t t = 0; t <= 65535; t += 257)
+                same = same && lerp(x, y, static_cast<uint16_t>(t)) ==
+                                   mix(x, y, static_cast<uint16_t>(t));
+            CHECK(same);
+        }
+    }
+}
+
+static_assert(lerp(0, 65535, 32768) == 32768);
+static_assert(lerp(65535, 0, 65535) == 0);
+
 /* Color::rgb8, the 8-bit convenience. */
 
 TEST_CASE("rgb8 reaches full scale and round-trips every byte") {

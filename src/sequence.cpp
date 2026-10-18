@@ -5,7 +5,7 @@
  */
 
 /* Sequence::at() -- the function every other part of the library exists to
- * call -- and the easing curves behind it.
+ * call. The easing curves behind it are public, and live in the header.
  */
 
 #include "stripseq/sequence.h"
@@ -31,35 +31,6 @@ uint16_t progress(uint32_t elapsed, uint32_t duration) {
         duration >>= 1;
     }
     return static_cast<uint16_t>(elapsed * full / duration);
-}
-
-/* The curves, on a 0..65535 parameter in and out. Each is exact at both ends
- * and monotonic, because each is the floor of a monotonic function -- a curve
- * that topped out at 65534 would leave a one-LSB step at every transition
- * boundary, a visible tick in a slow breathe. */
-uint16_t ease(Transition kind, uint16_t t) {
-    switch (kind) {
-    case Transition::EaseIn:
-        return static_cast<uint16_t>(detail::div65535(uint32_t{t} * t));        /* t^2 */
-    case Transition::EaseOut: {
-        const uint32_t u = full - t;
-        return static_cast<uint16_t>(full - detail::div65535(u * u));          /* 1 - (1-t)^2 */
-    }
-    case Transition::EaseInOut: {
-        /* EaseIn on the first half and EaseOut on the second, each at double
-         * speed: 2t^2, then 1 - 2(1-t)^2. Both products stay inside
-         * div65535's range, and the halves meet at 32766 and 32769 either
-         * side of the middle, so the whole is monotonic and point-symmetric. */
-        if (t < 32768)
-            return static_cast<uint16_t>(detail::div65535(2 * uint32_t{t} * t));
-        const uint32_t u = full - t;
-        return static_cast<uint16_t>(full - detail::div65535(2 * u * u));
-    }
-    case Transition::Step:
-    case Transition::Linear:
-        break;
-    }
-    return t;
 }
 
 }  // namespace

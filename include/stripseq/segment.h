@@ -62,6 +62,26 @@ using OffsetFn = int32_t (*)(uint16_t index, uint16_t count, int32_t delay_q8);
  *                exactly as long as one driven by a step list. */
 using ColorFn = Sample (*)(int32_t playhead_ms, uint16_t index, uint16_t count);
 
+/* A pseudo-random number for a replacement that wants one: a hash of the
+ * pixel's index for an offset, or of the index and a time slot for a spark.
+ * Neither step may keep state, so a hash of what it is given is the only
+ * randomness either has, and the same arguments always draw the same picture.
+ *
+ * Wellons' lowbias32: every input bit reaches every output bit, so any bits
+ * of the result are as good as any others and `hash(i) % span` scatters
+ * evenly. Never reduce a multiplicative hash like i * 2654435761 that way: the
+ * remainder is near-linear in i, so neighbouring pixels land one of two fixed
+ * distances apart and fire as a chase. A bijection on uint32_t, so distinct inputs
+ * never collide; hash(0) is 0. */
+constexpr uint32_t hash(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
 /* Fit intent: the delay that spreads total_ms evenly across count pixels.
  * A free function rather than a Segment method, because the result is just a
  * delay -- once computed there is nothing about it left to remember.

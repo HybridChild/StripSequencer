@@ -339,6 +339,24 @@ TEST_CASE("the curves have the shapes their names promise") {
     CHECK(symmetric);
 }
 
+/* The same 65535 ms fade shows the public curve directly, so a ColorFn that
+ * calls ease() gets exactly the curve a step's fade follows. */
+TEST_CASE("ease() is the curve at() applies") {
+    for (Transition kind : {Transition::Linear, Transition::EaseIn,
+                            Transition::EaseOut, Transition::EaseInOut}) {
+        CAPTURE(static_cast<int>(kind));
+        const Sequence s = built(SequenceBuilder{}.fade_to(red_only, 65535, kind).repeat(1));
+        bool same = true;
+        for (int32_t p = 0; p < 65535; ++p)
+            same = same && s.at(p).color.r == ease(kind, static_cast<uint16_t>(p));
+        CHECK(same);
+        CHECK(ease(kind, 65535) == 65535);
+    }
+}
+
+static_assert(ease(Transition::Step, 1234) == 1234);
+static_assert(ease(Transition::EaseIn, 32768) == 16384);
+
 TEST_CASE("a fade longer than a minute stays monotonic and reaches its target") {
     /* Past 65536 ms the fade's progress is computed on shifted values, so it
      * is checked separately from the exhaustive case above. */

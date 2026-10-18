@@ -170,23 +170,11 @@ static constexpr uint32_t kSlotMs = 400;
 static constexpr uint32_t kSparkMs = 30;
 static constexpr uint32_t kSparkFadeMs = 330;
 
-/* Wellons' lowbias32: every input bit reaches every output bit. Never take a
- * weaker hash's low bits with %: on a short span, neighbouring pixels land a
- * constant step apart and fire as a chase. */
-static uint32_t mix(uint32_t h) {
-    h ^= h >> 16;
-    h *= 0x7feb352du;
-    h ^= h >> 15;
-    h *= 0x846ca68bu;
-    h ^= h >> 16;
-    return h;
-}
-
 /* The spark that pixel index fires in slot, t ms after the slot began, as a
  * 16-bit level. t may run past the slot, which is how the previous slot's
  * spark fades on into this one. */
 static uint16_t spark(uint16_t index, uint32_t slot, uint32_t t) {
-    const uint32_t h = mix(slot * 2654435761u ^ mix(index + 1u));
+    const uint32_t h = hash(slot * 2654435761u ^ hash(index + 1u));
     if ((h & 3) == 0)
         return 0;
     /* A multiply-high, so the start reads the top bits and the skip the bottom
@@ -243,33 +231,24 @@ static_assert(kSparkMs + kSparkFadeMs <= kSlotMs, "a spark must be over within a
  *
  * Heights, levels and heats are all Q16: 65536 is the whole strip, or full. */
 
-static uint16_t blend(uint16_t a, uint16_t b, uint16_t t) {
-    return static_cast<uint16_t>((uint32_t{a} * (65535u - t) + uint32_t{b} * t) / 65535u);
-}
-
-/* 3f^2 - 2f^3, which eases into and out of every lattice point. A linear blend
- * turns a corner there, and on a slow fade the eye catches the corner. */
-static uint16_t smooth(uint16_t f) {
-    const uint64_t x = f;
-    return static_cast<uint16_t>((x * x * (3u * 65536u - 2u * x)) >> 32);
-}
-
 /* Value noise over a plane: a hashed level at every whole (x, y), blended
- * smoothly between. x and y are Q16, so a lattice cell is 65536 units wide,
+ * between on an ease-in-out, which flattens into and out of every lattice
+ * point. A linear blend turns a corner there, and on a slow fade the eye
+ * catches the corner. x and y are Q16, so a lattice cell is 65536 units wide,
  * and the plane repeats after 65536 cells with no seam, because the neighbour
  * of the last cell is the first. A coordinate that overflows is therefore
  * harmless, which is what lets time drive one without bound. */
 static uint16_t lattice(uint32_t x, uint32_t y, uint32_t seed) {
-    return static_cast<uint16_t>(mix(x * 2654435761u ^ mix(y ^ seed)) >> 16);
+    return static_cast<uint16_t>(hash(x * 2654435761u ^ hash(y ^ seed)) >> 16);
 }
 
 static uint16_t noise(uint32_t x, uint32_t y, uint32_t seed) {
     const uint32_t x0 = x >> 16, x1 = (x0 + 1) & 0xFFFF;
     const uint32_t y0 = y >> 16, y1 = (y0 + 1) & 0xFFFF;
-    const uint16_t sx = smooth(static_cast<uint16_t>(x));
-    const uint16_t sy = smooth(static_cast<uint16_t>(y));
-    return blend(blend(lattice(x0, y0, seed), lattice(x1, y0, seed), sx),
-                 blend(lattice(x0, y1, seed), lattice(x1, y1, seed), sx), sy);
+    const uint16_t sx = ease(Transition::EaseInOut, static_cast<uint16_t>(x));
+    const uint16_t sy = ease(Transition::EaseInOut, static_cast<uint16_t>(y));
+    return lerp(lerp(lattice(x0, y0, seed), lattice(x1, y0, seed), sx),
+                lerp(lattice(x0, y1, seed), lattice(x1, y1, seed), sx), sy);
 }
 
 /* Noise in time alone: a fresh level every period_ms, eased between. */
@@ -352,7 +331,7 @@ static uint16_t ember_heat(uint32_t y, uint32_t t, uint16_t count) {
     uint32_t hottest = 0;
     for (uint32_t k = 0; k < kEmberSlots && k <= slot; ++k) {
         const uint32_t s = slot - k;
-        const uint32_t h = mix(s * 2654435761u ^ 0x5EEDu);
+        const uint32_t h = hash(s * 2654435761u ^ 0x5EEDu);
         if (h & 1)
             continue;
         const uint32_t birth =

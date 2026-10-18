@@ -119,6 +119,31 @@ uint32_t render_alone(const Segment& s, uint8_t (&buffer)[kBytes], int64_t now_m
 }  // namespace
 
 /* ------------------------------------------------------------------------ */
+/* hash                                                                      */
+/* ------------------------------------------------------------------------ */
+
+/* Reference values from an independent implementation of lowbias32, so a
+ * mistyped constant cannot pass by agreeing with itself. */
+static_assert(hash(0) == 0);
+static_assert(hash(1) == 0x688990C0u);
+static_assert(hash(2) == 0xD1132181u);
+static_assert(hash(0xFFFFFFFFu) == 0x6768824Au);
+static_assert(hash(0xDEADBEEFu) == 0xE628C683u);
+
+/* The property the header promises, and the one a multiplicative hash lacks:
+ * flipping any input bit can flip any output bit. A multiply alone never lets
+ * a high input bit reach a low output bit. */
+TEST_CASE("hash lets every input bit reach every output bit") {
+    for (uint32_t bit = 0; bit < 32; ++bit) {
+        CAPTURE(bit);
+        uint32_t reached = 0;
+        for (uint32_t x = 0; x < 1000; ++x)
+            reached |= hash(x) ^ hash(x ^ (uint32_t{1} << bit));
+        CHECK(reached == 0xFFFFFFFFu);
+    }
+}
+
+/* ------------------------------------------------------------------------ */
 /* spread                                                                    */
 /* ------------------------------------------------------------------------ */
 
