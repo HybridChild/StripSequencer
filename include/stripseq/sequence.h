@@ -355,14 +355,13 @@ private:
  *
  * Endless, so a segment on it is never finished and is never dropped, and one
  * black step of the longest loop the builder accepts, 2^29 ms, so the
- * playhead the sequencer hands out takes as long as it can to come round:
- * 0 at play(), climbing a millisecond a millisecond, and back to 0 every 6.2
- * days. A ColorFn that keys a pattern off the playhead -- a slot of time
- * hashed into a spark -- jumps once at that wrap, and nowhere else. Each
- * pixel's playhead is the sequencer's less its stagger, as always, so on a
- * staggered segment a ColorFn sees negative playheads for the first moments
- * after play(). The black step is what the segment shows if its ColorFn is
- * taken away.
+ * playhead the sequencer hands out takes as long as it can to come round: 0
+ * at play(), and back to 0 every 6.2 days. A ColorFn that keys a pattern off
+ * the playhead -- a slot of time hashed into a spark -- jumps once at that
+ * wrap, and nowhere else. Each pixel's playhead is the sequencer's less its
+ * stagger, as always, so on a staggered segment a ColorFn sees negative
+ * playheads for the first moments after play(). The black step is what the
+ * segment shows if its ColorFn is taken away.
  *
  * Not named clock: with `using namespace stripseq`, that collides with
  * <time.h>'s clock() the moment both are in scope. */

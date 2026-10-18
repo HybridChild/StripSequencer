@@ -79,7 +79,7 @@ This repo goes one step further and puts its warnings behind `PROJECT_IS_TOP_LEV
 ```cmake
 if(PROJECT_IS_TOP_LEVEL)
     set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow
-        -Wconversion -Wsign-conversion)
+        -Wconversion -Wsign-conversion -Wundef)
     target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()
 ```

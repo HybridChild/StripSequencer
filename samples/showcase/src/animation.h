@@ -34,10 +34,10 @@ struct Canvas {
 };
 
 /* Eleven RGBW pixels at full white draw more than a USB-powered bench should
- * be asked for. Applied in the space colors are written in, before gamma, so 74 is
- * about 5% of full light and leaves a channel 12 output levels from dark to
- * full: enough for a fade to read as smooth, where 64 leaves eight and a slow
- * fade climbs them as a visible staircase. */
+ * be asked for. Applied in the space colors are written in, before gamma, so
+ * 74 is about 5% of full light and leaves a channel 12 output levels from dark
+ * to full: enough for a fade to read as smooth, where 64 leaves eight and a
+ * slow fade climbs them as a visible staircase. */
 inline constexpr uint8_t kBrightness = 74;
 
 struct Animation {
@@ -45,8 +45,8 @@ struct Animation {
     /* Called on an empty strip, at the brightness below. */
     void (*show)(Canvas& c, int64_t now);
     /* Run every tick_ms while the animation is up, or never if null. */
-    void (*tick)(Canvas& c, int64_t now);
-    uint32_t tick_ms;
+    void (*tick)(Canvas& c, int64_t now) = nullptr;
+    uint32_t tick_ms = 0;
     uint8_t brightness = kBrightness;
     /* Whether the frame loop drops segments that have finished. Only the
      * alert wants it: a finished segment keeps painting its landing color,

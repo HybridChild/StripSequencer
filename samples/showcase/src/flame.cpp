@@ -183,9 +183,9 @@ static Color heat_color(uint16_t heat) {
         ++i;
     const Stop& lo = kPalette[i - 1];
     const Stop& hi = kPalette[i];
-    return Color::lerp(lo.color, hi.color,
-                       static_cast<uint16_t>(uint32_t(heat - lo.heat) * 65535u /
-                                             uint32_t(hi.heat - lo.heat)));
+    const uint32_t into = static_cast<uint32_t>(heat - lo.heat);
+    const uint32_t width = static_cast<uint32_t>(hi.heat - lo.heat);
+    return Color::lerp(lo.color, hi.color, static_cast<uint16_t>(into * 65535u / width));
 }
 
 /* Every pixel is mid-change in a fire, so the hold is always 0. */

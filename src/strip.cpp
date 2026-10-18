@@ -48,8 +48,8 @@ uint8_t Strip::drop_finished(int64_t now_ms) {
     /* Backwards, because remove() shifts every later entry down: a forward
      * loop would skip the segment after each removal. */
     const uint8_t before = count_;
-    for (uint8_t i = segment_count(); i > 0; --i)
-        if (segment(i - 1).finished(now_ms))
+    for (uint8_t i = count_; i > 0; --i)
+        if (segments_[i - 1].finished(now_ms))
             remove(i - 1);
     return static_cast<uint8_t>(before - count_);
 }

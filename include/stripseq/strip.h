@@ -58,18 +58,19 @@ public:
      * a refusal is a mistake the first render shows rather than a condition to
      * handle, so placing a segment is a plain statement. */
     bool add(const Segment& s);
-    bool remove(uint8_t at);      /* false if at >= count */
+
+    /* Returns false if at >= count. Shifts every entry after `at` down one, so
+     * an index is a position and never a handle: one held across a removal may
+     * now name a different segment, and a Segment& returned earlier may now
+     * refer to one. Re-find the segment you want with Segment::drives() rather
+     * than caching where it was. */
+    bool remove(uint8_t at);
 
     /* Removes every segment, which is how an application switching from one
      * animation to the next starts from an empty list. Only the list: the
      * brightness and the buffer are the strip's, not an animation's, and stay
      * as they are. */
     void clear();
-
-    /* remove shifts every entry after `at`, so an index is a position and never
-     * a handle: one held across a removal may now name a different segment, and
-     * a Segment& returned earlier may now refer to one. Re-find the segment you
-     * want with Segment::drives() rather than caching where it was. */
 
     uint8_t segment_count() const;
 

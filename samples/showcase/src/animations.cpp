@@ -34,12 +34,12 @@ static constexpr Sequence kComet = SequenceBuilder{}
     .build_const();
 
 static constexpr Sequence kRainbow = SequenceBuilder{}
-    .fade_to(Color::hsv(0x2AAA, 255, 255), 500)   // red   -> yellow
-    .fade_to(Color::hsv(0x5555, 255, 255), 500)   //       -> green
-    .fade_to(Color::hsv(0x8000, 255, 255), 500)   //       -> cyan
-    .fade_to(Color::hsv(0xAAAA, 255, 255), 500)   //       -> blue
-    .fade_to(Color::hsv(0xD555, 255, 255), 500)   //       -> magenta
-    .fade_to(Color::hsv(0x0000, 255, 255), 500)   //       -> red
+    .fade_to(Color::hsv(0x2AAA, 255, 255), 500)   /* red   -> yellow  */
+    .fade_to(Color::hsv(0x5555, 255, 255), 500)   /*       -> green   */
+    .fade_to(Color::hsv(0x8000, 255, 255), 500)   /*       -> cyan    */
+    .fade_to(Color::hsv(0xAAAA, 255, 255), 500)   /*       -> blue    */
+    .fade_to(Color::hsv(0xD555, 255, 255), 500)   /*       -> magenta */
+    .fade_to(Color::hsv(0x0000, 255, 255), 500)   /*       -> red     */
     .build_const();
 
 /* Green holds on each pixel for exactly the stagger across the strip, so the
@@ -98,6 +98,10 @@ static constexpr Sequence kAlert = SequenceBuilder{}
  * breathing on either side. */
 static constexpr uint16_t kAlertFirst = 2;
 static constexpr uint16_t kAlertCount = 4;
+
+/* A fresh alert every seven seconds: five flashes take two, so the background
+ * breathes alone for most of the cycle. */
+static constexpr uint32_t kAlertEveryMs = 7000;
 static_assert(kAlertFirst + kAlertCount <= kPixels, "the alert must fit on the strip");
 
 /* ---- The replaced step 1s ----------------------------------------------- */
@@ -174,6 +178,7 @@ static void show_wipe(Canvas& c, int64_t now) {
 /* The bar fills over three seconds, rests full for two, and starts again.
  * Values past 100 are the rest. */
 static constexpr uint32_t kProgressTickMs = 30;
+static constexpr uint8_t kProgressLast = 100 + 2000 / kProgressTickMs;
 static uint8_t progress;
 
 static void set_progress(Canvas& c, uint8_t percent) {
@@ -190,7 +195,7 @@ static void show_progress(Canvas& c, int64_t) {
 }
 
 static void advance_progress(Canvas& c, int64_t) {
-    progress = progress < 166 ? progress + 1 : 0;
+    progress = progress < kProgressLast ? progress + 1 : 0;
     set_progress(c, progress < 100 ? progress : 100);
 }
 
@@ -261,7 +266,7 @@ static void raise_alert(Canvas& c, int64_t now) {
     c.seq_b.play(now);
     for (uint8_t i = 0; i < c.strip.segment_count(); ++i)
         if (c.strip.segment(i).drives(c.seq_b))
-            return;   // still flashing: the load() alone restarts it
+            return;   /* still flashing: the load() alone restarts it */
     c.strip.add(Segment(kAlertFirst, kAlertCount, c.seq_b));
 }
 
@@ -274,20 +279,22 @@ static constexpr uint8_t kFlameBrightness = 120;
  * otherwise private to its file, and main.cpp would fail to link. It is still
  * constexpr, so it is built by the compiler and lives in flash. */
 constexpr Animation kAnimations[] = {
-    {"blink", show_blink, nullptr, 0},
-    {"breathe: eased fades", show_breathe, nullptr, 0},
-    {"comet: a stagger of 24 ms a pixel", show_comet, nullptr, 0},
-    {"rainbow: the hue wheel spread across the strip", show_rainbow, nullptr, 0},
-    {"static gradient: the rainbow, seeked and never played", show_gradient, nullptr, 0},
-    {"wipe: a finite sequence that stays where it lands", show_wipe, wipe, kWipeTickMs},
-    {"progress bar: a playhead set from outside", show_progress, advance_progress,
-     kProgressTickMs},
-    {"two halves: two sequencers side by side", show_halves, nullptr, 0},
-    {"converging: opposite delays", show_converging, nullptr, 0},
-    {"mirrored: a replaced step 1 on one half", show_mirrored, nullptr, 0},
-    {"twinkle: a replaced step 2 that never repeats", show_twinkle, nullptr, 0},
-    {"flame: a fire with no heat array", show_flame, nullptr, 0, kFlameBrightness},
-    {"alert: red flashes painted over a breathing background", show_alert, raise_alert,
-     7000, kBrightness, true},
+    {.name = "blink", .show = show_blink},
+    {.name = "breathe: eased fades", .show = show_breathe},
+    {.name = "comet: a stagger of 24 ms a pixel", .show = show_comet},
+    {.name = "rainbow: the hue wheel spread across the strip", .show = show_rainbow},
+    {.name = "static gradient: the rainbow, seeked and never played", .show = show_gradient},
+    {.name = "wipe: a finite sequence that stays where it lands", .show = show_wipe,
+     .tick = wipe, .tick_ms = kWipeTickMs},
+    {.name = "progress bar: a playhead set from outside", .show = show_progress,
+     .tick = advance_progress, .tick_ms = kProgressTickMs},
+    {.name = "two halves: two sequencers side by side", .show = show_halves},
+    {.name = "converging: opposite delays", .show = show_converging},
+    {.name = "mirrored: a replaced step 1 on one half", .show = show_mirrored},
+    {.name = "twinkle: a replaced step 2 that never repeats", .show = show_twinkle},
+    {.name = "flame: a fire with no heat array", .show = show_flame,
+     .brightness = kFlameBrightness},
+    {.name = "alert: red flashes painted over a breathing background", .show = show_alert,
+     .tick = raise_alert, .tick_ms = kAlertEveryMs, .drops_finished = true},
 };
 constexpr size_t kAnimationCount = sizeof(kAnimations) / sizeof(kAnimations[0]);

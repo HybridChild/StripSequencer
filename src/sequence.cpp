@@ -63,7 +63,7 @@ Sample Sequence::at(int32_t playhead_ms) const {
         /* A finite sequence is a line, and its two ends have colors of their
          * own. Before the start the hold is the time until this pixel starts
          * moving -- what lets a wipe report a real deadline rather than a frame
-         * rate. Negated in uint32_t, so INT32_MIN is no special case. */
+         * rate. */
         if (playhead_ms < 0)
             return Sample{start_, 0u - static_cast<uint32_t>(playhead_ms)};
 

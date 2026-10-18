@@ -17,6 +17,7 @@ using namespace stripseq;
 static constexpr uint32_t kSlotMs = 400;
 static constexpr uint32_t kSparkMs = 30;
 static constexpr uint32_t kSparkFadeMs = 330;
+static_assert(kSparkMs + kSparkFadeMs <= kSlotMs, "a spark must be over within a slot of starting");
 
 /* The spark that pixel index fires in slot, t ms after the slot began, as a
  * 16-bit level. t may run past the slot, which is how the previous slot's
@@ -53,4 +54,3 @@ Sample twinkle(int32_t playhead_ms, uint16_t index, uint16_t /*count*/) {
     }
     return {Color::rgb(v, v, v), 0};
 }
-static_assert(kSparkMs + kSparkFadeMs <= kSlotMs, "a spark must be over within a slot of starting");

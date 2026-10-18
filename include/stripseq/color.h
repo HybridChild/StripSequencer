@@ -89,17 +89,20 @@ struct Color {
      * between them with the position. sat and val are scaled by x257 like
      * rgb8, so 255 is full scale.
      *
-     * All of it fits uint32_t: the largest product, span * pos, is under
-     * 65535^2. hue * 6 is always even, so pos stops at 65534 and a channel
-     * ends each sextant at most a step short of where the next begins. */
+     * All of it fits uint32_t, and both divisions are detail::div65535, so a
+     * call at run time makes no library call on a Cortex-M0. It is exact up to
+     * 65535^2: (top - base) * pos is under that, and dividing by 255 is
+     * dividing by 65535 with the numerator scaled by 257. hue * 6 is
+     * always even, so pos stops at 65534 and a channel ends each sextant at
+     * most a step short of where the next begins. */
     static constexpr Color hsv(uint16_t hue, uint8_t sat, uint8_t val) {
         const uint32_t scaled  = uint32_t{hue} * 6u;
         const uint32_t sextant = scaled >> 16;
         const uint32_t pos     = scaled & 0xFFFFu;
 
         const uint32_t top  = uint32_t{val} * 257u;
-        const uint32_t base = top * (255u - sat) / 255u;
-        const uint32_t step = (top - base) * pos / 65535u;
+        const uint32_t base = detail::div65535(top * ((255u - sat) * 257u));
+        const uint32_t step = detail::div65535((top - base) * pos);
 
         const auto v    = static_cast<uint16_t>(top);
         const auto m    = static_cast<uint16_t>(base);
@@ -129,11 +132,11 @@ struct Color {
      * emitted light later, at the 8-bit conversion. So with gamma on, a blend's
      * midpoint is halfway to the eye rather than halfway in light.
      *
-     * Each channel is (x * (65535 - t) + y * t) / 65535, in uint32_t -- the
+     * Each channel is (a * (65535 - t) + b * t) / 65535, in uint32_t -- the
      * largest the numerator can be is 65535^2, which fits, and is exactly the
      * range detail::div65535 is exact over. Exact at both ends and monotonic in
-     * t. Never x + (y - x) * t / 65535: it needs a signed intermediate, and is
-     * easy to get wrong in the direction where y < x.
+     * t. Never a + (b - a) * t / 65535: it needs a signed intermediate, and is
+     * easy to get wrong in the direction where b < a.
      *
      * The channel blend is the free stripseq::lerp above, qualified because
      * this member hides it. */
@@ -171,7 +174,7 @@ inline constexpr Color rgbwhite = Color::rgb8(255, 255, 255);  /* all three chan
  * sits beside LED_COLOR_ID_RED -- but beside red and blue in a namespace of
  * colors it reads as "the strip looks white", and the phosphor emitter is
  * usually warmer and dimmer than the RGB mix by an amount the library cannot
- * know. rgbwhite keeps its awkward name because it is the portable one, and
+ * know. rgbwhite has an awkward name on purpose: it is the portable one, and
  * the awkwardness stops it being read as authoritative. Adafruit NeoPixel and
  * NeoPixelBus likewise expose the channel and name no constant. */
 

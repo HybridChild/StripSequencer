@@ -57,8 +57,11 @@ if(PROJECT_IS_TOP_LEVEL)
     # -Wsign-conversion spelled out because gcc's -Wconversion leaves signedness
     # out in C++ while clang's includes it; without it the two compilers in the
     # matrix would enforce different rules.
+    #
+    # -Wundef because the configuration is read with #if: a misspelled
+    # `#if STRIPSEQ_GAMMMA` is 0, and quietly compiles the other variant.
     set(STRIPSEQ_WARNINGS -Wall -Wextra -Wpedantic -Wshadow
-        -Wconversion -Wsign-conversion)
+        -Wconversion -Wsign-conversion -Wundef)
 
     target_compile_options(stripseq PRIVATE ${STRIPSEQ_WARNINGS})
 endif()

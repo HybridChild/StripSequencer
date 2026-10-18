@@ -32,8 +32,8 @@ namespace stripseq {
  *             can normalise position: mirroring is (count - 1 - index).
  *   delay_q8  the segment's pixel_delay, in 1/256 ms. The default reads it as
  *             lag per pixel, (index * delay_q8) >> 8; a replacement reads it
- *             however it documents -- Twinkle takes it as the span its offsets
- *             scatter across.
+ *             however it documents -- the cookbook's Twinkle takes it as the
+ *             span its offsets scatter across.
  *   returns   the offset in ms, positive for behind. The segment subtracts it
  *             from the sequencer's playhead to get this pixel's.
  *
@@ -45,9 +45,10 @@ namespace stripseq {
  * time per pixel: reversing or rescaling a pixel's playhead is beyond it, and
  * a ColorFn, which receives that playhead, may do what it likes with it.
  *
- * pixel_delay is a replacement's one parameter, which is what lets a Twinkle
- * span or a mirror's delay be set at run time. Anything richer -- a hash
- * seeded per device, say -- needs the context pointer docs/DESIGN.md defers. */
+ * pixel_delay is a replacement's one parameter, which is what lets the
+ * cookbook's Twinkle span or a mirror's delay be set at run time. Anything
+ * richer -- a hash seeded per device, say -- needs the context pointer
+ * docs/DESIGN.md defers. */
 using OffsetFn = int32_t (*)(uint16_t index, uint16_t count, int32_t delay_q8);
 
 /* Step 2: what color is at that playhead?
