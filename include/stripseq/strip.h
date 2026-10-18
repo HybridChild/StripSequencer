@@ -36,8 +36,8 @@ public:
      * follows from it, so neither can drift from the array it describes.
      * constexpr so the object can be constinit at file scope. */
     template <size_t B>
-    constexpr explicit Strip(uint8_t (&buffer)[B])
-        : buffer_(buffer), pixel_count_(static_cast<uint16_t>(B / bytes_per_pixel)) {
+    constexpr explicit Strip(uint8_t (&pixels)[B])
+        : buffer_(pixels), pixel_count_(static_cast<uint16_t>(B / bytes_per_pixel)) {
         /* A buffer that does not divide evenly is a channel-count mismatch --
          * usually an RGB-sized buffer handed to an RGBW build, which would
          * otherwise run off the end of the last pixel. */
