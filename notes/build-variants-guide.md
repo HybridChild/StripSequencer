@@ -79,7 +79,9 @@ stripseq_add_variant(rgbw_nogamma  STRIPSEQ_WHITE_CHANNEL=1 STRIPSEQ_GAMMA=0)
 stripseq_add_variant(tight         STRIPSEQ_MAX_STEPS=6 STRIPSEQ_MAX_SEGMENTS=2)
 ```
 
-**Each call passes only its deviations from the defaults, and `default` passes nothing at all.** That is deliberate and easy to get wrong in the other direction. Writing `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 STRIPSEQ_GAMMA=1)` looks more explicit and is strictly worse: the values in `config.h` would then never be compiled by anything, and a typo turning the declared default white channel on would pass the entire suite, because every variant overrode it. A default is only tested by *not* setting it.
+**Each call passes only its deviations from the defaults, and `default` passes nothing at all.** That is deliberate and easy to get wrong in the other direction. Writing `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 STRIPSEQ_GAMMA=1)` looks more explicit and is strictly worse: the variant named for the defaults would then compile a copy of them rather than `config.h`'s, and whether the declared values were compiled at all would depend on which other variants happened to leave a knob alone. A default is only tested by *not* setting it.
+
+Not setting it is still only half of testing it, because compiling a value is not checking it. Every test reads the macros it was compiled with, so a mistyped default builds a different library that agrees with itself, and the whole suite passes. What checks the value is a second copy of it held somewhere else: `tests/layout.cpp` writes the documented defaults out again and asserts them in every variant that leaves a knob unset. It is the move [`cmake-usage-requirements-guide.md`](cmake-usage-requirements-guide.md) §7 makes for propagation — an expectation that does not come from the mechanism under test — and changing a default then means changing it in both places, which is right for a decision about every consumer's build.
 
 **The fifth call is not part of any cross product.** `tight` exists because the capacity macros, while safe to share, are still a place where code quietly assumes the default: an off-by-one in a capacity check, a loop bounded by a literal `8`, a test that hardcodes how many steps fit. One cheap variant at awkward values catches that class of mistake, and unlike the behavioural macros it does not need its own cross product — the capacities do not interact with the layout, so one sample is enough.
 
@@ -139,10 +141,12 @@ ctest --test-dir build -N | grep -oE '#[0-9]+: [a-z_]+:' | sed 's/.*: //' | sort
   … nogamma:
   … rgbw:
   … rgbw_nogamma:
+    2 spdx:
   … tight:
+    2 verbatim:
 ```
 
-The five counts are equal, and each is the number of test cases in the suite: every case runs once in every configuration.
+Each count is the number of test cases compiled into that configuration, and every case runs once in every configuration it compiles in. The counts are not all equal, and they differ by exactly the cases §6 describes: the two RGBW builds have one more, about the white channel, and `tight` has two fewer, which need three segments where it holds two. `spdx:` and `verbatim:` are not variants: they are checks on the repository's sources, registered once each.
 
 **Proves:** one source tree, one `ctest` invocation, five independently compiled configurations — and each case is reported under the configuration it ran in, not pooled.
 
@@ -160,15 +164,28 @@ stripseq_add_variant(fat STRIPSEQ_MAX_STEPS=64 STRIPSEQ_MAX_SEGMENTS=16)
 ./scripts/build.sh && ./scripts/test.sh build -R '^fat:'
 ```
 
-Every case passes once more, under `fat:`, and `sizeof(Sequence)` in that binary is 56 steps — 672 bytes in an RGB build — larger than the default build's, all of it capacity that no recipe uses. **Revert it** — a sixth variant costs a compile on every build and this one buys nothing the other five do not cover.
+Every case passes once more, under `fat:`, and `sizeof(Sequence)` in that binary is 788 bytes in an RGB build against the default build's 116 — 56 more steps of 12 bytes each, all of it capacity that no recipe uses. **Revert it** — a sixth variant costs a compile on every build and this one buys nothing the other five do not cover.
 
 **Proves:** the helper is the unit of configuration. Nothing inside it knows how many variants exist, and nothing outside it needs to know how a variant is built.
 
 ### Exercise 3 — Watch a default stop being tested
 
-*Demonstrates §4: why `default` passes nothing.*
+*Demonstrates §4: why `default` passes nothing, and what checks the value it compiles.*
 
-Change the first call to `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 STRIPSEQ_GAMMA=1)`, then edit `include/stripseq/config.h` so the declared default becomes `#define STRIPSEQ_WHITE_CHANNEL 1` — a plausible typo.
+Edit `include/stripseq/config.h` so the declared default becomes `#define STRIPSEQ_WHITE_CHANNEL 1` — a plausible typo. Build with ninja's `-k 0`, so that one failure does not stop the others from being reported:
+
+```sh
+cmake --build build -- -k 0 2>&1 | grep -E 'FAILED|error:'
+```
+
+```
+FAILED: … CMakeFiles/tests_default.dir/tests/layout.cpp.o
+tests/layout.cpp:54:15: error: static assertion failed due to requirement '1 == 0': config.h's default changed. If that is intended, change it here too.
+```
+
+and the same for `tests_nogamma` and `tests_tight`, the three variants that leave the white channel unset. The two RGBW variants set it themselves, so the typo does not reach them.
+
+Now see what the check is for. In `tests/layout.cpp`, comment out the four `#ifndef STRIPSEQ_EXPECT_…` blocks after `STRIPSEQ_DEFAULT_MSG`, and keep the typo:
 
 ```sh
 ./scripts/build.sh && ./scripts/test.sh
@@ -178,21 +195,28 @@ Change the first call to `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 
 100% tests passed out of …
 ```
 
-Every variant is green, and the library's declared default is now wrong for every consumer who does not override it. Restore both, rebuild, and watch `default:` fail as it should have all along.
+Every variant is green. The `default` variant is now an RGBW build, every test in it agrees with that, and the library's declared default is wrong for every consumer who does not override it.
 
-**Proves:** a default is tested by *not* setting it. An explicit copy of a default in the build system hides the declaration it duplicates.
+Last, put the four blocks back and change the first call to `stripseq_add_variant(default STRIPSEQ_WHITE_CHANNEL=0 STRIPSEQ_GAMMA=1)`. Build with `-k 0` again: `tests_default` compiles now, and only `tests_nogamma` and `tests_tight` still fail. The variant named for the defaults has stopped testing them, and the typo is caught only because two other variants happen to leave the white channel alone. **Restore all three files.**
+
+**Proves:** a default is tested by *not* setting it, and checked only by a copy of its value held outside the code under test. Compiled alone, a mistyped default is self-consistent and passes everything; an explicit copy in the build system takes even the compiling away from the variant meant to do it.
 
 ### Exercise 4 — Confirm the capacity variant earns its place
 
 *Demonstrates §4: sampling the size knobs.*
 
-In `tests/layout.cpp`, replace `CHECK(sizeof(Sequence) >= sizeof(Step) * STRIPSEQ_MAX_STEPS);` with a hardcoded `CHECK(sizeof(Sequence) >= sizeof(Step) * 8);` — exactly the kind of assumption that creeps into tests written against the defaults.
+In `tests/sequence.cpp`, in the case "TooManySteps, counted against this build's capacity", replace the loop bound `i < STRIPSEQ_MAX_STEPS` with a hardcoded `i < 8` — exactly the kind of assumption that creeps into tests written against the defaults.
 
 ```sh
 ./scripts/build.sh && ./scripts/test.sh
 ```
 
-Four variants pass. `tight:` fails, because there is no room for eight steps in a build configured for six. **Revert it.**
+```
+99% tests passed, 1 tests failed out of …
+	… - tight:TooManySteps, counted against this build's capacity (Failed)
+```
+
+Four variants pass. `tight:` fails, because a build configured for six steps refuses the seventh, and the test expected all eight to fit. **Revert it.**
 
 **Proves:** one variant at awkward capacities catches the whole class of "assumes the default" mistakes, without a cross product over values that do not change meaning.
 

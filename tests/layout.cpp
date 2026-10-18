@@ -1,8 +1,8 @@
 /* What the build variants are for: the sizes and capacities that change with
  * the configuration, checked against what the build asked for.
  *
- * The static_asserts at the top are the load-bearing part, and they exist for
- * one specific failure. If `target_compile_definitions` in
+ * The static_asserts at the top are the load-bearing part. The first set exists
+ * for one specific failure. If `target_compile_definitions` in
  * cmake/stripseq_variant.cmake were PRIVATE rather than PUBLIC, the library
  * would compile against an eight-byte Color while the tests compiled against a
  * six-byte one -- and the two would link cleanly, because
@@ -39,6 +39,28 @@ static_assert(STRIPSEQ_MAX_STEPS == STRIPSEQ_EXPECT_MAX_STEPS, STRIPSEQ_PROPAGAT
 #endif
 #ifdef STRIPSEQ_EXPECT_MAX_SEGMENTS
 static_assert(STRIPSEQ_MAX_SEGMENTS == STRIPSEQ_EXPECT_MAX_SEGMENTS, STRIPSEQ_PROPAGATION_MSG);
+#endif
+
+/* And where a variant passes nothing for a knob, the value is config.h's own,
+ * which nothing else checks: every test reads the macros it was compiled with,
+ * so a default mistyped in config.h builds a different library that agrees
+ * with itself, and the whole suite passes. These are the documented defaults,
+ * written a second time. Changing one is a decision about every consumer's
+ * build, and has to be made in both places. */
+#define STRIPSEQ_DEFAULT_MSG \
+    "config.h's default changed. If that is intended, change it here too."
+
+#ifndef STRIPSEQ_EXPECT_WHITE_CHANNEL
+static_assert(STRIPSEQ_WHITE_CHANNEL == 0, STRIPSEQ_DEFAULT_MSG);
+#endif
+#ifndef STRIPSEQ_EXPECT_GAMMA
+static_assert(STRIPSEQ_GAMMA == 1, STRIPSEQ_DEFAULT_MSG);
+#endif
+#ifndef STRIPSEQ_EXPECT_MAX_STEPS
+static_assert(STRIPSEQ_MAX_STEPS == 8, STRIPSEQ_DEFAULT_MSG);
+#endif
+#ifndef STRIPSEQ_EXPECT_MAX_SEGMENTS
+static_assert(STRIPSEQ_MAX_SEGMENTS == 4, STRIPSEQ_DEFAULT_MSG);
 #endif
 
 /* File scope, constinit: the ground rule is that nothing in this library runs
