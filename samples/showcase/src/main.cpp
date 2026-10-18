@@ -122,13 +122,6 @@ static constexpr Sequence kProgress = SequenceBuilder{}
     .repeat(1)
     .build_const();
 
-/* Only a clock for the twinkle and the flame, whose ColorFns ignore the steps.
- * The sequencer hands an endless sequence's playhead over modulo its loop, so
- * the loop is the longest the builder allows, 2^29 ms or about six days, and
- * neither repeats sooner than that. */
-static constexpr Sequence kClock =
-    SequenceBuilder{}.hold(colors::black, uint32_t{1} << 29).build_const();
-
 /* The breathe bottoms out lit rather than dark. Gamma acts after the sequence,
  * so the floor is high in linear terms: at gamma 2.5, 144 leaves the chip at
  * about a quarter of full blue. At kBrightness the fade crosses 9 output
@@ -196,7 +189,7 @@ static uint16_t spark(uint16_t index, uint32_t slot, uint32_t t) {
  * sparking about twice a second, something is nearly always mid-fade, and a
  * longer one would buy no sleep. */
 static Sample twinkle(int32_t playhead_ms, uint16_t index, uint16_t /*count*/) {
-    const uint32_t p = static_cast<uint32_t>(playhead_ms);   /* an endless playhead is never negative */
+    const uint32_t p = static_cast<uint32_t>(playhead_ms);   /* timebase, unstaggered: never negative */
     const uint32_t slot = p / kSlotMs;
     const uint32_t t = p % kSlotMs;
     uint16_t v = spark(index, slot, t);
@@ -392,7 +385,7 @@ static Color heat_color(uint16_t heat) {
 
 /* Every pixel is mid-change in a fire, so the hold is always 0. */
 static Sample flame(int32_t playhead_ms, uint16_t index, uint16_t count) {
-    const uint32_t t = static_cast<uint32_t>(playhead_ms);   /* an endless playhead is never negative */
+    const uint32_t t = static_cast<uint32_t>(playhead_ms);   /* timebase, unstaggered: never negative */
     const uint32_t y = (2u * index + 1u) * 32768u / count;   /* the pixel's centre */
     const uint16_t body = flame_heat(y, t);
     const uint16_t ember = ember_heat(y, t, count);
@@ -523,7 +516,7 @@ static void show_mirrored(int64_t now) {
 }
 
 static void show_twinkle(int64_t now) {
-    seq.load(kClock);
+    seq.load(timebase);
     seq.play(now);
     Segment s(0, kPixels, seq);
     s.set_color_fn(twinkle);
@@ -531,7 +524,7 @@ static void show_twinkle(int64_t now) {
 }
 
 static void show_flame(int64_t now) {
-    seq.load(kClock);
+    seq.load(timebase);
     seq.play(now);
     Segment s(0, kPixels, seq);
     s.set_color_fn(flame);

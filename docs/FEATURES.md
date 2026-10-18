@@ -305,6 +305,16 @@ The hold is a contract rather than a hint. The strip will not render again befor
 
 A playhead can be negative, or past the end of whatever the function has in mind, since each pixel's playhead is the sequencer's less its offset.
 
+A function that draws from time alone, and never reads a step, still needs its segment's sequencer to be playing something. Load `timebase`: an endless sequence of one black step, as long as the builder allows, so the playhead the function receives counts milliseconds since `play()` and wraps back to 0 only every 2^29 ms, about 6.2 days.
+
+```cpp
+seq.load(timebase);
+seq.play(now());
+Segment s(0, kPixels, seq);
+s.set_color_fn(flame);   // a function of index and time, nothing stored
+strip.add(s);
+```
+
 ### Helpers for replacements
 
 Three pieces of the library's own arithmetic are public because a replacement keeps needing them, and the obvious version of each is subtly wrong:

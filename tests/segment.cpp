@@ -411,6 +411,36 @@ TEST_CASE("a ColorFn is asked about each pixel's own playhead, index and count")
     }
 }
 
+static_assert(timebase.total_duration_ms() == hold_forever, "timebase is endless");
+static_assert(timebase.loop_duration_ms() == uint32_t{1} << 29, "the longest loop accepted");
+
+TEST_CASE("timebase hands a ColorFn the time since play, until it wraps at 2^29 ms") {
+    Sequencer seq;
+    seq.load(timebase);
+    seq.play(5000);
+    Segment s(0, kPixels, seq);
+    s.set_color_fn(recorded);
+    uint8_t buffer[kBytes];
+
+    constexpr int64_t wrap = int64_t{1} << 29;
+    for (int64_t since : {int64_t{0}, int64_t{1}, int64_t{400}, int64_t{5} * 24 * 3600 * 1000,
+                          wrap - 1, wrap, wrap + 400, 3 * wrap + 7}) {
+        CAPTURE(since);
+        for (Call& c : calls)
+            c = {};
+        render_alone(s, buffer, 5000 + since);
+        REQUIRE(calls[0].seen);
+        CHECK(calls[0].playhead_ms == since % wrap);
+        CHECK_FALSE(s.finished(5000 + since));
+    }
+
+    /* Without the ColorFn, its one step shows. */
+    s.set_color_fn(nullptr);
+    CHECK(render_alone(s, buffer, 5000 + 1234) == static_cast<uint32_t>(wrap - 1234));
+    for (uint16_t i = 0; i < kPixels; ++i)
+        CHECK(shows(buffer, i, colors::black));
+}
+
 /* ------------------------------------------------------------------------ */
 /* Holding still                                                             */
 /* ------------------------------------------------------------------------ */
