@@ -1,0 +1,12 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The bench strip on the U083, described once in strip_demo's overlay, which
+ * also says why this board builds with --rgb.
+ */
+
+#include "../../strip_demo/boards/nucleo_u083rc.overlay"

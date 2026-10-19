@@ -1,0 +1,82 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The bench strip on a Nucleo-U083RC: the same 11 SK6812-class RGBW pixels
+ * (ILPL-K501), driven from SPI3 with data out on PB5 (Arduino D4). The U0 has
+ * no I2S, so each LED bit is a short symbol on MOSI instead. Only MOSI is
+ * routed; SCK runs inside the peripheral and never needs to leave the chip.
+ *
+ * Build with --rgb. worldsemi,ws2812-spi implements led_strip_update_rgb()
+ * and not led_strip_update_channels(), so an RGBW build runs but every update
+ * returns -ENOSYS and the strip stays dark. On the RGB path the driver applies
+ * color-mapping itself and sends zero for the white die.
+ *
+ * SPI3 rather than the board's SPI1, whose SCK shares PA5 with the user LED
+ * and whose pins the board already hands to the Arduino header.
+ */
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/*
+ * DMA keeps the symbols back to back. Fed by interrupt, a 48 MHz M0+ leaves
+ * gaps between bytes, which only stretch each bit's low time but eat into
+ * the margin before the strip mistakes a gap for a reset. The DMAMUX request
+ * lines are SPI3's, as Zephyr's own spi_loopback overlay for the U083 uses
+ * them; the driver wants both directions even for a write. dma1 and dmamux1
+ * are already enabled by the board. CONFIG_SPI_STM32_DMA is in this board's
+ * .conf.
+ */
+&spi3 {
+	status = "okay";
+	/*
+	 * Between frames the line must read low, or the next frame's first bit
+	 * is lost. The HAL's pinctrl node for this pin already carries a
+	 * pull-down, which holds it there if the peripheral lets go of the pin
+	 * when a transfer ends.
+	 */
+	pinctrl-0 = <&spi3_mosi_pb5>;
+	pinctrl-names = "default";
+	dmas = <&dmamux1 2 41 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+	       <&dmamux1 1 40 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+
+	led_strip: ilpl_k501@0 {
+		status = "okay";
+		compatible = "worldsemi,ws2812-spi";
+		reg = <0>;
+
+		chain-length = <11>;
+
+		/*
+		 * Each data bit is one 4-bit symbol at 3 MHz, the 48 MHz system
+		 * clock divided by 16: 333 ns per SPI bit, 1.33 us per LED bit.
+		 * 0xC is 667 ns high and 0x8 is 333 ns, the SK6812's T1H and T0H
+		 * within its 150 ns tolerance. Both end low, so a pause between
+		 * bytes only lengthens a bit's low time.
+		 */
+		spi-max-frequency = <3000000>;
+		bits-per-symbol = <4>;
+		spi-one-frame = <0xC>;
+		spi-zero-frame = <0x8>;
+		reset-delay = <80>;
+
+		/*
+		 * The order the chip expects on the wire. The driver reads it on
+		 * the RGB path, and fills the white slot with zero.
+		 */
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE
+				 LED_COLOR_ID_WHITE>;
+	};
+};
+
+/ {
+	aliases {
+		led-strip = &led_strip;
+	};
+};
