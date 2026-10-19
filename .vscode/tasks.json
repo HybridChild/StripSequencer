@@ -24,19 +24,19 @@
       "problemMatcher": []
     },
     {
-      // The second compiler in the matrix. /usr/bin/g++ is Apple clang, so
-      // homebrew's GCC is named outright, as scripts/build.sh explains.
+      // The second compiler in the matrix. On macOS, where g++ is Apple clang,
+      // it needs STRIPSEQ_GCC_SUFFIX in VS Code's environment, as
+      // scripts/build.sh explains.
       "label": "host: build (gcc)",
       "type": "shell",
-      "command": "scripts/build.sh build-gcc",
-      "options": { "env": { "CXX": "g++-16" } },
+      "command": "scripts/build.sh gcc",
       "group": "build",
       "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
     },
     {
       "label": "host: test (gcc)",
       "type": "shell",
-      "command": "scripts/test.sh build-gcc",
+      "command": "scripts/test.sh gcc",
       "dependsOn": "host: build (gcc)",
       "group": "test",
       "problemMatcher": []
@@ -47,7 +47,7 @@
       // one clangd and the tests read.
       "label": "host: build (debug)",
       "type": "shell",
-      "command": "scripts/build.sh build-debug -DCMAKE_BUILD_TYPE=Debug",
+      "command": "scripts/build.sh debug",
       "group": "build",
       "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
     },
@@ -87,6 +87,14 @@
       "label": "ide: index",
       "type": "shell",
       "command": "scripts/ide-index.sh",
+      "problemMatcher": []
+    },
+    {
+      // Once per checkout, as scripts/ide-setup.sh says; reload the window
+      // after it so the extensions read the settings it writes.
+      "label": "ide: setup",
+      "type": "shell",
+      "command": "scripts/ide-setup.sh",
       "problemMatcher": []
     },
     {

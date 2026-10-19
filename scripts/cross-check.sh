@@ -71,24 +71,23 @@ check_init() {
     done
 }
 
-# build <build dir> <cpu>. --fresh because the toolchain's flags are cache
-# defaults, read on the first configure only: a tree configured before a flag
-# changed would otherwise keep checking without it.
+# build <build dir> <preset> <cpu>: the preset in CMakePresets.json that
+# configures the library alone for <cpu>, into <build dir> rather than its own.
+# --fresh because the toolchain's flags are cache defaults, read on the first
+# configure only: a tree configured before a flag changed would otherwise keep
+# checking without it.
 build() {
-    cmake --fresh -S "$REPO" -B "$REPO/$1" -G Ninja \
-          -DCMAKE_TOOLCHAIN_FILE="$REPO/cmake/arm-none-eabi.cmake" \
-          -DSTRIPSEQ_CROSS_CPU="$2" \
-          -DSTRIPSEQ_BUILD_TESTS=OFF
+    (cd "$REPO" && cmake --fresh --preset "$2" -B "$REPO/$1")
     cmake --build "$REPO/$1"
 
     # Listing the objects is what makes the check readable in CI output.
-    echo "== $2"
+    echo "== $3"
     arm-none-eabi-size "$REPO/$1"/CMakeFiles/stripseq.dir/src/*.obj
-    check_helpers "$REPO/$1" "$2"
-    check_init "$REPO/$1" "$2"
+    check_helpers "$REPO/$1" "$3"
+    check_init "$REPO/$1" "$3"
 }
 
-build "$BUILD_DIR" cortex-m4
-build "$BUILD_DIR-m0" cortex-m0
+build "$BUILD_DIR" cross-m4 cortex-m4
+build "$BUILD_DIR-m0" cross-m0 cortex-m0
 
 exit "$status"

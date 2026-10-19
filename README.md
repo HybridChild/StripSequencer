@@ -180,13 +180,15 @@ That is 130 to 290 cycles a pixel for each segment covering it. At 60 frames a s
 ```sh
 scripts/build.sh                   # configure and build into ./build
 scripts/test.sh                    # run every test in every variant
-CXX=g++-16 scripts/build.sh build-gcc && scripts/test.sh build-gcc
+scripts/build.sh gcc && scripts/test.sh gcc   # the same under GCC
 scripts/cross-check.sh             # freestanding Cortex-M4 and M0 builds
 scripts/sample-build.sh            # strip_demo under Zephyr; SAMPLE= for another, --rgb for RGB
 tools/footprint/footprint.sh       # flash and object sizes, Cortex-M0 and M4
 ```
 
 The host suite builds the whole library five times, once per configuration that changes compiled behaviour plus one at tight capacities, and runs every test in each. The cross-check compiles the library for bare-metal Cortex-M with only the two headers Zephyr's minimal C++ library provides, and fails if an object calls a run-time helper outside a short allowlist: a soft-float routine, `operator new`, anything from libc beyond the compiler's own `memcpy` and `memset`, or a division the design does not account for. It also fails on anything initialised at run time: an `.init_array` entry or a static's guard variable. CI runs the host suite on gcc and clang, plain and under ASan and UBSan, the cross-check, strip_demo in both channel configurations, and frame_cost and the showcase in the bench's.
+
+The scripts are bash and run on Linux and macOS; on Windows, run them under WSL, where flashing and the console also need the ST-LINK attached to WSL with `usbipd`. Each takes a preset from [`CMakePresets.json`](CMakePresets.json), so `cmake --preset` and any IDE that reads presets configure the same trees the scripts do. On macOS `g++` is Apple clang, so the gcc preset needs `STRIPSEQ_GCC_SUFFIX` to name a real GCC — `-16` for Homebrew's `g++-16`. For VS Code, run `scripts/ide-setup.sh` once to write the settings that hold this machine's Zephyr paths, then `scripts/ide-index.sh` after the first builds.
 
 ## Licence
 

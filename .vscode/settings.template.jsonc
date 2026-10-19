@@ -1,3 +1,6 @@
+// The source of .vscode/settings.json, which scripts/ide-setup.sh writes from
+// this file with this machine's paths in place of the @...@ values. Edit this
+// one: settings.json is generated, gitignored and overwritten on the next run.
 {
   // --- C/C++ IntelliSense via clangd ---------------------------------------
   // clangd reads one database at the repo root, which scripts/ide-index.sh
@@ -28,39 +31,40 @@
   ],
 
   // --- DeviceTree + Kconfig (trond-snekvik.*) ------------------------------
-  // Absolute paths, so this half describes one machine. VS Code expands neither
-  // `~` nor ${userHome} in settings values -- each extension would have to, and
-  // these two read their paths raw -- and ${workspaceFolder} is not accepted by
-  // devicetree.ctxFile. On another checkout, rewrite the /Users/... prefixes
-  // here and in devicetree.json.
+  // The @...@ values are absolute paths into this machine's Zephyr workspace,
+  // which scripts/ide-setup.sh fills in when it writes settings.json from this
+  // template. VS Code expands neither `~` nor ${userHome} in settings values --
+  // each extension would have to, and these two read their paths raw -- and
+  // ${workspaceFolder} is not accepted by devicetree.ctxFile.
   //
   // Both extensions find Zephyr by running `west topdir` in the opened folder.
-  // This repo is not inside the west workspace -- ~/zephyr-workspace is, and the
-  // samples reach this repo through ZEPHYR_EXTRA_MODULES -- so that lookup
-  // fails and both are pointed at it by hand. west lives in the workspace's
-  // virtualenv, which is not on VS Code's PATH.
-  "devicetree.zephyr": "/Users/esbendn/zephyr-workspace/zephyr",
-  "devicetree.west": "/Users/esbendn/zephyr-workspace/.venv/bin/west",
+  // This repo is not inside the west workspace -- the samples reach it through
+  // ZEPHYR_EXTRA_MODULES -- so that lookup fails and both are pointed at the
+  // workspace by hand. west lives in the workspace's virtualenv, which is not on
+  // VS Code's PATH.
+  "devicetree.zephyr": "@ZEPHYR_BASE@",
+  "devicetree.west": "@WEST@",
   "devicetree.bindings": [
     "${zephyrBase}/dts/bindings"
   ],
   // One saved context per sample with an overlay: the board's .dts plus that
-  // overlay, which is what the extension checks the overlay against. Written
-  // by hand because the extension predates Zephyr's hardware model v2: it reads
-  // the arch from the first directory under boards/, which is now the vendor
-  // (boards/st/...), and then every #include in the board file goes
-  // unresolved. A context records the arch outright.
-  "devicetree.ctxFile": "/Users/esbendn/Engineering/Projects/StripSequencer/.vscode/devicetree.json",
+  // overlay, which is what the extension checks the overlay against.
+  // scripts/ide-setup.sh writes them rather than the extension, because the
+  // extension predates Zephyr's hardware model v2: it reads the arch from the
+  // first directory under boards/, which is now the vendor (boards/st/...),
+  // and then every #include in the board file goes unresolved. A context
+  // records the arch outright.
+  "devicetree.ctxFile": "@CTX_FILE@",
 
-  "kconfig.zephyr.base": "/Users/esbendn/zephyr-workspace/zephyr",
-  "kconfig.zephyr.west": "/Users/esbendn/zephyr-workspace/.venv/bin/west",
+  "kconfig.zephyr.base": "@ZEPHYR_BASE@",
+  "kconfig.zephyr.west": "@WEST@",
   // The board feeds $(BOARD), $(ARCH) and $(BOARD_DIR) to the Kconfig tree.
   // `dir` is spelled out because the extension would otherwise look for the
   // defconfig under boards/<arch>/, where hwmv2 no longer puts it.
   "kconfig.zephyr.board": {
-    "board": "nucleo_h753zi",
-    "arch": "arm",
-    "dir": "/Users/esbendn/zephyr-workspace/zephyr/boards/st/nucleo_h753zi"
+    "board": "@BOARD@",
+    "arch": "@ARCH@",
+    "dir": "@BOARD_DIR@"
   },
   // Zephyr's Kconfig tree reaches the modules -- this repo's zephyr/Kconfig
   // among them -- through files CMake generates per build, so completion in a
@@ -74,10 +78,10 @@
   },
 
   // --- CMake ---------------------------------------------------------------
-  // scripts/build.sh is the way the host tree is configured: Ninja, ./build,
-  // whatever CXX says. CMake Tools would configure the same directory with a
-  // kit of its own choosing, and a different compiler in an existing cache
-  // makes CMake discard it. The tasks in tasks.json call the scripts instead.
+  // CMakePresets.json is how every tree is configured, so CMake Tools and the
+  // scripts tasks.json calls configure a tree the same way. CMake Tools still
+  // configures only when asked: opening the folder should not start a build.
+  "cmake.useCMakePresets": "always",
   "cmake.configureOnOpen": false,
   "cmake.automaticReconfigure": false,
 

@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Host",
+      "description": "The library, the five variants and their tests, with whatever compiler CXX names or the system's default. The tree clangd and the tests read.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "debug",
+      "inherits": "default",
+      "displayName": "Host, debug",
+      "description": "The host tree with debug information, for the debugger; ./build has none.",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "gcc",
+      "inherits": "default",
+      "displayName": "Host, GCC",
+      "description": "The host tree under GCC, the matrix's second compiler: g++ followed by STRIPSEQ_GCC_SUFFIX. On macOS g++ is Apple clang, so there the preset is disabled until the suffix names a real GCC, such as -16 for Homebrew's g++-16.",
+      "binaryDir": "${sourceDir}/build-gcc",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "g++$penv{STRIPSEQ_GCC_SUFFIX}" },
+      "condition": {
+        "type": "anyOf",
+        "conditions": [
+          { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+          { "type": "notEquals", "lhs": "$penv{STRIPSEQ_GCC_SUFFIX}", "rhs": "" }
+        ]
+      }
+    },
+    {
+      "name": "cross",
+      "hidden": true,
+      "generator": "Ninja",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": { "STRIPSEQ_BUILD_TESTS": "OFF" }
+    },
+    {
+      "name": "cross-m4",
+      "inherits": "cross",
+      "displayName": "Cortex-M4, freestanding",
+      "description": "The library alone for a bare-metal Cortex-M4, as scripts/cross-check.sh checks it.",
+      "binaryDir": "${sourceDir}/build-cross",
+      "cacheVariables": { "STRIPSEQ_CROSS_CPU": "cortex-m4" }
+    },
+    {
+      "name": "cross-m0",
+      "inherits": "cross",
+      "displayName": "Cortex-M0, freestanding",
+      "description": "The library alone for a bare-metal Cortex-M0, as scripts/cross-check.sh checks it.",
+      "binaryDir": "${sourceDir}/build-cross-m0",
+      "cacheVariables": { "STRIPSEQ_CROSS_CPU": "cortex-m0" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "default", "configurePreset": "default" },
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "gcc", "configurePreset": "gcc" },
+    { "name": "cross-m4", "configurePreset": "cross-m4" },
+    { "name": "cross-m0", "configurePreset": "cross-m0" }
+  ],
+  "testPresets": [
+    { "name": "default", "configurePreset": "default", "output": { "outputOnFailure": true } },
+    { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
+    { "name": "gcc", "configurePreset": "gcc", "output": { "outputOnFailure": true } }
+  ]
+}

@@ -161,7 +161,7 @@ stripseq_add_variant(fat STRIPSEQ_MAX_STEPS=64 STRIPSEQ_MAX_SEGMENTS=16)
 ```
 
 ```sh
-./scripts/build.sh && ./scripts/test.sh build -R '^fat:'
+./scripts/build.sh && ./scripts/test.sh default -R '^fat:'
 ```
 
 Every case passes once more, under `fat:`, and `sizeof(Sequence)` in that binary is 788 bytes in an RGB build against the default build's 116 — 56 more steps of 12 bytes each, all of it capacity that no recipe uses. **Revert it** — a sixth variant costs a compile on every build and this one buys nothing the other five do not cover.

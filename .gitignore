@@ -6,3 +6,10 @@ build*/
 # Editor and tooling artefacts.
 .cache/
 compile_commands.json
+
+# Machine-specific, written by scripts/ide-setup.sh from the committed template.
+.vscode/settings.json
+.vscode/devicetree.json
+
+# CMake's file for a developer's own presets, never committed by design.
+CMakeUserPresets.json

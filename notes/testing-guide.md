@@ -218,7 +218,7 @@ CHECK(Strip::bytes_per_pixel == 3u);
 ```
 
 ```sh
-./scripts/build.sh && ./scripts/test.sh build -R 'white-channel'
+./scripts/build.sh && ./scripts/test.sh default -R 'white-channel'
 ```
 
 The `-R` filter, passed through to `ctest`, narrows the run to the one case's five results; without it the same two failures appear among every case in every configuration.

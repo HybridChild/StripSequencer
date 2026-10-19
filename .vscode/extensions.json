@@ -7,11 +7,11 @@
   // left out.
   //
   // The DeviceTree and Kconfig extensions check the samples' overlays and
-  // prj.conf files against the board and the module's Kconfig; settings.json
-  // says how they are pointed at the Zephyr workspace.
+  // prj.conf files against the board and the module's Kconfig; settings.json,
+  // which scripts/ide-setup.sh writes, points them at the Zephyr workspace.
   //
-  // CodeLLDB drives the "Debug a host test" launch configuration; lldb is the
-  // debugger Apple's toolchain ships, so it needs nothing else installed.
+  // CodeLLDB drives the "Debug a host test" launch configuration. It bundles
+  // its own lldb, so it needs nothing else installed on any host.
   "recommendations": [
     "llvm-vs-code-extensions.vscode-clangd",
     "trond-snekvik.devicetree",
