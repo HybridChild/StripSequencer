@@ -80,3 +80,13 @@
 		led-strip = &led_strip;
 	};
 };
+
+/*
+ * The user button shorts PC13 to ground, and the board fits no resistor to
+ * hold it high, as measured on the bench. Zephyr v4.4.1's board file calls
+ * it active-high with no pull, which leaves the pin floating and counts a
+ * release as a press: a finger near the button is enough to trigger it.
+ */
+&user_button {
+	gpios = <&gpioc 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+};
