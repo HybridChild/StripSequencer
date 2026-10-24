@@ -29,6 +29,11 @@
  * them; the driver wants both directions even for a write. dma1 and dmamux1
  * are already enabled by the board. CONFIG_SPI_STM32_DMA is in this board's
  * .conf.
+ *
+ * The Zephyr tree needs the patch in zephyr/patches.yml. v4.4.1's DMA path
+ * enables the SPI before arming the DMA, and an enabled master with nothing
+ * to send holds MOSI high, measured on the bench: the high runs into the
+ * first symbol, so the first pixel always reads its green MSB as a 1.
  */
 &spi3 {
 	status = "okay";

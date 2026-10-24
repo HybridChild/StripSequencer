@@ -1,0 +1,24 @@
+# Changes this module needs in the Zephyr tree it builds against, for
+# `west patch`. They are applied to the workspace, not built from here. Run it
+# from the workspace; -sm cannot name a module outside it, so the two paths are
+# given instead:
+#
+#   west patch -b $REPO/zephyr/patches -l $REPO/zephyr/patches.yml apply
+#
+# `git apply` underneath is not idempotent: a second apply fails, harmlessly.
+#
+# Each one belongs upstream, and goes from here once a Zephyr release carries
+# it. Never run `west patch clean` against a workspace with work of its own in
+# it: it runs `git checkout .` and `git clean -dfx` in every patched module.
+patches:
+  - path: zephyr/spi-stm32-enable-after-dma-armed.patch
+    sha256sum: b0b0dd9682e225df7c4009f275000c98419d8838b60c41d7b7c08b623610a24e
+    module: zephyr
+    author: Esben Dueholm Nørgaard
+    email: esbendn@tutanota.com
+    date: 2026-10-24
+    upstreamable: true
+    comments: >-
+      Needed by the Nucleo-U083RC overlay, which drives the strip from SPI3's
+      MOSI over DMA. Without it the first pixel's green MSB is always set. The
+      H7 SPI takes another branch and is unaffected.

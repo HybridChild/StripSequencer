@@ -1,0 +1,42 @@
+drivers: spi: stm32: enable the SPI only once its DMA is armed
+
+On the non-H7 SPI, transceive_dma() sets SPE before it starts the DMA
+channels. An enabled master with an empty TX FIFO drives MOSI high, and
+holds it there until the first byte arrives, so the first bit of every
+transfer is stretched by however long the DMA setup takes. A WS2812-class
+strip driven from MOSI reads that bit as a 1: on a Nucleo-U083RC the
+first pixel's green MSB is always set.
+
+Enable the SPI after the DMA requests, as the reference manual orders
+it, so the TX FIFO is already full when shifting starts.
+
+diff --git a/drivers/spi/spi_stm32.c b/drivers/spi/spi_stm32.c
+index 5f134e6c681..276d6556bfd 100644
+--- a/drivers/spi/spi_stm32.c
++++ b/drivers/spi/spi_stm32.c
+@@ -2099,8 +2099,6 @@ static int transceive_dma(const struct device *dev,
+ 	if (transfer_dir != STM32_SPI_HALF_DUPLEX_RX && LL_SPI_GetMode(spi) == LL_SPI_MODE_MASTER) {
+ 		LL_SPI_StartMasterTransfer(spi);
+ 	}
+-#else
+-	LL_SPI_Enable(spi);
+ #endif /* st_stm32h7_spi */
+ 
+ 	/* This is turned off in spi_stm32_complete(). */
+@@ -2154,6 +2152,16 @@ static int transceive_dma(const struct device *dev,
+ #if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
+ 		/* toggle the DMA request to restart the transfer */
+ 		spi_dma_enable_requests(spi);
++
++		/*
++		 * Enable the SPI only once the DMA is armed, as the reference
++		 * manual orders it. An enabled master with nothing to send
++		 * drives MOSI high until the first byte arrives, which
++		 * stretches the first bit of the transfer.
++		 */
++		if (!LL_SPI_IsEnabled(spi)) {
++			LL_SPI_Enable(spi);
++		}
+ #endif /* ! st_stm32h7_spi */
+ 
+ #ifdef CONFIG_SPI_ASYNC
