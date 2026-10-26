@@ -16,7 +16,7 @@
 #                  idles in sleep, and Zephyr gates D1's debug clocks there
 #                  unless CONFIG_STM32_ENABLE_DEBUG_SLEEP_STOP is set. pyocd
 #                  cannot get past that, under reset or not.
-#   nucleo_u083rc  pyocd, as Zephyr v4.4.1's board file offers no openocd.
+#   nucleo_u083rc  pyocd, as Zephyr's board file offers no openocd.
 #                  pyocd comes with the workspace's Python requirements, but
 #                  knows the part only once its CMSIS pack is installed, once
 #                  per machine: `pyocd pack install stm32u083rctx`.

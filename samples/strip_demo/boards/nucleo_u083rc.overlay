@@ -11,10 +11,10 @@
  *
  * SCK is routed to PB3 (Arduino D3) although the strip never reads it, so
  * keep D3 free. The controller receives only with SCK on a pin, measured on
- * the bench, and from Zephyr v4.5 the DMA path finishes a transfer only once
- * its receive side has: with SCK internal, every frame waits out the
- * driver's one-second timeout and returns -EAGAIN. MISO stays unrouted, so
- * the unused received bytes read as zero.
+ * the bench, and the driver's DMA path finishes a transfer only once its
+ * receive side has: with SCK internal, every frame waits out the driver's
+ * one-second timeout and returns -EAGAIN. MISO stays unrouted, so the unused
+ * received bytes read as zero.
  *
  * Build with --rgb. worldsemi,ws2812-spi implements led_strip_update_rgb()
  * and not led_strip_update_channels(), so an RGBW build runs but every update
@@ -36,10 +36,10 @@
  * are already enabled by the board. CONFIG_SPI_STM32_DMA is in this board's
  * .conf.
  *
- * The Zephyr tree needs the patch in zephyr/patches.yml. v4.4.1's DMA path
- * enables the SPI before arming the DMA, and an enabled master with nothing
- * to send holds MOSI high, measured on the bench: the high runs into the
- * first symbol, so the first pixel always reads its green MSB as a 1.
+ * The Zephyr tree needs the patch in zephyr/patches.yml. Without it the DMA
+ * path enables the SPI before arming the DMA, and an enabled master with
+ * nothing to send holds MOSI high, measured on the bench: the high runs into
+ * the first symbol, so the first pixel always reads its green MSB as a 1.
  */
 &spi3 {
 	status = "okay";
@@ -90,14 +90,4 @@
 	aliases {
 		led-strip = &led_strip;
 	};
-};
-
-/*
- * The user button shorts PC13 to ground, and the board fits no resistor to
- * hold it high, as measured on the bench. Zephyr v4.4.1's board file calls
- * it active-high with no pull, which leaves the pin floating and counts a
- * release as a press: a finger near the button is enough to trigger it.
- */
-&user_button {
-	gpios = <&gpioc 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 };

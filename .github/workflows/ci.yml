@@ -154,12 +154,12 @@ jobs:
           path: |
             ${{ env.ZEPHYR_WORKSPACE }}
             ${{ env.ZEPHYR_SDK_INSTALL_DIR }}
-          key: zephyr-v4.4.1-hal_stm32-cmsis_6-sdk-arm
+          key: zephyr-v4.5.0-rc3-hal_stm32-cmsis_6-sdk-arm
 
       - name: Set up the workspace
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.4.1 \
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.5.0-rc3 \
                     -o=--depth=1 "$ZEPHYR_WORKSPACE"
           cd "$ZEPHYR_WORKSPACE"
           west config manifest.project-filter -- '-.*,+cmsis_6,+hal_stm32'

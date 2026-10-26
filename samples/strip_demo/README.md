@@ -14,7 +14,7 @@ scripts/sample-flash.sh
 scripts/console.sh             # 115200 8N1 on the ST-LINK port
 ```
 
-The scripts expect a Zephyr v4.4.1 workspace at `~/zephyr-workspace`, or wherever `ZEPHYR_WORKSPACE` points. The sample names this repository in `ZEPHYR_EXTRA_MODULES`, so the workspace's `west.yml` never has to know about it.
+The scripts expect a Zephyr v4.5.0-rc3 workspace at `~/zephyr-workspace`, or wherever `ZEPHYR_WORKSPACE` points. The sample names this repository in `ZEPHYR_EXTRA_MODULES`, so the workspace's `west.yml` never has to know about it.
 
 `scripts/sample-build.sh --rgb` builds the same sample with `CONFIG_STRIPSEQ_WHITE_CHANNEL=n`, which takes the other adapter path: `led_strip_update_rgb()` on the buffer as it stands instead of a permute and `led_strip_update_channels()`. On this strip it runs with the white die dark, which is the driver's documented behaviour rather than a fault. CI builds both.
 
