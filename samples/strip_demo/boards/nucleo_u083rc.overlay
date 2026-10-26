@@ -7,8 +7,14 @@
 /*
  * The bench strip on a Nucleo-U083RC: the same 11 SK6812-class RGBW pixels
  * (ILPL-K501), driven from SPI3 with data out on PB5 (Arduino D4). The U0 has
- * no I2S, so each LED bit is a short symbol on MOSI instead. Only MOSI is
- * routed; SCK runs inside the peripheral and never needs to leave the chip.
+ * no I2S, so each LED bit is a short symbol on MOSI instead.
+ *
+ * SCK is routed to PB3 (Arduino D3) although the strip never reads it, so
+ * keep D3 free. The controller receives only with SCK on a pin, measured on
+ * the bench, and from Zephyr v4.5 the DMA path finishes a transfer only once
+ * its receive side has: with SCK internal, every frame waits out the
+ * driver's one-second timeout and returns -EAGAIN. MISO stays unrouted, so
+ * the unused received bytes read as zero.
  *
  * Build with --rgb. worldsemi,ws2812-spi implements led_strip_update_rgb()
  * and not led_strip_update_channels(), so an RGBW build runs but every update
@@ -39,11 +45,11 @@
 	status = "okay";
 	/*
 	 * Between frames the line must read low, or the next frame's first bit
-	 * is lost. The HAL's pinctrl node for this pin already carries a
-	 * pull-down, which holds it there if the peripheral lets go of the pin
-	 * when a transfer ends.
+	 * is lost. The HAL's pinctrl node for MOSI already carries a pull-down,
+	 * which holds it there if the peripheral lets go of the pin when a
+	 * transfer ends.
 	 */
-	pinctrl-0 = <&spi3_mosi_pb5>;
+	pinctrl-0 = <&spi3_mosi_pb5 &spi3_sck_pb3>;
 	pinctrl-names = "default";
 	dmas = <&dmamux1 2 41 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
 	       <&dmamux1 1 40 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
