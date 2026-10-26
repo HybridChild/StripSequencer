@@ -1,42 +1,153 @@
-drivers: spi: stm32: enable the SPI only once its DMA is armed
+From 3521b3d94932d585328534315947191cc96732c9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Esben=20Dueholm=20N=C3=B8rgaard?= <esbendn@tutanota.com>
+Date: Sun, 25 Oct 2026 09:10:40 +0100
+Subject: [PATCH] drivers: spi: stm32: enable the SPI only once its DMA is
+ armed
 
-On the non-H7 SPI, transceive_dma() sets SPE before it starts the DMA
-channels. An enabled master with an empty TX FIFO drives MOSI high, and
-holds it there until the first byte arrives, so the first bit of every
-transfer is stretched by however long the DMA setup takes. A WS2812-class
-strip driven from MOSI reads that bit as a 1: on a Nucleo-U083RC the
-first pixel's green MSB is always set.
+In both DMA paths, transceive_dma() and the RTIO DMA path, the driver
+sets SPE (and CSTART on H7-like SPIs) before it starts the DMA
+channels. An enabled controller with an empty TX FIFO drives MOSI high
+until the first frame arrives, so the first bit of each transfer is
+stretched by however long the DMA setup takes. Most peripherals sample
+on SCK and never notice, but a self-clocked protocol does: a WS2812
+strip driven from MOSI reads the stretched bit as a 1, so the first
+pixel's green MSB is always set.
 
-Enable the SPI after the DMA requests, as the reference manual orders
-it, so the TX FIFO is already full when shifting starts.
+Set SPE, and CSTART on H7-like SPIs, only after the first DMA channels
+are started, which is the order RM0431, RM0433 and RM0503 give for
+starting a DMA transfer: DMA requests, DMA streams, then SPE. The DMA
+requests and chip select stay ahead of it. Later chunks find the SPI
+already enabled. An H7-like controller in full duplex does not start
+before the TX FIFO holds data, so there the change only brings the order
+in line with RM0433.
+
+Arm the DMA and set SPE with interrupts locked. A transfer that fits in
+the TX FIFO completes its TX DMA before SPE is set, and the
+asynchronous DMA callback, used by RTIO and by asynchronous calls,
+waits for the TX FIFO to drain; taken before SPE, it never returns.
+spi_loopback under RTIO with DMA hangs in its 4-byte asymmetric null
+buffers test on a Nucleo-U083RC without the lock.
+
+Measured on a Nucleo-U083RC driving a WS2812-class strip from SPI3
+(MOSI on PB5): without this change, the TX FIFO is empty and PB5 reads
+high once SPE is set, and pixel 0 always shows its green MSB set; with
+it, SR shows the TX FIFO full (0x1800) and PB5 low when SPE is set,
+and pixel 0 shows the right color.
+
+Tested with spi_loopback on a Nucleo-U083RC and a Nucleo-H753ZI (DMA,
+interrupt, RTIO and RTIO with DMA scenarios, plus DMA with nocache
+memory on the H753), and built for the STM32 DMA scenarios on all
+their platforms.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ drivers/spi/spi_stm32.c | 46 ++++++++++++++++++++++++++++++++---------
+ 1 file changed, 36 insertions(+), 10 deletions(-)
 
 diff --git a/drivers/spi/spi_stm32.c b/drivers/spi/spi_stm32.c
-index 5f134e6c681..276d6556bfd 100644
+index 9733dbf4faa..a0fa06c9a10 100644
 --- a/drivers/spi/spi_stm32.c
 +++ b/drivers/spi/spi_stm32.c
-@@ -2099,8 +2099,6 @@ static int transceive_dma(const struct device *dev,
- 	if (transfer_dir != STM32_SPI_HALF_DUPLEX_RX && LL_SPI_GetMode(spi) == LL_SPI_MODE_MASTER) {
- 		LL_SPI_StartMasterTransfer(spi);
- 	}
--#else
--	LL_SPI_Enable(spi);
- #endif /* st_stm32h7_spi */
+@@ -1039,6 +1039,7 @@ static void spi_stm32_iodev_msg_start(const struct device *dev, struct spi_confi
+ #endif /* CONFIG_DCACHE */
+ 		uint32_t transfer_dir = LL_SPI_GetTransferDirection(spi);
+ 		size_t dma_len;
++		unsigned int key;
+ 		int ret = 0;
  
- 	/* This is turned off in spi_stm32_complete(). */
-@@ -2154,6 +2152,16 @@ static int transceive_dma(const struct device *dev,
- #if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
- 		/* toggle the DMA request to restart the transfer */
+ 		struct dma_config *rx_cfg = &data->dma_rx.dma_cfg;
+@@ -1050,16 +1051,15 @@ static void spi_stm32_iodev_msg_start(const struct device *dev, struct spi_confi
+ 		tx_cfg->dest_data_size   = tx_cfg->dest_burst_length   = dfs;
+ 
  		spi_dma_enable_requests(spi);
+-		LL_SPI_Enable(spi);
+ 		spi_stm32_cs_control(dev, true);
+-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
+-		LL_SPI_StartMasterTransfer(spi);
+-#endif /* st_stm32h7_spi */
+ 
+ 		data->status_flags = 0;
+ 		data->tx_len = data->ctx.tx_len;
+ 		data->rx_len = data->ctx.rx_len;
+ 
++		/* Arm the DMA, then enable the SPI, see transceive_dma() */
++		key = irq_lock();
 +
+ 		if (transfer_dir == STM32_SPI_FULL_DUPLEX) {
+ 			dma_len = spi_context_max_continuous_chunk(&data->ctx);
+ 			ret = spi_dma_move_buffers(dev, dma_len);
+@@ -1071,10 +1071,19 @@ static void spi_stm32_iodev_msg_start(const struct device *dev, struct spi_confi
+ 			ret = spi_dma_move_rx_buffers(dev, dma_len);
+ 		}
+ 		if (ret != 0) {
++			irq_unlock(key);
+ 			LOG_ERR("Failed to start SPI DMA transfer");
+ 			spi_stm32_iodev_complete(dev, -EIO);
++			return;
+ 		}
+ 
++		LL_SPI_Enable(spi);
++#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
++		LL_SPI_StartMasterTransfer(spi);
++#endif /* st_stm32h7_spi */
++
++		irq_unlock(key);
++
+ 		return;
+ 	}
+ #endif /* CONFIG_SPI_STM32_DMA */
+@@ -1961,6 +1970,7 @@ static int transceive_dma(const struct device *dev,
+ 	SPI_TypeDef *spi = cfg->spi;
+ 	struct dma_config *rx_cfg = &data->dma_rx.dma_cfg, *tx_cfg = &data->dma_tx.dma_cfg;
+ 	uint32_t transfer_dir = ll_get_transfer_direction(spi);
++	unsigned int key;
+ 	int ret;
+ 	int err;
+ 	uint8_t dfs = bits2bytes(config->operation);
+@@ -1974,17 +1984,22 @@ static int transceive_dma(const struct device *dev,
+ 
+ 	/* Set request before enabling (otherwise SPI CFG1 reg may be write protected) */
+ 	spi_dma_enable_requests(spi);
+-	LL_SPI_Enable(spi);
+ 	spi_stm32_cs_control(dev, true);
+-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
+-	if (SPI_OP_MODE_GET(config->operation) == SPI_OP_MODE_CONTROLLER) {
+-		LL_SPI_StartMasterTransfer(spi);
+-	}
+-#endif /* st_stm32h7_spi */
+ 
+ 	do {
+ 		data->status_flags = 0;
+ 
 +		/*
-+		 * Enable the SPI only once the DMA is armed, as the reference
-+		 * manual orders it. An enabled master with nothing to send
-+		 * drives MOSI high until the first byte arrives, which
-+		 * stretches the first bit of the transfer.
++		 * Enable the SPI only once the DMA is armed. An enabled controller
++		 * with an empty TX FIFO drives MOSI high until the first frame
++		 * arrives, which stretches the first bit on the wire.
++		 *
++		 * Keep interrupts locked until SPE is set: a transfer that fits in
++		 * the TX FIFO completes its TX DMA before then, and the asynchronous
++		 * DMA callback waits for the TX FIFO to drain.
 +		 */
++		key = irq_lock();
++
+ 		if (transfer_dir == STM32_SPI_FULL_DUPLEX) {
+ 			data->tx_len = data->rx_len = spi_context_max_continuous_chunk(&data->ctx);
+ 			ret = spi_dma_move_buffers(dev, data->tx_len);
+@@ -1996,6 +2011,17 @@ static int transceive_dma(const struct device *dev,
+ 			ret = spi_dma_move_rx_buffers(dev, data->rx_len);
+ 		}
+ 
 +		if (!LL_SPI_IsEnabled(spi)) {
 +			LL_SPI_Enable(spi);
++#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
++			if (SPI_OP_MODE_GET(config->operation) == SPI_OP_MODE_CONTROLLER) {
++				LL_SPI_StartMasterTransfer(spi);
++			}
++#endif /* st_stm32h7_spi */
 +		}
- #endif /* ! st_stm32h7_spi */
- 
++
++		irq_unlock(key);
++
  #ifdef CONFIG_SPI_ASYNC
+ 		if (data->ctx.asynchronous) {
+ 			return spi_context_wait_for_completion(&data->ctx);
