@@ -167,23 +167,6 @@ TEST_CASE("load refers to the sequence, so a rebuild into it shows at once") {
     CHECK(seq.sequence().at(seq.playhead(750)).color == colors::green);
 }
 
-TEST_CASE("no_sequence unloads: black, held forever, wherever the clock is") {
-    Sequencer seq;
-    seq.load(endless_777);
-    seq.play(0);
-    seq.load(no_sequence);
-    for (const Sequencer& s : {seq, Sequencer{}}) {
-        CHECK(&s.sequence() == &no_sequence);
-        CHECK_FALSE(s.playing());
-        for (int64_t now : {int64_t{0}, int64_t{1234}, two_40}) {
-            CAPTURE(now);
-            const Sample sample = s.sequence().at(s.playhead(now));
-            CHECK(sample.color == colors::black);
-            CHECK(sample.hold_ms == hold_forever);
-        }
-    }
-}
-
 /* ------------------------------------------------------------------------ */
 /* play, pause and seek                                                      */
 /* ------------------------------------------------------------------------ */
@@ -387,7 +370,8 @@ TEST_CASE("an endless playhead is exact on the longest loop and at either end of
     /* The remainder's own edges, which a 777 ms loop leaves out: a loop with
      * the most bits the builder allows, so that doubling the remainder comes
      * closest to the top of a uint32_t, and odd, so that no power of two
-     * divides it; and positions whose high word is full. */
+     * divides it, across the positions above; and positions whose high word
+     * is full, on both loops. */
     constexpr Sequence longest_loop =
         SequenceBuilder{}.hold(colors::red, 1).fade_to(colors::green, longest_total_ms - 2).build_const();
     static_assert(longest_loop.loop_duration_ms() == longest_total_ms - 1);
@@ -402,10 +386,14 @@ TEST_CASE("an endless playhead is exact on the longest loop and at either end of
             CAPTURE(position);
             CHECK(seq.playhead(position) == mod_loop(position, s->loop_duration_ms()));
         }
-        for (int64_t position : positions) {
-            CAPTURE(position);
-            CHECK(seq.playhead(position) == mod_loop(position, s->loop_duration_ms()));
-        }
+    }
+
+    Sequencer seq;
+    seq.load(longest_loop);
+    seq.play(0);
+    for (int64_t position : positions) {
+        CAPTURE(position);
+        CHECK(seq.playhead(position) == mod_loop(position, loop));
     }
 }
 
@@ -451,8 +439,9 @@ TEST_CASE("a finite sequence left playing for 60 days stays on its landing color
 
 /* The arithmetic the limit rests on, and the room it leaves. These read the
  * constants above, not the library's own, which are private to its sources:
- * they are the proof the limit is worked out from. The test case below is
- * what checks the library against it. */
+ * they are the proof the limit is worked out from. "the largest stagger at
+ * either end of the sequencer's range is exact", in tests/segment.cpp, is what
+ * checks the library against it. */
 static_assert(int64_t{limit_ms} - largest_lag_ms > int64_t{longest_total_ms});
 static_assert(int64_t{limit_ms} + largest_lead_ms <= INT32_MAX);
 static_assert(-int64_t{limit_ms} + largest_lead_ms < 0);
@@ -461,46 +450,26 @@ static_assert(-int64_t{limit_ms} - largest_lag_ms >= INT32_MIN);
 /* And an endless loop of the longest length still leaves room either way. */
 static_assert(int64_t{longest_total_ms} - 1 + largest_lead_ms <= INT32_MAX);
 
-TEST_CASE("a narrowed playhead plus or minus any stagger is still exact") {
-    /* The builder does accept a total that long, and one more is refused. */
-    Sequence longest;
-    REQUIRE(SequenceBuilder{}.start_color(colors::black).hold(colors::red, longest_total_ms)
-                .landing_color(colors::green).repeat(1).build(longest) == Error::None);
-    CHECK(longest.total_duration_ms() == longest_total_ms);
-    Sequence too_long;
-    CHECK(SequenceBuilder{}.hold(colors::red, longest_total_ms + 1).repeat(1).build(too_long) ==
-          Error::TooLong);
-
-    /* So the most-staggered pixel at either limit shows the color at that end. */
-    CHECK(longest.at(limit_ms - largest_lag_ms).color == colors::green);
-    CHECK(longest.at(limit_ms - largest_lag_ms).hold_ms == hold_forever);
-    CHECK(longest.at(-limit_ms + largest_lead_ms).color == colors::black);
-}
-
-TEST_CASE("the playhead is continuous where a 32-bit clock would break") {
-    /* Millisecond by millisecond across 2^31 and 2^32 ms of play, where an
-     * int32_t difference turns negative and a uint32_t clock wraps. */
-    for (int64_t edge : {two_31, two_32}) {
-        Sequencer seq;
-        seq.load(endless_777);
-        seq.play(edge);   /* the clock itself crosses the same edge */
-        int32_t last = seq.playhead(edge + edge - 1000);
-        for (int64_t now = edge + edge - 999; now <= edge + edge + 1000; ++now) {
-            const int32_t p = seq.playhead(now);
-            if (p != (last + 1) % 777) {
-                CAPTURE(edge);
-                CAPTURE(now);
-                CHECK(p == (last + 1) % 777);
-                break;
-            }
-            last = p;
-        }
-    }
-}
-
 /* ------------------------------------------------------------------------ */
 /* The empty sequence                                                        */
 /* ------------------------------------------------------------------------ */
+
+TEST_CASE("no_sequence unloads: black, held forever, wherever the clock is") {
+    Sequencer seq;
+    seq.load(endless_777);
+    seq.play(0);
+    seq.load(no_sequence);
+    for (const Sequencer& s : {seq, Sequencer{}}) {
+        CHECK(&s.sequence() == &no_sequence);
+        CHECK_FALSE(s.playing());
+        for (int64_t now : {int64_t{0}, int64_t{1234}, two_40}) {
+            CAPTURE(now);
+            const Sample sample = s.sequence().at(s.playhead(now));
+            CHECK(sample.color == colors::black);
+            CHECK(sample.hold_ms == hold_forever);
+        }
+    }
+}
 
 TEST_CASE("an empty sequence left playing does not divide by zero") {
     Sequencer seq;

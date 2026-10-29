@@ -73,9 +73,9 @@ The trick is that the binary can enumerate itself. Every framework of this kind 
 You can read the output. It is a real file in the build tree:
 
 ```cmake
-add_test( [==[rgbw:color and step layout follow the white-channel setting]==]
+add_test( [==[rgbw:a pixel takes four bytes with the white channel and three without]==]
           .../build/tests_rgbw
-          [==[--test-case=color and step layout follow the white-channel setting]==])
+          [==[--test-case=a pixel takes four bytes with the white channel and three without]==])
 ```
 
 That is the whole magic: an ordinary `add_test`, with an ordinary command line, generated rather than typed. The `TEST_PREFIX "${name}:"` this repo passes is prepended to the CTest name only — the `--test-case=` filter still carries the case's real name, because that is what the binary understands.
@@ -198,11 +198,11 @@ The binary lists its cases by their real names and knows nothing about CTest. CT
 *Demonstrates §4: discovery is code generation, not magic.*
 
 ```sh
-grep -m1 'white-channel' build/tests_rgbw_tests-*.cmake
+grep -m1 'a pixel takes' build/tests_rgbw_tests-*.cmake
 ```
 
 ```
-add_test( [==[rgbw:color and step layout follow the white-channel setting]==] .../tests_rgbw [==[--test-case=color and step layout follow the white-channel setting]==])
+add_test( [==[rgbw:a pixel takes four bytes with the white channel and three without]==] .../tests_rgbw [==[--test-case=a pixel takes four bytes with the white channel and three without]==])
 ```
 
 **Proves:** every discovered test is a plain `add_test` with a filter flag, written by a script that ran your binary with `--list-test-cases` after linking it. You could have typed these by hand; you would have to retype them whenever a case is renamed.
@@ -218,17 +218,17 @@ CHECK(Strip::bytes_per_pixel == 3u);
 ```
 
 ```sh
-./scripts/build.sh && ./scripts/test.sh default -R 'white-channel'
+./scripts/build.sh && ./scripts/test.sh default -R 'a pixel takes'
 ```
 
 The `-R` filter, passed through to `ctest`, narrows the run to the one case's five results; without it the same two failures appear among every case in every configuration.
 
 ```
-1/5 Test #…: rgbw:color and step layout follow the white-channel setting ...........***Failed
-2/5 Test #…: nogamma:color and step layout follow the white-channel setting ........   Passed
-3/5 Test #…: rgbw_nogamma:color and step layout follow the white-channel setting ...***Failed
-4/5 Test #…: default:color and step layout follow the white-channel setting ........   Passed
-5/5 Test #…: tight:color and step layout follow the white-channel setting ..........   Passed
+1/5 Test #…: rgbw:a pixel takes four bytes with the white channel and three without ...........***Failed
+2/5 Test #…: nogamma:a pixel takes four bytes with the white channel and three without ........   Passed
+3/5 Test #…: rgbw_nogamma:a pixel takes four bytes with the white channel and three without ...***Failed
+4/5 Test #…: default:a pixel takes four bytes with the white channel and three without ........   Passed
+5/5 Test #…: tight:a pixel takes four bytes with the white channel and three without ..........   Passed
 60% tests passed, 2 tests failed out of 5
 ```
 
@@ -447,11 +447,11 @@ cmake --build build-ubsan --target tests_default && ./build-ubsan/tests_default 
 The ordinary build fails on Apple Silicon, and the failures say nothing about division:
 
 ```
-tests/sequencer.cpp:511: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+tests/sequencer.cpp:480: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
   values: CHECK( 1 == 0 )
   logged: elapsed := 1
 
-tests/sequencer.cpp:511: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
+tests/sequencer.cpp:480: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NOT correct!
   values: CHECK( 999 == 0 )
   logged: elapsed := 999
 ```
@@ -462,10 +462,10 @@ tests/sequencer.cpp:511: ERROR: CHECK( seq.playhead(5000 + elapsed) == 0 ) is NO
 src/sequencer.cpp:41:49: runtime error: division by zero
 SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior src/sequencer.cpp:41:49
 ===============================================================================
-tests/sequencer.cpp:505:
+tests/sequencer.cpp:474:
 TEST CASE:  an empty sequence left playing does not divide by zero
 
-tests/sequencer.cpp:505: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
+tests/sequencer.cpp:474: FATAL ERROR: test case CRASHED: SIGABRT - Abort (abnormal termination) signal
 ```
 
 `-fno-sanitize-recover=all` makes the first report abort the process, which doctest reports as a crash in the case that was running. **Revert it**, rebuild `build-ubsan`, and the case passes there too. `build-ubsan` matches the `build*/` pattern, so it is ignored by git and removed by `scripts/clean.sh`.
@@ -519,7 +519,7 @@ cmake --build build --target tests_default && ./build/tests_default -tc='generat
 ```
 
 ```
-tests/fuzz.cpp:511: ERROR: hold_ms disagrees with the model
+tests/fuzz.cpp:508: ERROR: hold_ms disagrees with the model
   logged: seed 0, playhead 6069; replay with STRIPSEQ_FUZZ_SEED=0
 ```
 
@@ -549,7 +549,7 @@ cmake --build build --target tests_default && ./build/tests_default -tc='generat
 ```
 
 ```
-tests/fuzz.cpp:523: ERROR: CHECK( built * 3 >= iterations ) is NOT correct!
+tests/fuzz.cpp:519: ERROR: CHECK( built * 3 >= iterations ) is NOT correct!
   values: CHECK( 564 >= 20000 )
   logged: built := 188
 ```
@@ -586,7 +586,7 @@ A test framework and a test runner solve different problems, and the seam betwee
 
 - **[`build-variants-guide.md`](build-variants-guide.md)** — where the five binaries come from, and why the tests cannot be shared between them.
 - **[`dependencies-guide.md`](dependencies-guide.md)** — how `doctest::doctest` reaches the build in the first place, and where `doctest_discover_tests` is defined.
-- **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, that a knob a variant leaves unset has `config.h`'s documented default, and that a `constinit` strip links against the library.
+- **`tests/layout.cpp`** — cases that check the build system rather than the code: that each variant's definitions reached the tests, that a knob a variant leaves unset has `config.h`'s documented default, and that a strip can be declared `constinit`.
 - **`cmake/stripseq_compile_fail.cmake` and `tests/compile_fail/build_const.cpp`** — §7 in full: about eighty lines of CMake and one probe file with nine cases, then the same pattern once more for `config.h`'s capacity range.
 - **[`constant-initialisation-guide.md`](constant-initialisation-guide.md) §4** — what the probes are testing: how `build_const()` turns an invalid sequence into a compile error that names it.
 - **`tests/cookbook.cpp`** — where the suite becomes an acceptance test: the eleven cookbook recipes, each with property assertions and a golden-frame hash.

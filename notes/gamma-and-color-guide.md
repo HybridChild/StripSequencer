@@ -287,7 +287,7 @@ cmake --build build --target tests_default
 It does not build. The `static_assert` at the end of `tests/color.cpp` evaluates `hsv(0x8000, …)` at compile time, and cyan is no longer exact:
 
 ```
-tests/color.cpp:192:15: error: static assertion failed due to requirement 'Color::hsv(32768, 255, 255).b == 65535'
+tests/color.cpp:178:15: error: static assertion failed due to requirement 'Color::hsv(32768, 255, 255).b == 65535'
 ```
 
 Comment that `static_assert` out, build again, and run the `hsv` cases:
@@ -298,13 +298,13 @@ cmake --build build --target tests_default && ./build/tests_default -tc='hsv*'
 
 ```
 TEST CASE:  hsv is continuous at the sextant boundaries
-tests/color.cpp:152: ERROR: CHECK( worst <= bound ) is NOT correct!
+tests/color.cpp:138: ERROR: CHECK( worst <= bound ) is NOT correct!
   values: CHECK( 15 <= 7 )
   logged: sat := 255
           val := 255
 …
 TEST CASE:  hsv lands on the primaries at the sextant starts it can reach exactly
-tests/color.cpp:177: ERROR: CHECK( Color::hsv(0x8000, 255, 255) == Color::rgb(0, 65535, 65535) ) is NOT correct!
+tests/color.cpp:163: ERROR: CHECK( Color::hsv(0x8000, 255, 255) == Color::rgb(0, 65535, 65535) ) is NOT correct!
   values: CHECK( rgb(0, 65535, 65532) == rgb(0, 65535, 65535) )
 [doctest] test cases:     4 |     2 passed | 2 failed | 115 skipped
 ```

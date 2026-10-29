@@ -116,7 +116,7 @@ TEST_CASE("the W channel survives the conversion unchanged") { ... }
 #endif
 ```
 
-The file is always in the build, so the guard is visible where the test is, and deleting or mis-spelling a variant name cannot silently remove a case. `tests/layout.cpp` uses the same style for its expectations, choosing values with `STRIPSEQ_WHITE_CHANNEL ? 8 : 6` rather than splitting into two files.
+The file is always in the build, so the guard is visible where the test is, and deleting or mis-spelling a variant name cannot silently remove a case. `tests/layout.cpp` uses the same style for its expectations, choosing values with `STRIPSEQ_WHITE_CHANNEL ? 4u : 3u` rather than splitting into two files.
 
 ---
 

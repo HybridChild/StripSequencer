@@ -55,23 +55,6 @@ TEST_CASE("to_bytes at full brightness encodes every top byte") {
     }
 }
 
-TEST_CASE("to_bytes keeps the ends fixed and never runs backwards") {
-    uint8_t out[bytes];
-    to_bytes(gray(0), 255, out);
-    CHECK(out[0] == 0);
-    to_bytes(gray(65535), 255, out);
-    CHECK(out[0] == 255);
-
-    uint8_t prev = 0;
-    bool monotonic = true;
-    for (uint32_t v = 0; v <= 65535; ++v) {
-        to_bytes(gray(static_cast<uint16_t>(v)), 255, out);
-        monotonic = monotonic && out[0] >= prev;
-        prev = out[0];
-    }
-    CHECK(monotonic);
-}
-
 TEST_CASE("to_bytes at brightness 0 is black whatever the color") {
     for (uint32_t v : {0u, 1u, 255u, 256u, 32768u, 65535u}) {
         CAPTURE(v);

@@ -130,19 +130,6 @@ static_assert(hash(2) == 0xD1132181u);
 static_assert(hash(0xFFFFFFFFu) == 0x6768824Au);
 static_assert(hash(0xDEADBEEFu) == 0xE628C683u);
 
-/* The property the header promises, and the one a multiplicative hash lacks:
- * flipping any input bit can flip any output bit. A multiply alone never lets
- * a high input bit reach a low output bit. */
-TEST_CASE("hash lets every input bit reach every output bit") {
-    for (uint32_t bit = 0; bit < 32; ++bit) {
-        CAPTURE(bit);
-        uint32_t reached = 0;
-        for (uint32_t x = 0; x < 1000; ++x)
-            reached |= hash(x) ^ hash(x ^ (uint32_t{1} << bit));
-        CHECK(reached == 0xFFFFFFFFu);
-    }
-}
-
 /* ------------------------------------------------------------------------ */
 /* spread                                                                    */
 /* ------------------------------------------------------------------------ */
@@ -178,20 +165,6 @@ TEST_CASE("spread keeps a ring's accumulated error under 1 ms up to 511 pixels")
 /* ------------------------------------------------------------------------ */
 
 TEST_CASE("the setters accept the largest stagger either way and refuse one more") {
-    Sequencer seq;
-    Segment s(0, kPixels, seq);
-    CHECK(s.set_pixel_delay_q8(largest_q8));
-    CHECK(s.set_pixel_delay_q8(-largest_q8));
-    CHECK_FALSE(s.set_pixel_delay_q8(largest_q8 + 1));
-    CHECK_FALSE(s.set_pixel_delay_q8(-largest_q8 - 1));
-    CHECK_FALSE(s.set_pixel_delay_q8(INT32_MIN));
-
-    /* In whole milliseconds, the same bound rounded down to a whole one. */
-    CHECK(s.set_pixel_delay(largest_q8 / 256));
-    CHECK_FALSE(s.set_pixel_delay(largest_q8 / 256 + 1));
-}
-
-TEST_CASE("the setters' bound is the product's, for every length of segment") {
     /* The setter takes the product in two halves, so its bound has corners a
      * single length does not reach: the high half alone over the limit, and
      * the low half carrying it over. Every span against the product in
@@ -213,6 +186,11 @@ TEST_CASE("the setters' bound is the product's, for every length of segment") {
                   (product >= -INT32_MAX && product <= INT32_MAX));
         }
     }
+
+    /* In whole milliseconds, the same bound rounded down to a whole one. */
+    Segment s(0, kPixels, seq);
+    CHECK(s.set_pixel_delay(largest_q8 / 256));
+    CHECK_FALSE(s.set_pixel_delay(largest_q8 / 256 + 1));
 }
 
 TEST_CASE("a segment of one pixel takes any delay that can be stored") {

@@ -152,7 +152,7 @@ Both are exact through `at()`, which is what lets them apply on every path. An e
 
 Note that the clamp is the very thing §4 called a trap. It is safe here for one reason: the difference underneath is `int64_t`, so it cannot have gone wrong before the clamp sees it. **Clamping an answer is sound exactly when the value it clamps was computed in a type that could not overflow on the way** (§11, Exercise 3 breaks that and watches the trap return).
 
-Why 2³⁰, and not the sequence's own total? Because a segment of pixels is *staggered*: its last pixel runs some fixed delay behind the sequencer, so it asks `at()` about the playhead minus that stagger, and a playhead clamped at the total would leave every staggered pixel short of the end forever. The sequencer does not know which segments read from it, so it clamps at a constant chosen to clear every case at once. The builder refuses any total over 2²⁹ ms, and the segment's overflow guard keeps every stagger within 2²³ ms either way — a stagger is a pixel index times a delay that must fit in an `int32_t` with 8 fractional bits. So 2³⁰ − 2²³ is still well past 2²⁹, 2³⁰ + 2²³ is still inside `int32_t`, and the same holds in mirror image below zero. Two limits enforced elsewhere are what make the constant exact, and the test called "a narrowed playhead plus or minus any stagger is still exact" writes that arithmetic down where a change to either limit would break it.
+Why 2³⁰, and not the sequence's own total? Because a segment of pixels is *staggered*: its last pixel runs some fixed delay behind the sequencer, so it asks `at()` about the playhead minus that stagger, and a playhead clamped at the total would leave every staggered pixel short of the end forever. The sequencer does not know which segments read from it, so it clamps at a constant chosen to clear every case at once. The builder refuses any total over 2²⁹ ms, and the segment's overflow guard keeps every stagger within 2²³ ms either way — a stagger is a pixel index times a delay that must fit in an `int32_t` with 8 fractional bits. So 2³⁰ − 2²³ is still well past 2²⁹, 2³⁰ + 2²³ is still inside `int32_t`, and the same holds in mirror image below zero. Two limits enforced elsewhere are what make the constant exact. `tests/sequencer.cpp` writes that arithmetic down as static_asserts, and the test called "the largest stagger at either end of the sequencer's range is exact" checks the library against it.
 
 Narrowing applies to the answer, never to what is stored. `pause()` records `position(now)`, not `playhead(now)`, so the stored value is exact however far out it is, and a position sought to −2³¹ plays in from −2³¹ rather than from the −2³⁰ it reads as.
 
@@ -362,23 +362,23 @@ cd "$REPO" && cmake --build build --target tests_default && ./build/tests_defaul
 ```
 TEST CASE:  a finite sequence left playing for 60 days stays on its landing color
 
-tests/sequencer.cpp:446: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
+tests/sequencer.cpp:434: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
   values: CHECK( rgb(0, 0, 0) == rgb(0, 65535, 0) )
   logged: day := 25
 
-tests/sequencer.cpp:447: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
+tests/sequencer.cpp:435: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
   values: CHECK( 1073741824 == 4294967295 )
   logged: day := 25
 
-tests/sequencer.cpp:446: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
+tests/sequencer.cpp:434: ERROR: CHECK( wipe.at(p).color == colors::green ) is NOT correct!
   values: CHECK( rgb(0, 0, 0) == rgb(0, 65535, 0) )
   logged: day := 49
 
-tests/sequencer.cpp:447: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
+tests/sequencer.cpp:435: ERROR: CHECK( wipe.at(p).hold_ms == hold_forever ) is NOT correct!
   values: CHECK( 61367096 == 4294967295 )
   logged: day := 49
 
-tests/sequencer.cpp:449: ERROR: CHECK( seq.playhead(777777 + 60 * ms_per_day) == limit_ms ) is NOT correct!
+tests/sequencer.cpp:437: ERROR: CHECK( seq.playhead(777777 + 60 * ms_per_day) == limit_ms ) is NOT correct!
   values: CHECK( 889032704 == 1073741824 )
 ```
 
@@ -399,13 +399,13 @@ cmake --build build --target tests_default && ./build/tests_default -tc='play wh
 ```
 TEST CASE:  play while playing and pause while paused change nothing
 
-tests/sequencer.cpp:300: ERROR: CHECK( seq.playhead(1700) == 700 ) is NOT correct!
+tests/sequencer.cpp:283: ERROR: CHECK( seq.playhead(1700) == 700 ) is NOT correct!
   values: CHECK( 0 == 700 )
 
-tests/sequencer.cpp:301: ERROR: CHECK( seq.playhead(2000) == 1000 ) is NOT correct!
+tests/sequencer.cpp:284: ERROR: CHECK( seq.playhead(2000) == 1000 ) is NOT correct!
   values: CHECK( 300 == 1000 )
 
-tests/sequencer.cpp:304: FATAL ERROR: REQUIRE( seq.playhead(2500) == 1500 ) is NOT correct!
+tests/sequencer.cpp:287: FATAL ERROR: REQUIRE( seq.playhead(2500) == 1500 ) is NOT correct!
   values: REQUIRE( 800 == 1500 )
 ```
 

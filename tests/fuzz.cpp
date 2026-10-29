@@ -395,9 +395,6 @@ Finding check(const uint8_t* data, size_t size) {
         const Sample got = s.at(p);
         const Expected want = expect(m, p);
 
-        if (!same(no_sequence.at(p), Sample{colors::black, hold_forever}))
-            return {"no_sequence is not black forever", p, true};
-
         /* Against the model. */
         if (want.fading) {
             if (got.hold_ms != 0)

@@ -402,11 +402,11 @@ cd "$REPO" && cmake --build build --target tests_default && ./build/tests_defaul
 
 ```
 TEST CASE:  TooLong: totals that overflow uint32_t are still too long
-tests/sequence.cpp:501: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32768)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:489: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32768)) == Error::TooLong ) is NOT correct!
   values: CHECK( 0 == 7 )
-tests/sequence.cpp:503: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32769)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:491: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 17).repeat(32769)) == Error::TooLong ) is NOT correct!
   values: CHECK( 0 == 7 )
-tests/sequence.cpp:506: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 31).hold(colors::red, 1u << 31)) == Error::TooLong ) is NOT correct!
+tests/sequence.cpp:494: ERROR: CHECK( error_of(SequenceBuilder{}.hold(colors::red, 1u << 31).hold(colors::red, 1u << 31)) == Error::TooLong ) is NOT correct!
   values: CHECK( 8 == 7 )
 [doctest] test cases:  3 | 2 passed | 1 failed | 116 skipped
 ```

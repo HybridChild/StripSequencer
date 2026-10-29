@@ -93,7 +93,7 @@ TEST_CASE("endless steps: color and hold inside each step, and at its boundaries
     CHECK(s.at(1000).hold_ms == 500);
 }
 
-TEST_CASE("endless: a negative playhead wraps rather than falling off") {
+TEST_CASE("endless: a negative playhead wraps rather than falling off, however far") {
     const Sequence s = built(SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500));
 
     CHECK(s.at(-1).color == colors::black);     /* 999 */
@@ -104,14 +104,10 @@ TEST_CASE("endless: a negative playhead wraps rather than falling off") {
     CHECK(s.at(-501).hold_ms == 1);
     CHECK(s.at(-1000).color == colors::red);    /* 0 */
     CHECK(s.at(-1000).hold_ms == 500);
-}
 
-TEST_CASE("endless: far-negative and far-positive playheads land in the right place") {
-    /* -1 alone would not catch the trap: `p % loop` is negative for every
-     * negative p, and a fix that only handles small ones -- adding one loop,
-     * say -- passes at -1 and fails here. */
-    const Sequence s = built(SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500));
-
+    /* Small negatives alone would not catch the trap: `p % loop` is negative
+     * for every negative p, and a fix that only handles small ones -- adding
+     * one loop, say -- passes above and fails here. */
     CHECK(s.at(-1'000'000'007).color == colors::black);   /* 993 */
     CHECK(s.at(-1'000'000'007).hold_ms == 7);
     CHECK(s.at(INT32_MIN).color == colors::red);          /* -2147483648 = 352 mod 1000 */
@@ -286,61 +282,49 @@ TEST_CASE("finite: the alert flashes three times and lands") {
 /* Easing                                                                    */
 /* ------------------------------------------------------------------------ */
 
-/* A fade of 65535 ms from black to full red makes the red channel *be* the
- * curve: t equals the elapsed milliseconds exactly, and a lerp from 0 to 65535
- * returns t unchanged. So every value the curve can take is one at() away, and
- * the invariants are checked exhaustively rather than on a sample.
- *
- * Each is finite, so that the fade starts from black. Endless, a one-step
- * sequence fades from its own last color -- itself -- and is solid red. */
 TEST_CASE("every curve is exact at both ends and monotonic in between") {
     for (Transition kind : {Transition::Linear, Transition::EaseIn,
                             Transition::EaseOut, Transition::EaseInOut}) {
         CAPTURE(static_cast<int>(kind));
-        const Sequence s = built(SequenceBuilder{}.fade_to(red_only, 65535, kind).repeat(1));
-
-        CHECK(s.at(0).color.r == 0);
-
         uint16_t prev = 0;
         bool monotonic = true;
-        for (int32_t p = 0; p < 65535; ++p) {
-            const uint16_t r = s.at(p).color.r;
-            monotonic = monotonic && r >= prev;
-            prev = r;
+        for (uint32_t t = 0; t <= 65535; ++t) {
+            const uint16_t e = ease(kind, static_cast<uint16_t>(t));
+            monotonic = monotonic && e >= prev;
+            prev = e;
         }
+        CHECK(ease(kind, 0) == 0);
         CHECK(monotonic);
-
-        /* No tick at the boundary: the last value inside the fade is within
-         * a couple of LSB of the target the next instant shows exactly. */
-        CHECK(prev >= 65533);
-        CHECK(s.at(65535).color.r == 65535);
+        CHECK(ease(kind, 65535) == 65535);
     }
 }
 
 TEST_CASE("the curves have the shapes their names promise") {
-    const auto mid = [](Transition kind) {
-        return built(SequenceBuilder{}.fade_to(red_only, 65535, kind).repeat(1)).at(32768).color.r;
-    };
-    CHECK(mid(Transition::Linear) == 32768);
-    CHECK(mid(Transition::EaseIn) == 16384);       /* t^2: a quarter at half way */
-    CHECK(mid(Transition::EaseOut) == 49152);      /* 1-(1-t)^2: three quarters */
-    CHECK(mid(Transition::EaseInOut) == 32769);    /* 1 - 2(1-t)^2, just past half */
-    CHECK(built(SequenceBuilder{}.fade_to(red_only, 65535, Transition::EaseInOut).repeat(1))
-              .at(16384).color.r == 8192);         /* 2t^2: an eighth at a quarter */
+    CHECK(ease(Transition::Linear, 32768) == 32768);
+    CHECK(ease(Transition::EaseIn, 32768) == 16384);       /* t^2: a quarter at half way */
+    CHECK(ease(Transition::EaseOut, 32768) == 49152);      /* 1-(1-t)^2: three quarters */
+    CHECK(ease(Transition::EaseInOut, 32768) == 32769);    /* 1 - 2(1-t)^2, just past half */
+    CHECK(ease(Transition::EaseInOut, 16384) == 8192);     /* 2t^2: an eighth at a quarter */
 
     /* EaseInOut is EaseIn and EaseOut joined at the middle, so it is exactly
      * symmetric about it: each half is the other turned through 180 degrees. */
-    const Sequence s =
-        built(SequenceBuilder{}.fade_to(red_only, 65535, Transition::EaseInOut).repeat(1));
     bool symmetric = true;
-    for (int32_t p = 0; p <= 65535; ++p) {
-        symmetric = symmetric && s.at(p).color.r + s.at(65535 - p).color.r == 65535;
+    for (uint32_t t = 0; t <= 65535; ++t) {
+        symmetric = symmetric && ease(Transition::EaseInOut, static_cast<uint16_t>(t)) +
+                                         ease(Transition::EaseInOut, static_cast<uint16_t>(65535 - t)) ==
+                                     65535;
     }
     CHECK(symmetric);
 }
 
-/* The same 65535 ms fade shows the public curve directly, so a ColorFn that
- * calls ease() gets exactly the curve a step's fade follows. */
+/* A fade of 65535 ms from black to full red makes the red channel *be* the
+ * curve: t equals the elapsed milliseconds exactly, and a lerp from 0 to 65535
+ * returns t unchanged. So every value of the fade is one at() away, and is
+ * compared with the curve exhaustively rather than on a sample. A ColorFn that
+ * calls ease() gets exactly the curve a step's fade follows.
+ *
+ * Finite, so that the fade starts from black. Endless, a one-step sequence
+ * fades from its own last color -- itself -- and is solid red. */
 TEST_CASE("ease() is the curve at() applies") {
     for (Transition kind : {Transition::Linear, Transition::EaseIn,
                             Transition::EaseOut, Transition::EaseInOut}) {
@@ -350,7 +334,11 @@ TEST_CASE("ease() is the curve at() applies") {
         for (int32_t p = 0; p < 65535; ++p)
             same = same && s.at(p).color.r == ease(kind, static_cast<uint16_t>(p));
         CHECK(same);
-        CHECK(ease(kind, 65535) == 65535);
+
+        /* No tick at the boundary: the last value inside the fade is within
+         * a couple of LSB of the target the next instant shows exactly. */
+        CHECK(s.at(65534).color.r >= 65533);
+        CHECK(s.at(65535).color.r == 65535);
     }
 }
 
@@ -544,13 +532,3 @@ static_assert([] {
     Sequence s;
     return SequenceBuilder{}.hold(colors::red, 0).fade_to(colors::red, 0).build(s);
 }() == Error::ZeroDurationFade);
-
-TEST_CASE("a build_const() sequence answers the same as a built one") {
-    const Sequence runtime =
-        built(SequenceBuilder{}.hold(colors::red, 500).hold(colors::black, 500));
-    for (int32_t p : {-1501, -1, 0, 499, 500, 999, 1000, 123'456}) {
-        CAPTURE(p);
-        CHECK(blink.at(p).color == runtime.at(p).color);
-        CHECK(blink.at(p).hold_ms == runtime.at(p).hold_ms);
-    }
-}

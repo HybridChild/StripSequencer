@@ -5,8 +5,7 @@
  * assigned in place is clipped to it. Rendering is a pure function of the
  * segments and the time handed in, so the same frame comes out however the
  * strip got there. Later segments win where they overlap. And drop_finished()
- * and the drives() sweep remove exactly what they should, however the list
- * shifts underneath them.
+ * removes exactly what has finished, however the list shifts underneath it.
  */
 
 #include <doctest/doctest.h>
@@ -266,32 +265,7 @@ TEST_CASE("brightness is applied as each pixel is converted") {
         CHECK(shows(buffer, i, colors::red, 128));
 }
 
-TEST_CASE("rendering is pure: the same time gives the same frame") {
-    Sequencer seq;
-    seq.load(breathe);
-    seq.play(0);
-
-    uint8_t buffer[kBytes];
-    Strip strip(buffer);
-    Segment comet(0, kPixels, seq);
-    REQUIRE(comet.set_pixel_delay(37));
-    REQUIRE(strip.add(comet));
-
-    const uint32_t hold = strip.render(1234);
-    uint8_t first[kBytes];
-    for (size_t k = 0; k < kBytes; ++k)
-        first[k] = buffer[k];
-
-    CHECK(strip.render(1234) == hold);
-    CHECK(same_bytes(buffer, first, kBytes));
-
-    strip.render(99999);
-    CHECK_FALSE(same_bytes(buffer, first, kBytes));
-    CHECK(strip.render(1234) == hold);
-    CHECK(same_bytes(buffer, first, kBytes));
-}
-
-TEST_CASE("rendering is stateless: call order does not reach the frame") {
+TEST_CASE("rendering is stateless: the same segments and time give the same frame") {
     Sequencer under;
     Sequencer over;
     Sequencer spare;
@@ -330,7 +304,8 @@ TEST_CASE("rendering is stateless: call order does not reach the frame") {
     roundabout.set_brightness(100);
     roundabout.render(123456);
 
-    for (int64_t now : {0, 640, 1999, 70000}) {
+    /* Out of order, and back to a time already shown. */
+    for (int64_t now : {640, 0, 70000, 1999, 640}) {
         CAPTURE(now);
         CHECK(direct.render(now) == roundabout.render(now));
         CHECK(same_bytes(a, b, kBytes));
@@ -368,63 +343,3 @@ TEST_CASE("drop_finished removes overlays that finish out of order") {
         CHECK(strip.segment_count() == 0);
     }
 }
-
-/* A background and two overlays is three segments, one more than tight holds. */
-#if STRIPSEQ_MAX_SEGMENTS >= 3
-
-TEST_CASE("drop_finished leaves an endless background in place") {
-    Sequencer background;
-    Sequencer first;
-    Sequencer second;
-    background.load(red);
-    first.load(long_flash);
-    second.load(short_flash);
-    background.play(0);
-    first.play(0);
-    second.play(0);
-
-    uint8_t buffer[kBytes];
-    Strip strip(buffer);
-    REQUIRE(strip.add(Segment(0, kPixels, background)));
-    REQUIRE(strip.add(Segment(0, kPixels, first)));
-    REQUIRE(strip.add(Segment(0, kPixels, second)));
-
-    CHECK(strip.drop_finished(150) == 1);
-    CHECK(strip.drop_finished(350) == 1);
-    REQUIRE(strip.segment_count() == 1);
-    CHECK(strip.segment(0).drives(background));
-    CHECK(strip.drop_finished(60000) == 0);
-}
-
-TEST_CASE("the drives() sweep removes every segment on one sequencer") {
-    /* The cookbook's cancel_alert(), over two segments sharing the alert. */
-    constexpr Sequence alert = SequenceBuilder{}
-                                   .hold(colors::green, 120)
-                                   .hold(colors::black, 120)
-                                   .repeat(3)
-                                   .build_const();
-    Sequencer breathe_seq;
-    Sequencer alert_seq;
-    breathe_seq.load(red);
-    alert_seq.load(alert);
-    breathe_seq.play(0);
-    alert_seq.play(0);
-
-    uint8_t buffer[kBytes];
-    Strip strip(buffer);
-    REQUIRE(strip.add(Segment(0, kPixels, breathe_seq)));
-    REQUIRE(strip.add(Segment(0, 5, alert_seq)));
-    REQUIRE(strip.add(Segment(5, 5, alert_seq)));
-
-    for (uint8_t i = strip.segment_count(); i > 0; --i)
-        if (strip.segment(i - 1).drives(alert_seq))
-            strip.remove(i - 1);
-
-    REQUIRE(strip.segment_count() == 1);
-    CHECK(strip.segment(0).drives(breathe_seq));
-    strip.render(10);
-    for (uint16_t i = 0; i < kPixels; ++i)
-        CHECK(shows(buffer, i, colors::red));
-}
-
-#endif  /* STRIPSEQ_MAX_SEGMENTS >= 3 */

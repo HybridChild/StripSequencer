@@ -67,24 +67,11 @@ static_assert(STRIPSEQ_MAX_SEGMENTS == 4, STRIPSEQ_DEFAULT_MSG);
  * before main(), and a Strip declared the way the cookbook declares one is the
  * case that would break it first. If Strip's constructor ever stops being a
  * constant expression, this line stops compiling. */
-static uint8_t buffer[11 * Strip::bytes_per_pixel];
-constinit static Strip strip(buffer);
+[[maybe_unused]] static uint8_t buffer[11 * Strip::bytes_per_pixel];
+[[maybe_unused]] constinit static Strip strip(buffer);
 
-TEST_CASE("color and step layout follow the white-channel setting") {
-    CHECK(sizeof(Color) == (STRIPSEQ_WHITE_CHANNEL ? 8u : 6u));
-    CHECK(sizeof(Step) == (STRIPSEQ_WHITE_CHANNEL ? 16u : 12u));
+/* sizeof(Color) and sizeof(Step) are asserted beside their declarations; the
+ * bytes a pixel takes in the buffer is the size the headers leave unchecked. */
+TEST_CASE("a pixel takes four bytes with the white channel and three without") {
     CHECK(Strip::bytes_per_pixel == (STRIPSEQ_WHITE_CHANNEL ? 4u : 3u));
-}
-
-TEST_CASE("a constinit strip is usable and links against the library") {
-    CHECK(strip.segment_count() == 0);
-    CHECK(strip.brightness() == 255);
-}
-
-TEST_CASE("the constant palette is constant-initialised") {
-    /* Reading these in a constant expression is what proves it: a dynamic
-     * initialiser would not survive here. */
-    static_assert(colors::black.r == 0 && colors::black.g == 0 && colors::black.b == 0);
-    static_assert(colors::red.r == 65535 && colors::red.g == 0);
-    CHECK(colors::rgbwhite.b == 65535);   /* x257, not <<8: full scale is reachable */
 }

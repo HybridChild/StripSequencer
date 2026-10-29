@@ -225,14 +225,14 @@ target_compile_definitions in cmake/stripseq_variant.cmake is PUBLIC.
 Leave `PRIVATE` in place from Exercise 3, and also comment out `target_compile_definitions(${exe} PRIVATE ${expect})` in the same file.
 
 ```sh
-cmake --build build --target tests_rgbw && ./build/tests_rgbw -tc='color and step layout*'
+cmake --build build --target tests_rgbw && ./build/tests_rgbw -tc='a pixel takes*'
 ```
 
 ```
 [doctest] Status: SUCCESS!
 ```
 
-`color and step layout follow the white-channel setting` passes — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. Now run a case that passes a `Sequence` across the boundary:
+`a pixel takes four bytes with the white channel and three without` passes — in a binary whose library thinks `Color` is eight bytes and whose tests think it is six. Now run a case that passes a `Sequence` across the boundary:
 
 ```sh
 ./build/tests_rgbw -tc='endless steps*'
