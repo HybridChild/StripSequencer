@@ -12,11 +12,11 @@
 # it: it runs `git checkout .` and `git clean -dfx` in every patched module.
 patches:
   - path: zephyr/spi-stm32-enable-after-dma-armed.patch
-    sha256sum: 57eb690460647525d440b8ccafa67a070f1206428ed80bbcfdf60b516a54fb6f
+    sha256sum: 70f1a6162d65eb652a4ef542d73a9317af9240427318a4a0a536be3addc9dda8
     module: zephyr
     author: Esben Dueholm Nørgaard
     email: esbendn@tutanota.com
-    date: 2026-10-25
+    date: 2026-10-31
     upstreamable: true
     comments: >-
       Needed by the Nucleo-U083RC overlay, which drives the strip from SPI3's

@@ -1,4 +1,4 @@
-From 3521b3d94932d585328534315947191cc96732c9 Mon Sep 17 00:00:00 2001
+From 927f04fd9ba8d052303efbbbea0eab258e72ffdb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Esben=20Dueholm=20N=C3=B8rgaard?= <esbendn@tutanota.com>
 Date: Sun, 25 Oct 2026 09:10:40 +0100
 Subject: [PATCH] drivers: spi: stm32: enable the SPI only once its DMA is
@@ -6,8 +6,8 @@ Subject: [PATCH] drivers: spi: stm32: enable the SPI only once its DMA is
 
 In both DMA paths, transceive_dma() and the RTIO DMA path, the driver
 sets SPE (and CSTART on H7-like SPIs) before it starts the DMA
-channels. An enabled controller with an empty TX FIFO drives MOSI high
-until the first frame arrives, so the first bit of each transfer is
+channels. Once SPE is set, the controller may drive MOSI before the
+DMA has supplied the first frame, so the first bit of each transfer is
 stretched by however long the DMA setup takes. Most peripherals sample
 on SCK and never notice, but a self-clocked protocol does: a WS2812
 strip driven from MOSI reads the stretched bit as a 1, so the first
@@ -17,9 +17,13 @@ Set SPE, and CSTART on H7-like SPIs, only after the first DMA channels
 are started, which is the order RM0431, RM0433 and RM0503 give for
 starting a DMA transfer: DMA requests, DMA streams, then SPE. The DMA
 requests and chip select stay ahead of it. Later chunks find the SPI
-already enabled. An H7-like controller in full duplex does not start
-before the TX FIFO holds data, so there the change only brings the order
-in line with RM0433.
+already enabled.
+
+On H7-like SPIs this shortens the stretch but cannot remove it. The
+controller drives the first bit onto MOSI as soon as SPE is set and
+starts SCK about five SCK periods after CSTART, which can only be set
+once SPE is. On a Nucleo-H753ZI at 1.875 MHz, MOSI leads the first SCK
+edge by about 2.9 us with this change, against 8.8 us without it.
 
 Arm the DMA and set SPE with interrupts locked. A transfer that fits in
 the TX FIFO completes its TX DMA before SPE is set, and the
@@ -45,7 +49,7 @@ Assisted-by: Claude:claude-opus-5-5
  1 file changed, 36 insertions(+), 10 deletions(-)
 
 diff --git a/drivers/spi/spi_stm32.c b/drivers/spi/spi_stm32.c
-index 9733dbf4faa..a0fa06c9a10 100644
+index 9733dbf4faa..c4ca63086c8 100644
 --- a/drivers/spi/spi_stm32.c
 +++ b/drivers/spi/spi_stm32.c
 @@ -1039,6 +1039,7 @@ static void spi_stm32_iodev_msg_start(const struct device *dev, struct spi_confi
@@ -120,9 +124,9 @@ index 9733dbf4faa..a0fa06c9a10 100644
  		data->status_flags = 0;
  
 +		/*
-+		 * Enable the SPI only once the DMA is armed. An enabled controller
-+		 * with an empty TX FIFO drives MOSI high until the first frame
-+		 * arrives, which stretches the first bit on the wire.
++		 * Enable the SPI only once the DMA is armed. Once SPE is set, the
++		 * controller may drive MOSI before the DMA has supplied the first
++		 * frame, which stretches the first bit on the wire.
 +		 *
 +		 * Keep interrupts locked until SPE is set: a transfer that fits in
 +		 * the TX FIFO completes its TX DMA before then, and the asynchronous
