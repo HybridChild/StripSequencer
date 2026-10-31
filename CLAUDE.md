@@ -39,7 +39,7 @@ These hold for every change.
 
 `docs/` and the code record what *this* project decided; **`notes/` teaches the concept behind it**, from first principles, using this repo as the running example. A guide should be readable by someone who has never seen this project. When a change touches something a guide explains, update the guide in the same change.
 
-The guides follow a shared skeleton, and an edit keeps it: an opening roadmap, numbered concept sections each building on the last, a synthesis where there is one, a **lab** of numbered exercises with commands, expected output and a **Proves:** line, then the model in one paragraph and where to go next. Cross-reference by `§` within a guide and by name across them. Cite this repo by function name, and Zephyr by `file:line` against v4.5.0-rc3. Keep `notes/README.md` current as the index — reading order, dependencies, and what each guide assumes.
+The guides follow a shared skeleton, and an edit keeps it: an opening roadmap, numbered concept sections each building on the last, a synthesis where there is one, a **lab** of numbered exercises with commands, expected output and a **Proves:** line, then the model in one paragraph and where to go next. Cross-reference by `§` within a guide and by name across them. Cite this repo by function name, and Zephyr by `file:line` against v4.5.0. Keep `notes/README.md` current as the index — reading order, dependencies, and what each guide assumes.
 
 ## Bench hardware
 
