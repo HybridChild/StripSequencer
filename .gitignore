@@ -1,4 +1,6 @@
 notes/ideas.md
+tmp/
+.DS_Store
 
 # Build trees. Every variant lives in one of these; none of it is worth keeping.
 build*/
