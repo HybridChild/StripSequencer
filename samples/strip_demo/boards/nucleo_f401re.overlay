@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The bench strip on a Nucleo-F401RE: the same 11 SK6812-class RGBW pixels
+ * (ILPL-K501), wired as on the U083, data out on PB5 (Arduino D4) and SCK on
+ * PB3 (Arduino D3). Here both are SPI1's, on AF5. The U083's overlay gives
+ * the reasons this one shares: why SCK is routed though the strip never reads
+ * it, why the build takes --rgb, and why DMA rather than interrupts.
+ *
+ * The F4's SPI has no TX FIFO, only a one-frame buffer, and its DMA is the
+ * stream controller rather than the U0's channels. It does not show the
+ * U083's green-MSB fault without the patch in zephyr/patches.yml, measured
+ * on the bench: MOSI rises half an SPI bit before the first SCK edge, as
+ * mode 0 requires, and pixel 0 matches the rest.
+ */
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/*
+ * SPI1's requests are on DMA2 only, channel 3 of streams 5 (TX) and 2 (RX),
+ * as Zephyr's nucleo_f411re spi_loopback overlay has them. The board leaves
+ * dma2 disabled. CONFIG_SPI_STM32_DMA is in this board's .conf.
+ */
+&spi1 {
+	/*
+	 * PB5 and PB3 in place of the board's Arduino D11 and D13. The MOSI
+	 * pinctrl node carries a pull-down, which holds the line low between
+	 * frames. The board's chip select on PB6 (D10) goes too: the strip has
+	 * no select input, so the controller manages NSS internally.
+	 */
+	pinctrl-0 = <&spi1_mosi_pb5 &spi1_sck_pb3>;
+	pinctrl-names = "default";
+	/delete-property/ cs-gpios;
+	dmas = <&dma2 5 3 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH) STM32_DMA_FIFO_FULL>,
+	       <&dma2 2 3 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH) STM32_DMA_FIFO_FULL>;
+	dma-names = "tx", "rx";
+
+	led_strip: ilpl_k501@0 {
+		status = "okay";
+		compatible = "worldsemi,ws2812-spi";
+		reg = <0>;
+
+		chain-length = <11>;
+
+		/*
+		 * SPI1 runs from the 84 MHz APB2 clock, and power-of-two
+		 * prescalers miss the U083's 3 MHz. /16 gives 5.25 MHz, 190 ns
+		 * per SPI bit, so a high time is a multiple of 190 ns and none
+		 * falls between 571 and 762 ns. 7-bit symbols take the longer:
+		 * 0x78 is 762 ns high and 571 ns low, 0x60 is 381 ns high and
+		 * 952 ns low, 1.33 us per LED bit as on the U083.
+		 *
+		 * A 571 ns T1H is inside the SK6812 datasheet's 600 +/- 150 ns,
+		 * and these pixels read it as a 0, measured on the bench: with
+		 * 6-bit symbols (0x38, 0x30) every frame decoded as black. They
+		 * take 625 ns from the H753 and 667 ns from the U083.
+		 *
+		 * The symbols straddle byte boundaries, so unlike the U083's a
+		 * gap between bytes can land inside a high time. DMA keeps the
+		 * bytes back to back: one byte lasts 1.5 us, ample time for a
+		 * stream to refill the data register.
+		 */
+		spi-max-frequency = <5250000>;
+		bits-per-symbol = <7>;
+		spi-one-frame = <0x78>;
+		spi-zero-frame = <0x60>;
+		reset-delay = <80>;
+
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE
+				 LED_COLOR_ID_WHITE>;
+	};
+};
+
+&dma2 {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		led-strip = &led_strip;
+	};
+};

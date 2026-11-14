@@ -8,7 +8,7 @@
 #   SAMPLE=frame_cost scripts/sample-flash.sh
 #   STLINK_SERIAL=0052... scripts/sample-flash.sh   # one probe of several
 #
-# Neither board's default runner, stm32cubeprogrammer, is installed in the
+# No board's default runner, stm32cubeprogrammer, is installed in the
 # workspace, so the runner follows the board the build was made for:
 #
 #   nucleo_h753zi  openocd, which the SDK bundles. The board's openocd config
@@ -20,6 +20,10 @@
 #                  pyocd comes with the workspace's Python requirements, but
 #                  knows the part only once its CMSIS pack is installed, once
 #                  per machine: `pyocd pack install stm32u083rctx`.
+#   nucleo_f072rb  openocd, the SDK's, with the board's own openocd config.
+#   nucleo_f401re  none. The bench's F401 has a dead ST-LINK and is flashed
+#                  through another Nucleo's debug header, which no runner here
+#                  describes.
 #
 # With more than one ST-LINK attached, openocd takes whichever it finds first
 # and pyocd stops to ask, so this refuses to guess -- a wrong guess writes the
@@ -61,6 +65,7 @@ BOARD="$(sed -n 's/^BOARD:STRING=//p' "$BUILD_DIR/CMakeCache.txt")"
 case "$BOARD" in
 nucleo_h753zi*) RUNNER=openocd; SERIAL_FLAG=--serial ;;
 nucleo_u083rc*) RUNNER=pyocd;   SERIAL_FLAG=--dev-id ;;
+nucleo_f072rb*) RUNNER=openocd; SERIAL_FLAG=--serial ;;
 *)
     echo "No runner chosen for board '$BOARD'." >&2
     exit 1

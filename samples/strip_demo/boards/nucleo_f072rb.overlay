@@ -1,0 +1,75 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The bench strip on a Nucleo-F072RB: the same 11 SK6812-class RGBW pixels
+ * (ILPL-K501), wired as on the U083, data out on PB5 (Arduino D4) and SCK on
+ * PB3 (Arduino D3). Here both are SPI1's, on AF0. The U083's overlay gives
+ * the reasons this one shares: why SCK is routed though the strip never reads
+ * it, why the build takes --rgb, and why DMA rather than interrupts.
+ *
+ * The F0's SPI has the same TX FIFO as the U0's, and needs the patch in
+ * zephyr/patches.yml as the U083 does, measured on the bench: without it,
+ * MOSI goes high about 74 us before the first SCK edge and pixel 0 is
+ * always green. With it, pixel 0 is correct.
+ */
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/*
+ * SPI1's fixed request lines on the F0's DMA, the same channels Zephyr's own
+ * nucleo_f070rb led_strip overlay uses. The board leaves dma1 disabled.
+ * CONFIG_SPI_STM32_DMA is in this board's .conf.
+ */
+&spi1 {
+	/*
+	 * PB5 and PB3 in place of the board's Arduino D11 and D13. The MOSI
+	 * pinctrl node carries a pull-down, which holds the line low between
+	 * frames. The board's chip select on PB6 (D10) goes too: the strip has
+	 * no select input, so the controller manages NSS internally.
+	 */
+	pinctrl-0 = <&spi1_mosi_pb5 &spi1_sck_pb3>;
+	pinctrl-names = "default";
+	/delete-property/ cs-gpios;
+	dmas = <&dma1 3 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+	       <&dma1 2 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+
+	led_strip: ilpl_k501@0 {
+		status = "okay";
+		compatible = "worldsemi,ws2812-spi";
+		reg = <0>;
+
+		chain-length = <11>;
+
+		/*
+		 * The U083's symbols at the U083's rate: SPI1 runs from the
+		 * 24 MHz APB clock, the 48 MHz system clock halved, and divided
+		 * by 8 that is 3 MHz. 333 ns per SPI bit, 1.33 us per LED bit;
+		 * 0xC is 667 ns high and 0x8 is 333 ns.
+		 */
+		spi-max-frequency = <3000000>;
+		bits-per-symbol = <4>;
+		spi-one-frame = <0xC>;
+		spi-zero-frame = <0x8>;
+		reset-delay = <80>;
+
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE
+				 LED_COLOR_ID_WHITE>;
+	};
+};
+
+&dma1 {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		led-strip = &led_strip;
+	};
+};

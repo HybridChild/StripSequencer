@@ -19,8 +19,8 @@ patches:
     date: 2026-10-31
     upstreamable: true
     comments: >-
-      Needed by the Nucleo-U083RC overlay, which drives the strip from SPI3's
-      MOSI over DMA. Without it the first pixel's green MSB is always set. It
-      also moves SPE (and CSTART) after the DMA start on H7-like SPIs and in
-      the RTIO DMA path, where the H753 bench never sees a difference: its
-      strip runs over I2S.
+      Needed by the Nucleo-U083RC and Nucleo-F072RB overlays, which drive the
+      strip from an SPI's MOSI over DMA. Without it the first pixel's green
+      MSB is always set. It also moves SPE (and CSTART) after the DMA start on
+      H7-like SPIs and in the RTIO DMA path, where the H753 bench never sees a
+      difference: its strip runs over I2S.
