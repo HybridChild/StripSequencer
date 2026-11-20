@@ -315,7 +315,7 @@ A function that draws from time alone, and never reads a step, still needs its s
 seq.load(timebase);
 seq.play(now());
 Segment s(0, kPixels, seq);
-s.set_color_fn(flame);   // a function of index and time, nothing stored
+s.set_color_fn(flames[0].draw);   // a function of index and time, nothing stored
 strip.add(s);
 ```
 

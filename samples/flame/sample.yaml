@@ -2,7 +2,7 @@
 # run and why it only builds.
 #
 # One channel configuration, for the showcase's reason: the only other thing
-# the setting changes here is one constant stop in the palette.
+# the setting changes here is one constant stop in each palette.
 sample:
   name: flame
   description: A whole fire drawn by a replaced step 2, with no heat array

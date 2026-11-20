@@ -25,8 +25,10 @@ using namespace stripseq;
  *   - embers: born at the flame's tip at hashed moments, each rising at its
  *     own speed and cooling as it goes, drawn between two pixels in
  *     proportion rather than jumping from one to the next;
- *   - a blackbody palette that turns heat into color, from dull red through
- *     orange to yellow, and on an RGBW strip into the white die at the top.
+ *   - a palette that turns heat into color: a black body's, from dull red
+ *     through orange to yellow, and on an RGBW strip into the white die at
+ *     the top, or one of three others that climb the same way in blue,
+ *     green and violet.
  *
  * Heights, levels and heats are all Q16: 65536 is the whole strip, or full. */
 
@@ -158,13 +160,21 @@ static uint16_t ember_heat(uint32_t y, uint32_t t, uint16_t count) {
 /* Heat to color, through stops at a black body's colors: dull red, red,
  * orange, amber, yellow. The colors are in the 16-bit space a sequence's are,
  * before gamma, which is why orange carries so much green: gamma takes most
- * of it away again. */
+ * of it away again.
+ *
+ * The other fires are the burning metal salts a chemistry class shows: the
+ * same heats, and the same climb from a dim glow to a pale tip, in another
+ * hue. Each picks its colors the way the black body's do, with the secondary
+ * channel well ahead of where it should land after gamma. */
 struct Stop {
     uint16_t heat;
     Color color;
 };
 
-static constexpr Stop kPalette[] = {
+static constexpr size_t kStops = 6;
+using Palette = Stop[kStops];
+
+static constexpr Palette kNatural = {
     {0,     colors::black},
     {9800,  Color::rgb8(80, 0, 0)},
     {24900, Color::rgb8(200, 25, 0)},
@@ -177,22 +187,75 @@ static constexpr Stop kPalette[] = {
 #endif
 };
 
-static Color heat_color(uint16_t heat) {
+/* Gas: the black body with red and blue exchanged, deep blue through azure. */
+static constexpr Palette kBlue = {
+    {0,     colors::black},
+    {9800,  Color::rgb8(0, 0, 80)},
+    {24900, Color::rgb8(0, 25, 200)},
+    {39300, Color::rgb8(0, 105, 255)},
+    {52400, Color::rgb8(10, 170, 255)},
+#if STRIPSEQ_WHITE_CHANNEL
+    {65535, Color::rgbw(10000, 52000, 65535, 36000)},
+#else
+    {65535, Color::rgb8(90, 220, 255)},
+#endif
+};
+
+/* Copper: emerald, leaning toward blue as it heats. */
+static constexpr Palette kGreen = {
+    {0,     colors::black},
+    {9800,  Color::rgb8(0, 80, 0)},
+    {24900, Color::rgb8(0, 200, 25)},
+    {39300, Color::rgb8(0, 255, 105)},
+    {52400, Color::rgb8(10, 255, 170)},
+#if STRIPSEQ_WHITE_CHANNEL
+    {65535, Color::rgbw(10000, 65535, 52000, 36000)},
+#else
+    {65535, Color::rgb8(90, 255, 220)},
+#endif
+};
+
+/* Potassium: violet, red and blue together, paling to lilac. */
+static constexpr Palette kViolet = {
+    {0,     colors::black},
+    {9800,  Color::rgb8(50, 0, 80)},
+    {24900, Color::rgb8(130, 0, 200)},
+    {39300, Color::rgb8(190, 30, 255)},
+    {52400, Color::rgb8(220, 110, 255)},
+#if STRIPSEQ_WHITE_CHANNEL
+    {65535, Color::rgbw(52000, 30000, 65535, 36000)},
+#else
+    {65535, Color::rgb8(235, 190, 255)},
+#endif
+};
+
+static Color heat_color(const Palette& palette, uint16_t heat) {
     size_t i = 1;
-    while (heat > kPalette[i].heat)
+    while (heat > palette[i].heat)
         ++i;
-    const Stop& lo = kPalette[i - 1];
-    const Stop& hi = kPalette[i];
+    const Stop& lo = palette[i - 1];
+    const Stop& hi = palette[i];
     const uint32_t into = static_cast<uint32_t>(heat - lo.heat);
     const uint32_t width = static_cast<uint32_t>(hi.heat - lo.heat);
     return Color::lerp(lo.color, hi.color, static_cast<uint16_t>(into * 65535u / width));
 }
 
-/* Every pixel is mid-change in a fire, so the hold is always 0. */
-Sample flame(int32_t playhead_ms, uint16_t index, uint16_t count) {
+/* Every pixel is mid-change in a fire, so the hold is always 0. The palette is
+ * a template argument rather than a variable because a ColorFn is a bare
+ * function pointer: each fire is its own function, and which one draws is the
+ * application's choice, made by installing it. */
+template <const Palette& palette>
+static Sample burn(int32_t playhead_ms, uint16_t index, uint16_t count) {
     const uint32_t t = static_cast<uint32_t>(playhead_ms);   /* timebase, unstaggered: never negative */
     const uint32_t y = (2u * index + 1u) * 32768u / count;   /* the pixel's centre */
     const uint16_t body = flame_heat(y, t);
     const uint16_t ember = ember_heat(y, t, count);
-    return {heat_color(body > ember ? body : ember), 0};
+    return {heat_color(palette, body > ember ? body : ember), 0};
 }
+
+const Flame flames[kFlameCount] = {
+    {"natural", burn<kNatural>},
+    {"blue",    burn<kBlue>},
+    {"green",   burn<kGreen>},
+    {"violet",  burn<kViolet>},
+};
