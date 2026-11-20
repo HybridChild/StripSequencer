@@ -3,7 +3,8 @@
 # from .vscode/settings.template.jsonc, and .vscode/devicetree.json, with the
 # absolute paths of this machine's Zephyr workspace.
 #
-#   scripts/ide-setup.sh                 # the workspace at ~/zephyr-workspace
+#   scripts/ide-setup.sh                 # the bench board, the workspace at ~/zephyr-workspace
+#   scripts/ide-setup.sh -b nucleo_u083rc  # another board
 #   ZEPHYR_WORKSPACE=/opt/zws scripts/ide-setup.sh
 #
 # Run once per checkout, and again after editing the template or moving the
@@ -14,13 +15,20 @@
 # Every sample with an overlay for the board gets a DeviceTree context of its
 # own. A sample added later needs this run again.
 #
-# The workspace, board and arch follow scripts/sample-build.sh: ZEPHYR_WORKSPACE
-# and BOARD override them, and ARCH is the board's, which hwmv2 no longer puts
-# in its path.
+# The workspace and board follow scripts/sample-build.sh: ZEPHYR_WORKSPACE
+# overrides the workspace, and -b names the board. ARCH is the
+# board's, which hwmv2 no longer puts in its path.
 set -euo pipefail
 
 WORKSPACE="${ZEPHYR_WORKSPACE:-$HOME/zephyr-workspace}"
-BOARD="${BOARD:-nucleo_h753zi}"
+BOARD=nucleo_h753zi
+if [[ $# -gt 0 ]]; then
+    if [[ "$1" != -b || $# -ne 2 ]]; then
+        echo "Usage: scripts/ide-setup.sh [-b board]" >&2
+        exit 1
+    fi
+    BOARD="$2"
+fi
 ARCH="${ARCH:-arm}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,7 +56,7 @@ shopt -s nullglob
 BOARD_FILES=("$ZEPHYR_BASE"/boards/*/"$BOARD"/"$BOARD".dts)
 shopt -u nullglob
 if (( ${#BOARD_FILES[@]} != 1 )); then
-    echo "No single $BOARD.dts under $ZEPHYR_BASE/boards -- check BOARD." >&2
+    echo "No single $BOARD.dts under $ZEPHYR_BASE/boards -- check the board." >&2
     exit 1
 fi
 BOARD_FILE="${BOARD_FILES[0]}"
@@ -86,6 +94,9 @@ values = {
     "BOARD": board,
     "ARCH": arch,
     "BOARD_DIR": str(pathlib.Path(board_file).parent),
+    # The tree scripts/sample-build.sh -b <board> writes, named as
+    # scripts/lib/sample-args.sh names it.
+    "KCONFIG_BINARY_DIR": str(repo / f"build-zephyr-strip_demo-{board.replace('/', '_')}" / "Kconfig"),
 }
 text = (vscode / "settings.template.jsonc").read_text()
 for key, value in values.items():

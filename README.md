@@ -182,7 +182,7 @@ scripts/build.sh                   # configure and build into ./build
 scripts/test.sh                    # run every test in every variant
 scripts/build.sh gcc && scripts/test.sh gcc   # the same under GCC
 scripts/cross-check.sh             # freestanding Cortex-M4 and M0 builds
-scripts/sample-build.sh            # strip_demo under Zephyr; SAMPLE= for another, --rgb for RGB
+scripts/sample-build.sh            # strip_demo on the bench board; name another sample, -b for another board, --rgb for RGB
 tools/footprint/footprint.sh       # flash and object sizes, Cortex-M0 and M4
 ```
 

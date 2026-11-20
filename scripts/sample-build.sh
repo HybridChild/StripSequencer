@@ -1,44 +1,50 @@
 #!/usr/bin/env bash
-# Build a sample -- the bring-up sample, samples/strip_demo, unless SAMPLE=
-# names another -- for the Nucleo-H753ZI against the shared Zephyr workspace
-# (~/zephyr-workspace). Each sample names this repo in ZEPHYR_EXTRA_MODULES, so
-# the workspace's west.yml never has to know it.
+# Build a sample for a board against the shared Zephyr workspace
+# (~/zephyr-workspace): by default the bring-up sample, samples/strip_demo, on
+# the bench's Nucleo-H753ZI. Each sample names this repo in
+# ZEPHYR_EXTRA_MODULES, so the workspace's west.yml never has to know it.
 #
-#   scripts/sample-build.sh              # RGBW, the bench configuration, into ./build-zephyr
-#   scripts/sample-build.sh --rgb        # white channel off, into ./build-zephyr-rgb
-#   scripts/sample-build.sh -p           # pristine, after a devicetree or Kconfig edit
-#   scripts/sample-build.sh <args>       # anything else goes to `west build`
-#   SAMPLE=frame_cost scripts/sample-build.sh   # into ./build-zephyr-frame_cost
+#   scripts/sample-build.sh                           # into ./build-zephyr-strip_demo-nucleo_h753zi
+#   scripts/sample-build.sh --rgb                     # white channel off, into ...-nucleo_h753zi-rgb
+#   scripts/sample-build.sh -p                        # pristine, after a devicetree or Kconfig edit
+#   scripts/sample-build.sh showcase                  # into ./build-zephyr-showcase-nucleo_h753zi
+#   scripts/sample-build.sh showcase -b nucleo_u083rc # into ./build-zephyr-showcase-nucleo_u083rc
+#   scripts/sample-build.sh <args>                    # anything else goes to `west build`
+#   scripts/sample-build.sh -- -DCONFIG_FOO=y         # and after --, to CMake
+#
+# scripts/lib/sample-args.sh has the arguments in full and how the tree is
+# named.
 #
 # --rgb exists because the two settings take different code paths --
 # led_strip_update_channels() and a permute, or led_strip_update_rgb() and a
-# straight cast -- and both must keep building. It is still the RGBW board: the
-# driver sends zero for the white die, so it runs, three-quarters lit.
+# straight cast -- and both must keep building. It has nothing to do with the
+# board: every bench strip is RGBW, and an --rgb build of one runs with the
+# driver sending zero for the white die, three-quarters lit.
 #
 # ZEPHYR_WORKSPACE= points it elsewhere, which is how CI uses it.
 set -euo pipefail
 
 WORKSPACE="${ZEPHYR_WORKSPACE:-$HOME/zephyr-workspace}"
-BOARD="${BOARD:-nucleo_h753zi}"
-SAMPLE="${SAMPLE:-strip_demo}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# The bring-up sample keeps the short name; any other carries its own, so two
-# samples never share a build tree.
-BUILD_DIR="$REPO/build-zephyr"
-[[ "$SAMPLE" != strip_demo ]] && BUILD_DIR+="-$SAMPLE"
+# shellcheck source=lib/sample-args.sh
+source "$SCRIPT_DIR/lib/sample-args.sh"
 
-PRISTINE=auto
-WHITE=y
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-    -p)    PRISTINE=always; shift ;;
-    --rgb) WHITE=n; BUILD_DIR+="-rgb"; shift ;;
-    *)     break ;;
-    esac
+# What is left splits at the first --: west's arguments before it, CMake's
+# after. The script adds a CMake argument of its own, so it must own the one
+# --; a second would reach CMake as a stray argument.
+WEST_ARGS=()
+CMAKE_ARGS=()
+while [[ $# -gt 0 && "$1" != -- ]]; do
+    WEST_ARGS+=("$1")
+    shift
 done
+if [[ $# -gt 0 ]]; then
+    shift
+    CMAKE_ARGS=("$@")
+fi
 
 # A workspace with its own virtualenv brings west and its Python into scope; one
 # without (CI's) already has them on the PATH.
@@ -50,5 +56,8 @@ export ZEPHYR_BASE="$WORKSPACE/zephyr"
 
 # west finds its workspace from the current directory.
 cd "$WORKSPACE"
-exec west build -p "$PRISTINE" -b "$BOARD" -s "$REPO/samples/$SAMPLE" -d "$BUILD_DIR" "$@" \
-    -- -DCONFIG_STRIPSEQ_WHITE_CHANNEL="$WHITE"
+# ${a[@]+"${a[@]}"} rather than "${a[@]}": macOS ships bash 3.2, where an
+# empty array under set -u is an error rather than nothing.
+exec west build -p "$PRISTINE" -b "$BOARD" -s "$REPO/samples/$SAMPLE" -d "$BUILD_DIR" \
+    ${WEST_ARGS[@]+"${WEST_ARGS[@]}"} \
+    -- -DCONFIG_STRIPSEQ_WHITE_CHANNEL="$WHITE" ${CMAKE_ARGS[@]+"${CMAKE_ARGS[@]}"}

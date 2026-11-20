@@ -68,11 +68,12 @@
   },
   // Zephyr's Kconfig tree reaches the modules -- this repo's zephyr/Kconfig
   // among them -- through files CMake generates per build, so completion in a
-  // prj.conf needs a built tree: scripts/sample-build.sh once. These name the
-  // bring-up sample; another sample's prj.conf parses against the same tree,
-  // which carries the same modules.
+  // prj.conf needs a built tree: scripts/sample-build.sh -b <board> once, for
+  // the board above. These name the bring-up sample; another
+  // sample's prj.conf parses against the same tree, which carries the same
+  // modules.
   "kconfig.env": {
-    "KCONFIG_BINARY_DIR": "${workspaceFolder}/build-zephyr/Kconfig",
+    "KCONFIG_BINARY_DIR": "@KCONFIG_BINARY_DIR@",
     "KCONFIG_BOARD_DIR": "${BOARD_DIR}",
     "APPLICATION_SOURCE_DIR": "${workspaceFolder}/samples/strip_demo"
   },

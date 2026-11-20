@@ -474,7 +474,7 @@ To see why the board would fault, look at the instructions the bench build runs.
 
 ```sh
 scripts/sample-build.sh
-arm-none-eabi-objdump -d -C "$(find build-zephyr -name sequencer.cpp.obj)" | grep -A1 udiv
+arm-none-eabi-objdump -d -C "$(find build-zephyr-strip_demo-nucleo_h753zi -name sequencer.cpp.obj)" | grep -A1 udiv
 ```
 
 ```

@@ -61,16 +61,14 @@
     {
       "label": "sample: build",
       "type": "shell",
-      "command": "scripts/sample-build.sh ${input:sampleBuildFlags}",
-      "options": { "env": { "SAMPLE": "${input:sample}" } },
+      "command": "scripts/sample-build.sh ${input:sample} -b ${input:board} ${input:sampleBuildFlags}",
       "group": "build",
       "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
     },
     {
       "label": "sample: flash",
       "type": "shell",
-      "command": "scripts/sample-flash.sh ${input:sampleFlashFlags}",
-      "options": { "env": { "SAMPLE": "${input:sample}" } },
+      "command": "scripts/sample-flash.sh ${input:sample} -b ${input:board} ${input:sampleFlashFlags}",
       "problemMatcher": []
     },
     {
@@ -130,8 +128,7 @@
     {
       "label": "green: frame_cost",
       "type": "shell",
-      "command": "scripts/sample-build.sh",
-      "options": { "env": { "SAMPLE": "frame_cost" } },
+      "command": "scripts/sample-build.sh frame_cost",
       "hide": true,
       "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
     }
@@ -143,6 +140,15 @@
       "description": "Which sample",
       "options": ["strip_demo", "frame_cost", "showcase"],
       "default": "strip_demo"
+    },
+    {
+      // The bench board first. The flash script has a runner for each but the
+      // F401, whose ST-LINK is dead.
+      "id": "board",
+      "type": "pickString",
+      "description": "Which board",
+      "options": ["nucleo_h753zi", "nucleo_u083rc", "nucleo_f072rb", "nucleo_f401re"],
+      "default": "nucleo_h753zi"
     },
     {
       // Substituted into the command line rather than passed in "args", so the

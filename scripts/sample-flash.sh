@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Flash a sample to a Nucleo over its ST-LINK: the bring-up sample, unless
-# SAMPLE= names another, as for scripts/sample-build.sh. The board is whichever
-# the build was made for -- BOARD= there, not here.
+# Flash a sample to a Nucleo over its ST-LINK. It takes the sample, board and
+# --rgb that scripts/sample-build.sh took, and writes the tree that build made.
 #
-#   scripts/sample-flash.sh              # what scripts/sample-build.sh built
-#   scripts/sample-flash.sh --rgb        # what scripts/sample-build.sh --rgb built
-#   SAMPLE=frame_cost scripts/sample-flash.sh
-#   STLINK_SERIAL=0052... scripts/sample-flash.sh   # one probe of several
+#   scripts/sample-flash.sh                           # what scripts/sample-build.sh built
+#   scripts/sample-flash.sh --rgb                     # what scripts/sample-build.sh --rgb built
+#   scripts/sample-flash.sh showcase -b nucleo_u083rc # what scripts/sample-build.sh showcase -b nucleo_u083rc built
+#   STLINK_SERIAL=0052... scripts/sample-flash.sh     # one probe of several
 #
 # No board's default runner, stm32cubeprogrammer, is installed in the
 # workspace, so the runner follows the board the build was made for:
@@ -36,13 +35,9 @@ WORKSPACE="${ZEPHYR_WORKSPACE:-$HOME/zephyr-workspace}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-SAMPLE="${SAMPLE:-strip_demo}"
-BUILD_DIR="$REPO/build-zephyr"
-[[ "$SAMPLE" != strip_demo ]] && BUILD_DIR+="-$SAMPLE"
-if [[ "${1:-}" == "--rgb" ]]; then
-    BUILD_DIR+="-rgb"
-    shift
-fi
+# -p is accepted, and means nothing to a flash.
+# shellcheck source=lib/sample-args.sh
+source "$SCRIPT_DIR/lib/sample-args.sh"
 
 if [[ ! -d "$BUILD_DIR" ]]; then
     echo "No build at $BUILD_DIR -- run scripts/sample-build.sh first." >&2
@@ -61,7 +56,6 @@ if [[ -z "${STLINK_SERIAL:-}" ]] && (( ${#PORTS[@]} > 1 )); then
     exit 2
 fi
 
-BOARD="$(sed -n 's/^BOARD:STRING=//p' "$BUILD_DIR/CMakeCache.txt")"
 case "$BOARD" in
 nucleo_h753zi*) RUNNER=openocd; SERIAL_FLAG=--serial ;;
 nucleo_u083rc*) RUNNER=pyocd;   SERIAL_FLAG=--dev-id ;;

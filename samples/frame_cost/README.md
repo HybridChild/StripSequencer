@@ -5,12 +5,12 @@ How long `Strip::render()` takes over a 60-pixel strip, in CPU cycles, on the be
 ## Build, flash, read
 
 ```sh
-SAMPLE=frame_cost scripts/sample-build.sh           # RGBW, into ./build-zephyr-frame_cost
-SAMPLE=frame_cost scripts/sample-flash.sh
+scripts/sample-build.sh frame_cost                  # RGBW, into ./build-zephyr-frame_cost-nucleo_h753zi
+scripts/sample-flash.sh frame_cost
 scripts/console.sh                                  # then reset the board to see it again
 ```
 
-`--rgb` builds and flashes the RGB configuration, as for strip_demo. The board is the Nucleo-H753ZI, and nothing here depends on the strip's overlay, so any board with a DWT cycle counter will run it with `BOARD=`.
+`--rgb` builds and flashes the RGB configuration, as for strip_demo. The board is the Nucleo-H753ZI, and nothing here depends on the strip's overlay, so any board with a DWT cycle counter will run it, named with `-b`: `scripts/sample-build.sh frame_cost -b <board>`.
 
 ## How it measures
 

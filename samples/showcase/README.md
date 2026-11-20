@@ -5,12 +5,12 @@ What the library can make a strip do, one animation per press of the user button
 ## Build, flash, watch
 
 ```sh
-SAMPLE=showcase scripts/sample-build.sh        # RGBW, into ./build-zephyr-showcase
-SAMPLE=showcase scripts/sample-flash.sh
+scripts/sample-build.sh showcase               # RGBW, into ./build-zephyr-showcase-nucleo_h753zi
+scripts/sample-flash.sh showcase
 scripts/console.sh                             # names each animation as it starts
 ```
 
-`--rgb` builds and flashes the RGB configuration, as for strip_demo. The board is the bench's, and its overlay is strip_demo's, included rather than copied, so the hardware is described in one place. Any other board needs what strip_demo's [On other hardware](../strip_demo/README.md#on-other-hardware) lists.
+`--rgb` builds and flashes the RGB configuration, as for strip_demo. The board is the bench's unless `-b` names another, as in `scripts/sample-build.sh showcase -b nucleo_u083rc`, and each board's overlay is strip_demo's, included rather than copied, so the hardware is described in one place. Any other board needs what strip_demo's [On other hardware](../strip_demo/README.md#on-other-hardware) lists.
 
 ## Where the code lives
 

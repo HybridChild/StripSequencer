@@ -38,16 +38,16 @@ repo = pathlib.Path(sys.argv[1])
 # The host tree goes first, for src/: the library is OS-agnostic, and the host
 # is where it is tested, so clangd should see it as the tests do -- under the
 # host compiler, with config.h's defaults. The bench's own configuration
-# follows: strip_demo in RGBW, then the other samples, then everything else, so
-# the Zephyr sources every sample compiles are read under the bring-up sample's
-# Kconfig and the RGBW board.
+# follows: strip_demo in RGBW on the bench board, then the other samples there,
+# then everything else, so the Zephyr sources every sample compiles are read
+# under the bring-up sample's Kconfig and the bench board.
 sources = [
     repo / "build" / "compile_commands.json",
-    repo / "build-zephyr" / "compile_commands.json",
-    repo / "build-zephyr-showcase" / "compile_commands.json",
-    repo / "build-zephyr-frame_cost" / "compile_commands.json",
+    repo / "build-zephyr-strip_demo-nucleo_h753zi" / "compile_commands.json",
 ]
-sources += sorted(p for p in repo.glob("build-zephyr*/compile_commands.json")
+sources += sorted(p for p in repo.glob("build-zephyr-*-nucleo_h753zi/compile_commands.json")
+                  if p not in sources)
+sources += sorted(p for p in repo.glob("build-zephyr-*/compile_commands.json")
                   if p not in sources)
 
 merged, seen = [], set()

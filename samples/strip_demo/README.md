@@ -9,7 +9,7 @@ A Nucleo-H753ZI driving 11 ILPL-K501 pixels — SK6812-class RGBW, green-red-blu
 ## Build, flash, watch
 
 ```sh
-scripts/sample-build.sh        # RGBW, the bench configuration
+scripts/sample-build.sh        # RGBW on the bench board, into ./build-zephyr-strip_demo-nucleo_h753zi
 scripts/sample-flash.sh
 scripts/console.sh             # 115200 8N1 on the ST-LINK port
 ```
@@ -37,4 +37,4 @@ The sample runs at a brightness of 64 of 255. Brightness is applied before gamma
 
 ## On other hardware
 
-The application reads three things from the devicetree: a `led-strip` alias naming any `led_strip` driver, that node's `chain-length` for the pixel count, and an `sw0` alias for the button, which most development boards already define. An RGBW build also reads the node's `color-mapping` to build its permute. Add an overlay under `boards/` that provides them and build with `BOARD=<your board> scripts/sample-build.sh`, adding `--rgb` for a strip without a white channel.
+The application reads three things from the devicetree: a `led-strip` alias naming any `led_strip` driver, that node's `chain-length` for the pixel count, and an `sw0` alias for the button, which most development boards already define. An RGBW build also reads the node's `color-mapping` to build its permute. Add an overlay under `boards/` that provides them and build with `scripts/sample-build.sh -b <your board>`, adding `--rgb` for a strip without a white channel.
