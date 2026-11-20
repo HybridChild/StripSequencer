@@ -5,8 +5,7 @@
  */
 
 /*
- * The bench strip on the U083, described once in strip_demo's overlay, which
- * also says why this board builds with --rgb.
+ * The bench strip on the U083, described once in strip_demo's overlay.
  */
 
 #include "../../strip_demo/boards/nucleo_u083rc.overlay"

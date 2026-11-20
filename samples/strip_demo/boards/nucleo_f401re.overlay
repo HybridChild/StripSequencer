@@ -9,7 +9,7 @@
  * (ILPL-K501), wired as on the U083, data out on PB5 (Arduino D4) and SCK on
  * PB3 (Arduino D3). Here both are SPI1's, on AF5. The U083's overlay gives
  * the reasons this one shares: why SCK is routed though the strip never reads
- * it, why the build takes --rgb, and why DMA rather than interrupts.
+ * it, and why DMA rather than interrupts.
  *
  * The F4's SPI has no TX FIFO, only a one-frame buffer, and its DMA is the
  * stream controller rather than the U0's channels. It does not show the

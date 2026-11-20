@@ -16,11 +16,6 @@
  * one-second timeout and returns -EAGAIN. MISO stays unrouted, so the unused
  * received bytes read as zero.
  *
- * Build with --rgb. worldsemi,ws2812-spi implements led_strip_update_rgb()
- * and not led_strip_update_channels(), so an RGBW build runs but every update
- * returns -ENOSYS and the strip stays dark. On the RGB path the driver applies
- * color-mapping itself and sends zero for the white die.
- *
  * SPI3 rather than the board's SPI1, whose SCK shares PA5 with the user LED
  * and whose pins the board already hands to the Arduino header.
  */
