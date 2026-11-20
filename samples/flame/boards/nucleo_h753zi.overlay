@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) 2026 Esben Dueholm Nørgaard
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The bench strip, described once in strip_demo's overlay: every sample that
+ * drives a strip drives this one, and the reasons for each value live beside
+ * it there.
+ */
+
+#include "../../strip_demo/boards/nucleo_h753zi.overlay"

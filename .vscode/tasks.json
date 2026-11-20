@@ -138,7 +138,7 @@
       "id": "sample",
       "type": "pickString",
       "description": "Which sample",
-      "options": ["strip_demo", "frame_cost", "showcase"],
+      "options": ["strip_demo", "frame_cost", "showcase", "flame"],
       "default": "strip_demo"
     },
     {

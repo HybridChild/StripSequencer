@@ -8,7 +8,6 @@
  * and the segments that place them, and the table main.cpp steps through. */
 
 #include "animation.h"
-#include "flame.h"
 #include "twinkle.h"
 
 using namespace stripseq;
@@ -244,14 +243,6 @@ static void show_twinkle(Canvas& c, int64_t now) {
     c.strip.add(s);
 }
 
-static void show_flame(Canvas& c, int64_t now) {
-    c.seq.load(timebase);
-    c.seq.play(now);
-    Segment s(0, kPixels, c.seq);
-    s.set_color_fn(flame);
-    c.strip.add(s);
-}
-
 /* The background is seq, first in the list and so painted first; the alert is
  * seq_b, added last and painted on top. drop_finished() in the frame loop is
  * what takes the alert away again once its five flashes are done. */
@@ -269,10 +260,6 @@ static void raise_alert(Canvas& c, int64_t now) {
             return;   /* still flashing: the load() alone restarts it */
     c.strip.add(Segment(kAlertFirst, kAlertCount, c.seq_b));
 }
-
-/* The flame lives in dull reds, which round to black at kBrightness, so it
- * asks for more; its average pixel is dim enough that it still draws little. */
-static constexpr uint8_t kFlameBrightness = 120;
 
 /* animation.h declares the table extern, and that declaration is what gives
  * this definition external linkage: a const variable at namespace scope is
@@ -292,8 +279,6 @@ constexpr Animation kAnimations[] = {
     {.name = "converging: opposite delays", .show = show_converging},
     {.name = "mirrored: a replaced step 1 on one half", .show = show_mirrored},
     {.name = "twinkle: a replaced step 2 that never repeats", .show = show_twinkle},
-    {.name = "flame: a fire with no heat array", .show = show_flame,
-     .brightness = kFlameBrightness},
     {.name = "alert: red flashes painted over a breathing background", .show = show_alert,
      .tick = raise_alert, .tick_ms = kAlertEveryMs, .drops_finished = true},
 };

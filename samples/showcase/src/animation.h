@@ -42,12 +42,11 @@ inline constexpr uint8_t kBrightness = 74;
 
 struct Animation {
     const char* name;
-    /* Called on an empty strip, at the brightness below. */
+    /* Called on an empty strip. */
     void (*show)(Canvas& c, int64_t now);
     /* Run every tick_ms while the animation is up, or never if null. */
     void (*tick)(Canvas& c, int64_t now) = nullptr;
     uint32_t tick_ms = 0;
-    uint8_t brightness = kBrightness;
     /* Whether the frame loop drops segments that have finished. Only the
      * alert wants it: a finished segment keeps painting its landing color,
      * and the wipe rests on nothing else, so dropping its segment would leave

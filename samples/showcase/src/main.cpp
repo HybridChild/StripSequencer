@@ -10,13 +10,12 @@
  * Unlike strip_demo, nothing here is a check. Each animation is chosen to look
  * like something, and to show one idea from the library: a stagger, a replaced
  * step 1, a playhead driven from outside, segments painted over each other, a
- * whole fire drawn by a step 2.
+ * step 2 that never repeats.
  *
  * This file is the Zephyr half: the device, the button, and when things
  * happen. What each animation draws is in animations.cpp, which reaches the
- * strip only through the Canvas this file hands it, and the two step 2s with
- * the most arithmetic in them, the twinkle and the flame, have files of their
- * own that need nothing but the library.
+ * strip only through the Canvas this file hands it, and the twinkle's step 2
+ * has a file of its own that needs nothing but the library.
  *
  * The frame loop and the module's led_strip adapter are strip_demo's, plus one
  * thing it never needs: a tick, for the animations that change on their own
@@ -103,7 +102,6 @@ static void enter(size_t next) {
     printk("%u/%u: %s\n", static_cast<unsigned>(current + 1),
            static_cast<unsigned>(kAnimationCount), kAnimations[current].name);
     const Animation& a = kAnimations[current];
-    strip.set_brightness(a.brightness);
     a.show(canvas, k_uptime_get());
     if (a.tick)
         k_work_reschedule(&tick_work, K_MSEC(a.tick_ms));
@@ -141,6 +139,9 @@ int main() {
     }
     gpio_init_callback(&button_cb, on_button, BIT(button.pin));
     gpio_add_callback(button.port, &button_cb);
+
+    /* The strip's, not an animation's: clear() leaves it as it is. */
+    strip.set_brightness(kBrightness);
 
     printk("showcase: %u pixels, %s. The user button advances.\n",
            static_cast<unsigned>(kPixels), STRIPSEQ_WHITE_CHANNEL ? "RGBW" : "RGB");

@@ -10,6 +10,5 @@ project(showcase)
 target_sources(app PRIVATE
     src/main.cpp
     src/animations.cpp
-    src/flame.cpp
     src/twinkle.cpp
 )

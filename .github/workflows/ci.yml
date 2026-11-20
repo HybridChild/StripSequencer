@@ -193,3 +193,8 @@ jobs:
       # builds above, and nothing else here depends on the channel setting.
       - name: Build showcase
         run: ./scripts/sample-build.sh showcase -p
+
+      # One configuration, for the showcase's reason: the only other thing the
+      # channel setting changes here is one constant stop in the palette.
+      - name: Build flame
+        run: ./scripts/sample-build.sh flame -p

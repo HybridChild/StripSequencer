@@ -7,8 +7,8 @@
 /* The flame: a whole fire drawn by a step 2, with no heat array. It needs only
  * the library, so nothing here or in flame.cpp knows it runs under Zephyr. */
 
-#ifndef SHOWCASE_FLAME_H_
-#define SHOWCASE_FLAME_H_
+#ifndef FLAME_FLAME_H_
+#define FLAME_FLAME_H_
 
 #include <stripseq/stripseq.h>
 
@@ -17,4 +17,4 @@
  * fire scales to whatever count it is given. */
 stripseq::Sample flame(int32_t playhead_ms, uint16_t index, uint16_t count);
 
-#endif  /* SHOWCASE_FLAME_H_ */
+#endif  /* FLAME_FLAME_H_ */
