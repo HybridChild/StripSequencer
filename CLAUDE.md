@@ -33,7 +33,7 @@ These hold for every change.
 - **No floating point anywhere in the library**, not even at compile time. Many Cortex-M parts have no FPU, soft-float pulls in library code, and integer math is bit-exact across compilers, which is what makes the golden-frame hashes meaningful. Tests may use `double` as an independent oracle.
 - **No dynamic initialisation at file scope, and no function-local statics.** A function-local static with a non-constant initialiser emits a guard variable and calls `__cxa_guard_acquire`. Every table is `constexpr` or a `const` array in flash. `scripts/cross-check.sh` fails on an `.init_array` entry or a guard variable in any object.
 - **Only `<cstdint>` and `<cstddef>`.** They are what Zephyr's default minimal C++ library provides, so a third header is a library that does not build there. Where a `min` is wanted, write it. `scripts/cross-check.sh` enforces this, along with an allowlist of the run-time helpers each object may call.
-- **Every change ends green**: all five variants (`default`, `rgbw`, `nogamma`, `rgbw_nogamma`, `tight`) on gcc and clang, the cross-check for both cores, and the Zephyr builds of the samples: strip_demo in both channel configurations, frame_cost in the bench's.
+- **Every change ends green**: all five variants (`default`, `rgbw`, `nogamma`, `rgbw_nogamma`, `tight`) on gcc and clang, the cross-check for both cores, and the Zephyr builds of the samples: `scripts/twister.sh`, every sample on every board and in every configuration its `sample.yaml` names.
 
 ## The guides in `notes/`
 

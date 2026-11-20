@@ -97,38 +97,22 @@
     },
     {
       // CLAUDE.md's "every change ends green", as one task: both compilers'
-      // five variants, the cross-check for both cores, and the Zephyr builds --
-      // strip_demo in both channel configurations, frame_cost in the bench's.
+      // five variants, the cross-check for both cores, and twister's build of
+      // every sample, as each sample.yaml lists it.
       "label": "everything green",
       "dependsOrder": "sequence",
       "dependsOn": [
         "host: test",
         "host: test (gcc)",
         "cross-check",
-        "green: strip_demo",
-        "green: strip_demo --rgb",
-        "green: frame_cost"
+        "green: samples"
       ],
       "problemMatcher": []
     },
     {
-      "label": "green: strip_demo",
+      "label": "green: samples",
       "type": "shell",
-      "command": "scripts/sample-build.sh",
-      "hide": true,
-      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
-    },
-    {
-      "label": "green: strip_demo --rgb",
-      "type": "shell",
-      "command": "scripts/sample-build.sh --rgb",
-      "hide": true,
-      "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
-    },
-    {
-      "label": "green: frame_cost",
-      "type": "shell",
-      "command": "scripts/sample-build.sh frame_cost",
+      "command": "scripts/twister.sh",
       "hide": true,
       "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}"] }
     }

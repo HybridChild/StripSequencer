@@ -1,0 +1,43 @@
+# What twister builds of this sample: scripts/twister.sh runs every scenario
+# below on every board it names, and CI runs the same.
+#
+# Build only. Each image drives a strip on the bench, and what it does there is
+# read by eye, stage by stage, as the README describes; nothing here can judge
+# it from the console.
+#
+# The boards are listed per scenario, never under common: twister appends a
+# scenario's lists to common's rather than replacing them, so a common list
+# could only ever be widened.
+sample:
+  name: strip_demo
+  description: The library on real hardware, and a staged check of that hardware
+common:
+  build_only: true
+  tags: stripseq
+tests:
+  # Every board with an overlay under boards/: the H753's I2S, and the SPI of
+  # the other three. Integration platforms too, so `twister -G` builds them
+  # all rather than only those Zephyr marks as defaults, none of which these
+  # are.
+  sample.stripseq.strip_demo:
+    platform_allow:
+      - nucleo_h753zi
+      - nucleo_u083rc
+      - nucleo_f072rb
+      - nucleo_f401re
+    integration_platforms:
+      - nucleo_h753zi
+      - nucleo_u083rc
+      - nucleo_f072rb
+      - nucleo_f401re
+  # The adapter's other path: led_strip_update_rgb() and a straight cast, in
+  # place of a permute and led_strip_update_channels(). It depends on the
+  # library's setting and not on the driver, so the bench board alone covers
+  # it.
+  sample.stripseq.strip_demo.rgb:
+    extra_configs:
+      - CONFIG_STRIPSEQ_WHITE_CHANNEL=n
+    platform_allow:
+      - nucleo_h753zi
+    integration_platforms:
+      - nucleo_h753zi

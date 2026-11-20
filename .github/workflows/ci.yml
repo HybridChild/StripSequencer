@@ -124,7 +124,7 @@ jobs:
         run: arm-none-eabi-nm build-cross/libstripseq.a
 
   zephyr:
-    name: zephyr module and sample
+    name: zephyr module and samples
     runs-on: ubuntu-latest
     env:
       ZEPHYR_WORKSPACE: ${{ github.workspace }}/../zephyr-ws
@@ -165,8 +165,14 @@ jobs:
           west config manifest.project-filter -- '-.*,+cmsis_6,+hal_stm32'
           west update --narrow -o=--depth=1
 
+      # Base for the build, build-test and run-test for twister: it imports its
+      # hardware-map support (natsort, tabulate, psutil) on every run, even one
+      # that only builds, and those are listed under run-test.
       - name: Install Zephyr's Python requirements
-        run: pip install -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-base.txt"
+        run: |
+          pip install -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-base.txt" \
+                      -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-build-test.txt" \
+                      -r "$ZEPHYR_WORKSPACE/zephyr/scripts/requirements-run-test.txt"
 
       # After the requirements, not with the workspace: west sdk is one of
       # Zephyr's own extension commands, and imports what they list.
@@ -176,25 +182,7 @@ jobs:
           cd "$ZEPHYR_WORKSPACE"
           west sdk install -t arm-zephyr-eabi -H -d "$ZEPHYR_SDK_INSTALL_DIR"
 
-      # Both settings, because they take different code paths in the adapter:
-      # update_channels() and a permute, or update_rgb() and a straight cast.
-      - name: Build the sample, RGBW
-        run: ./scripts/sample-build.sh -p
-
-      - name: Build the sample, RGB
-        run: ./scripts/sample-build.sh -p --rgb
-
-      # One configuration is enough: frame_cost has no adapter, so the channel
-      # setting takes no path of its own here that strip_demo does not cover.
-      - name: Build frame_cost
-        run: ./scripts/sample-build.sh frame_cost -p
-
-      # One configuration is enough: the adapter's two paths are strip_demo's
-      # builds above, and nothing else here depends on the channel setting.
-      - name: Build showcase
-        run: ./scripts/sample-build.sh showcase -p
-
-      # One configuration, for the showcase's reason: the only other thing the
-      # channel setting changes here is one constant stop in the palette.
-      - name: Build flame
-        run: ./scripts/sample-build.sh flame -p
+      # Every sample on every board its sample.yaml names, in every scenario
+      # it lists; each sample.yaml says why its matrix is what it is.
+      - name: Build the samples
+        run: ./scripts/twister.sh

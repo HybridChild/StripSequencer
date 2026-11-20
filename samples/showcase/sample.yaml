@@ -1,0 +1,21 @@
+# What twister builds of this sample; see strip_demo's sample.yaml for how it is
+# run and why it only builds.
+#
+# One channel configuration: the adapter's two paths are strip_demo's, and
+# nothing else here depends on the setting.
+sample:
+  name: showcase
+  description: A dozen animations, one per press of the user button
+common:
+  build_only: true
+  tags: stripseq
+  # The bench board alone. What this sample adds to the matrix is its own
+  # code, which uses more of the library's API than strip_demo does; its other
+  # boards' overlays only include strip_demo's, which strip_demo's builds
+  # already check.
+  platform_allow:
+    - nucleo_h753zi
+  integration_platforms:
+    - nucleo_h753zi
+tests:
+  sample.stripseq.showcase: {}

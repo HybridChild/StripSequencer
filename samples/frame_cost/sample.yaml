@@ -1,0 +1,21 @@
+# What twister builds of this sample; see strip_demo's sample.yaml for how it is
+# run.
+#
+# Build only, though the sample prints its figures to the console: they are
+# measurements to read and copy into the README, not a pass or a fail.
+#
+# The bench board alone, which the README's figures come from. One channel
+# configuration: frame_cost has no adapter, so the setting takes no path of its
+# own here that strip_demo does not cover.
+sample:
+  name: frame_cost
+  description: Cycles per Strip::render() on the bench board
+common:
+  build_only: true
+  tags: stripseq
+  platform_allow:
+    - nucleo_h753zi
+  integration_platforms:
+    - nucleo_h753zi
+tests:
+  sample.stripseq.frame_cost: {}
