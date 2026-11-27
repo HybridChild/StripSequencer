@@ -46,12 +46,6 @@ static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios)
 /* A hold of 0 means "come back at the frame rate", and this is the frame rate. */
 static constexpr uint32_t kFramePeriodMs = 16;
 
-/* The fire lives in dull reds, which round to black at the 74 the other
- * samples run at, so it asks for more. Its average pixel is dim enough that
- * eleven RGBW pixels still draw little from a USB-powered bench. Applied
- * before gamma, so 120 is about 15% of full light. */
-static constexpr uint8_t kBrightness = 120;
-
 static void frame(struct k_work* work);
 static K_WORK_DELAYABLE_DEFINE(frame_work, frame);
 
@@ -62,23 +56,34 @@ static void frame(struct k_work*) {
     if (err)
         printk("strip update failed: %d\n", err);
 
-    k_work_reschedule(&frame_work, K_MSEC(hold ? hold : kFramePeriodMs));
+    if (hold != hold_forever)
+        k_work_reschedule(&frame_work, K_MSEC(hold ? hold : kFramePeriodMs));
 }
 
-/* The fire keeps burning through a change: only the segment's ColorFn is
- * swapped, and the sequencer's playhead runs on, so the flame's shape carries
- * straight over into the new colors. */
+/* The fire keeps burning through a change: only the segment's ColorFn and the
+ * strip's brightness are swapped, and the sequencer's playhead runs on, so
+ * the flame's shape carries straight over into the new colors. After the
+ * fires come the swatches, which hold forever, so a change renders at once
+ * rather than waiting on a frame that is not coming. */
+static constexpr size_t kShowCount = kFlameCount + kSwatchCount;
 static size_t current;
+
+static const Flame& entry(size_t which) {
+    return which < kFlameCount ? flames[which] : swatches[which - kFlameCount];
+}
 
 static void show(size_t which) {
     current = which;
-    strip.segment(0).set_color_fn(flames[current].draw);
-    printk("fire %u/%u: %s\n", static_cast<unsigned>(current + 1),
-           static_cast<unsigned>(kFlameCount), flames[current].name);
+    strip.segment(0).set_color_fn(entry(current).draw);
+    strip.set_brightness(entry(current).brightness);
+    printk("%s %u/%u: %s\n", current < kFlameCount ? "fire" : "swatch",
+           static_cast<unsigned>(current + 1), static_cast<unsigned>(kShowCount),
+           entry(current).name);
+    k_work_reschedule(&frame_work, K_NO_WAIT);
 }
 
 static void advance(struct k_work*) {
-    show((current + 1) % kFlameCount);
+    show((current + 1) % kShowCount);
 }
 static K_WORK_DEFINE(advance_work, advance);
 
@@ -118,9 +123,6 @@ int main() {
     seq.load(timebase);
     seq.play(k_uptime_get());
     strip.add(Segment(0, kPixels, seq));
-    strip.set_brightness(kBrightness);
     show(0);
-
-    k_work_reschedule(&frame_work, K_NO_WAIT);
     return 0;
 }

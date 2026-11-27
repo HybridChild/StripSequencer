@@ -27,8 +27,7 @@ using namespace stripseq;
  *     proportion rather than jumping from one to the next;
  *   - a palette that turns heat into color: a black body's, from dull red
  *     through orange to yellow, and on an RGBW strip into the white die at
- *     the top, or one of three others that climb the same way in blue,
- *     green and violet.
+ *     the top, or one of five others that mix two primaries the same way.
  *
  * Heights, levels and heats are all Q16: 65536 is the whole strip, or full. */
 
@@ -162,79 +161,200 @@ static uint16_t ember_heat(uint32_t y, uint32_t t, uint16_t count) {
  * before gamma, which is why orange carries so much green: gamma takes most
  * of it away again.
  *
- * The other fires are the burning metal salts a chemistry class shows: the
- * same heats, and the same climb from a dim glow to a pale tip, in another
- * hue. Each picks its colors the way the black body's do, with the secondary
- * channel well ahead of where it should land after gamma. */
+ * The stops name roles rather than channels. The cold primary is the whole of
+ * a dull glow and the first to rise; the hot one joins it as the heat climbs,
+ * so it mixes in toward the base and is missing at the ragged top; the third
+ * only tints the tip. The black body is red cold and green hot. Every other
+ * fire is the same stops with the primaries dealt out differently, so all
+ * six turn color at the same heats. White is a role of its own and is the
+ * same in every fire; an RGB build ignores it. */
 struct Stop {
     uint16_t heat;
-    Color color;
+    uint16_t cold, hot, tint, white;
 };
+
+static constexpr uint16_t c8(uint8_t level) {
+    return static_cast<uint16_t>(level * 257);
+}
 
 static constexpr size_t kStops = 6;
-using Palette = Stop[kStops];
-
-static constexpr Palette kNatural = {
-    {0,     colors::black},
-    {9800,  Color::rgb8(80, 0, 0)},
-    {24900, Color::rgb8(200, 25, 0)},
-    {39300, Color::rgb8(255, 105, 0)},
-    {52400, Color::rgb8(255, 170, 10)},
+static constexpr Stop kBlackBody[kStops] = {
+    {0,     0,       0,       0,       0},
+    {9800,  c8(80),  0,       0,       0},
+    {24900, c8(200), c8(25),  0,       0},
+    {39300, c8(255), c8(105), 0,       0},
+    {52400, c8(255), c8(170), c8(10),  0},
 #if STRIPSEQ_WHITE_CHANNEL
-    {65535, Color::rgbw(65535, 52000, 10000, 36000)},
+    {65535, 65535,   52000,   10000,   36000},
 #else
-    {65535, Color::rgb8(255, 220, 90)},
+    {65535, c8(255), c8(220), c8(90),  0},
 #endif
 };
 
-/* Gas: the black body with red and blue exchanged, deep blue through azure. */
-static constexpr Palette kBlue = {
-    {0,     colors::black},
-    {9800,  Color::rgb8(0, 0, 80)},
-    {24900, Color::rgb8(0, 25, 200)},
-    {39300, Color::rgb8(0, 105, 255)},
-    {52400, Color::rgb8(10, 170, 255)},
-#if STRIPSEQ_WHITE_CHANNEL
-    {65535, Color::rgbw(10000, 52000, 65535, 36000)},
-#else
-    {65535, Color::rgb8(90, 220, 255)},
-#endif
+enum Channel : uint8_t { kRed, kGreen, kBlue };
+
+/* The primaries are not equally bright: green looks far brighter than red at
+ * the same level, and blue dimmer. The table is the level of each primary
+ * that looks as bright as red at full, in thousandths, before gamma. It is
+ * set by eye on the bench strip, against the swatches at the end of this
+ * file. A WS2812B's datasheet intensities, about 400, 700 and 190 mcd, put
+ * blue far dimmer than it looks there, so they are no guide to it. */
+static constexpr uint32_t kEqualLevel[3] = {1000, 800, 900};
+
+static constexpr Channel third(Channel cold, Channel hot) {
+    return static_cast<Channel>(3 - cold - hot);
+}
+
+/* Newton's method, rounding down; consteval, so it only ever runs while
+ * compiling. */
+static consteval uint64_t isqrt(uint64_t x) {
+    if (x < 2)
+        return x;
+    uint64_t r = x, next = (x + 1) / 2;
+    while (next < r) {
+        r = next;
+        next = (r + x / r) / 2;
+    }
+    return r;
+}
+
+/* How bright a level looks, Q16 in and out: 65536 is red at full. The output
+ * raises a level to the 2.5 before it reaches the LED, and x^2.5 is
+ * x * x * sqrt(x), so this is integers only, like the library's gamma table.
+ * Exact at full: 65536^2 * 2^16 >> 32. */
+static consteval uint64_t light(uint64_t level) {
+    return level * level * isqrt(level << 16) >> 32;
+}
+
+/* A color's channels before it is fitted under full scale, so any may be past
+ * 65535. */
+struct Levels {
+    uint32_t channel[3];
 };
 
-/* Copper: emerald, leaning toward blue as it heats. */
-static constexpr Palette kGreen = {
-    {0,     colors::black},
-    {9800,  Color::rgb8(0, 80, 0)},
-    {24900, Color::rgb8(0, 200, 25)},
-    {39300, Color::rgb8(0, 255, 105)},
-    {52400, Color::rgb8(10, 255, 170)},
-#if STRIPSEQ_WHITE_CHANNEL
-    {65535, Color::rgbw(10000, 65535, 52000, 36000)},
-#else
-    {65535, Color::rgb8(90, 255, 220)},
-#endif
+/* How bright a color looks once scaled by scale, Q16: each channel counted as
+ * the level of red that looks as bright, and the light of the three added. */
+static consteval uint64_t perceived(const Levels& c, uint32_t scale) {
+    uint64_t sum = 0;
+    for (size_t i = 0; i < 3; ++i)
+        sum += light(uint64_t{c.channel[i]} * scale / 65536u * 1000u / kEqualLevel[i]);
+    return sum;
+}
+
+/* One stop of one fire, before it is fitted under full scale.
+ *
+ * The hue: each role is first given the level that looks the way the black
+ * body's channel in that role does -- the cold part as bright as its red,
+ * the hot as its green, the tint as its blue -- and the hot part is then
+ * scaled by the fire's mix, in thousandths. How strongly one primary reads
+ * mixed into another depends on the pair, so green into blue shows far less
+ * than green into red at the same balance, and the mix is set by eye.
+ *
+ * The brightness: the whole color is then scaled until it looks exactly as
+ * bright as the black body's at the same heat. So the mix moves the hue and
+ * never the brightness, and a fire matches the black body at every stop
+ * whatever its mix. */
+static consteval Levels hued(Channel cold, Channel hot, uint32_t mix, const Stop& s) {
+    Levels c{};
+    c.channel[cold] = s.cold * kEqualLevel[cold] / kEqualLevel[kRed];
+    c.channel[hot] = s.hot * kEqualLevel[hot] / kEqualLevel[kGreen] * mix / 1000u;
+    c.channel[third(cold, hot)] = s.tint * kEqualLevel[third(cold, hot)] / kEqualLevel[kBlue];
+    return c;
+}
+
+static consteval Levels matched(Channel cold, Channel hot, uint32_t mix, const Stop& s) {
+    const Levels have = hued(cold, hot, mix, s);
+    const uint64_t target = perceived(hued(kRed, kGreen, 1000, s), 65536);
+    /* Unscaled when it already matches, which the black body always does, so
+     * its levels come through exactly; otherwise the least scale, up to four
+     * times, that looks at least as bright. */
+    uint32_t scale = 65536;
+    if (perceived(have, scale) != target) {
+        uint32_t lo = 0, hi = 4 * 65536;
+        while (lo < hi) {
+            const uint32_t mid = (lo + hi) / 2;
+            if (perceived(have, mid) < target)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        scale = lo;
+    }
+    Levels out{};
+    for (size_t i = 0; i < 3; ++i)
+        out.channel[i] = static_cast<uint32_t>(uint64_t{have.channel[i]} * scale / 65536u);
+    return out;
+}
+
+/* The fire lives in dull reds, which round to black at the 74 the other
+ * samples run at, so the black body asks for more. Its average pixel is dim
+ * enough that eleven RGBW pixels still draw little from a USB-powered bench.
+ * Applied before gamma, so 120 is about 15% of full light. */
+static constexpr uint32_t kBrightness = 120;
+
+/* A channel cannot go above full, so a fire whose dim primary wants more is
+ * scaled down until its brightest level fits, and the strip's brightness is
+ * raised by as much, which is the same multiply before gamma. This is that
+ * brightest level, and never less than full. */
+static consteval uint32_t peak(Channel cold, Channel hot, uint32_t mix) {
+    uint32_t most = 65535;
+    for (const Stop& s : kBlackBody) {
+        const Levels c = matched(cold, hot, mix, s);
+        for (uint32_t level : c.channel)
+            most = level > most ? level : most;
+    }
+    return most;
+}
+
+static consteval uint16_t fit(uint32_t level, uint32_t peak) {
+    return static_cast<uint16_t>(uint64_t{level} * 65535u / peak);
+}
+
+/* A fire's stop as a color, fitted under full scale. White is the same in
+ * every fire, so it is scaled down with the rest and the raised brightness
+ * puts it back where it was. */
+struct Shade {
+    uint16_t heat;
+    Color    color;
 };
 
-/* Potassium: violet, red and blue together, paling to lilac. */
-static constexpr Palette kViolet = {
-    {0,     colors::black},
-    {9800,  Color::rgb8(50, 0, 80)},
-    {24900, Color::rgb8(130, 0, 200)},
-    {39300, Color::rgb8(190, 30, 255)},
-    {52400, Color::rgb8(220, 110, 255)},
+static consteval Shade shade(Channel cold, Channel hot, uint32_t mix, uint32_t peak, const Stop& s) {
+    const Levels c = matched(cold, hot, mix, s);
+    const uint16_t r = fit(c.channel[kRed], peak);
+    const uint16_t g = fit(c.channel[kGreen], peak);
+    const uint16_t b = fit(c.channel[kBlue], peak);
 #if STRIPSEQ_WHITE_CHANNEL
-    {65535, Color::rgbw(52000, 30000, 65535, 36000)},
+    return {s.heat, Color::rgbw(r, g, b, fit(s.white, peak))};
 #else
-    {65535, Color::rgb8(235, 190, 255)},
+    return {s.heat, Color::rgb(r, g, b)};
 #endif
+}
+
+/* The brightness is kept wide so fire() can refuse one past 255 rather than
+ * see it wrap. */
+struct Palette {
+    Shade    stop[kStops];
+    uint32_t brightness;
 };
+
+static consteval Palette palette(Channel cold, Channel hot, uint32_t mix) {
+    static_assert(kStops == 6, "palette() lists every stop");
+    const uint32_t p = peak(cold, hot, mix);
+    return {{shade(cold, hot, mix, p, kBlackBody[0]), shade(cold, hot, mix, p, kBlackBody[1]),
+             shade(cold, hot, mix, p, kBlackBody[2]), shade(cold, hot, mix, p, kBlackBody[3]),
+             shade(cold, hot, mix, p, kBlackBody[4]), shade(cold, hot, mix, p, kBlackBody[5])},
+            (kBrightness * p + 32767u) / 65535u};   /* to the nearest step */
+}
+
+template <Channel cold, Channel hot, uint32_t mix>
+static constexpr Palette kPalette = palette(cold, hot, mix);
 
 static Color heat_color(const Palette& palette, uint16_t heat) {
     size_t i = 1;
-    while (heat > palette[i].heat)
+    while (heat > palette.stop[i].heat)
         ++i;
-    const Stop& lo = palette[i - 1];
-    const Stop& hi = palette[i];
+    const Shade& lo = palette.stop[i - 1];
+    const Shade& hi = palette.stop[i];
     const uint32_t into = static_cast<uint32_t>(heat - lo.heat);
     const uint32_t width = static_cast<uint32_t>(hi.heat - lo.heat);
     return Color::lerp(lo.color, hi.color, static_cast<uint16_t>(into * 65535u / width));
@@ -253,9 +373,49 @@ static Sample burn(int32_t playhead_ms, uint16_t index, uint16_t count) {
     return {heat_color(palette, body > ember ? body : ember), 0};
 }
 
+template <Channel cold, Channel hot, uint32_t mix = 1000>
+static constexpr Flame fire(const char* name) {
+    static_assert(cold != hot, "a fire mixes two different primaries");
+    static_assert(kPalette<cold, hot, mix>.brightness <= 255,
+                  "a fire too dim to match the black body even at full brightness");
+    return {name, burn<kPalette<cold, hot, mix>>,
+            static_cast<uint8_t>(kPalette<cold, hot, mix>.brightness)};
+}
+
+/* Every ordered pair of primaries, grouped by the cold one. Each is named
+ * cold/hot: the color at the top of the flame, then the one that mixes in at
+ * its base. */
 const Flame flames[kFlameCount] = {
-    {"natural", burn<kNatural>},
-    {"blue",    burn<kBlue>},
-    {"green",   burn<kGreen>},
-    {"violet",  burn<kViolet>},
+    fire<kRed, kGreen>("red/green"),
+    fire<kRed, kBlue, 850>("red/blue"),
+    fire<kGreen, kRed>("green/red"),
+    fire<kGreen, kBlue, 850>("green/blue"),
+    fire<kBlue, kRed>("blue/red"),
+    fire<kBlue, kGreen, 1350>("blue/green"),
+};
+
+/* Steady blocks for setting kEqualLevel by eye, where a flickering fire of
+ * two colors is no help: red at full on the base half, and the other primary
+ * at its table level on the top half. The table is right when the halves look
+ * equally bright. The halves are the same number of pixels, so on an odd
+ * strip the last is dark rather than tipping the comparison. A level over
+ * 1000 would need more than full scale, so both halves come down together.
+ * Nothing moves, so the hold is forever. */
+template <Channel primary>
+static Sample swatch(int32_t, uint16_t index, uint16_t count) {
+    constexpr uint32_t top = kEqualLevel[primary] > 1000 ? kEqualLevel[primary] : 1000;
+    const uint16_t half = count / 2;
+    uint32_t channel[3] = {0, 0, 0};
+    if (index < half)
+        channel[kRed] = 65535u * 1000u / top;
+    else if (index < 2 * half)
+        channel[primary] = 65535u * kEqualLevel[primary] / top;
+    return {Color::rgb(static_cast<uint16_t>(channel[kRed]), static_cast<uint16_t>(channel[kGreen]),
+                       static_cast<uint16_t>(channel[kBlue])),
+            hold_forever};
+}
+
+const Flame swatches[kSwatchCount] = {
+    {"red | green, for kEqualLevel", swatch<kGreen>, kBrightness},
+    {"red | blue, for kEqualLevel",  swatch<kBlue>,  kBrightness},
 };
